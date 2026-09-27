@@ -4,379 +4,625 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HireNow — Skilled People. Real Work. Faster.</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 48 48%27%3E%3Crect width=%2748%27 height=%2748%27 rx=%2710%27 fill=%27%23101B33%27/%3E%3Crect x=%279%27 y=%2712%27 width=%277%27 height=%2724%27 rx=%271.5%27 fill=%27%23EAF2F7%27/%3E%3Crect x=%279%27 y=%2721%27 width=%2721%27 height=%277%27 rx=%271.5%27 fill=%27%23EAF2F7%27/%3E%3Cpath d=%27M26 20 L33.5 8 L41 20 L37 20 L37 36 L30 36 L30 20 Z%27 fill=%27%23F5A623%27/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 48 48%27%3E%3Crect width=%2748%27 height=%2748%27 rx=%2710%27 fill=%27%23101B33%27/%3E%3Crect x=%279%27 y=%277%27 width=%279%27 height=%2719%27 rx=%273%27 fill=%27%23EAF2F7%27/%3E%3Crect x=%2730%27 y=%2712%27 width=%279%27 height=%2714%27 rx=%273%27 fill=%27%23F5A623%27/%3E%3C/svg%3E">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bp-0: #101B33; --bp-1: #182A4A; --bp-2: #223A63;
-    --line: #3E6E95; --line-soft: rgba(143,190,220,0.16); --line-bright: #8FCBEF;
-    --ink: #EAF2F7; --ink-soft: #93B4CC;
-    --safety: #F5A623; --safety-ink: #241804;
-    --rust: #E2572B; --rust-tint: rgba(226,87,43,0.16);
-    --ok: #58B37C;
-    --radius: 3px;
+    --bg: #F3F6FB; --card: #FFFFFF; --navy: #101B33; --navy-2: #1B2C52;
+    --ink: #17233A; --ink-soft: #7C8AA0; --line: #E7ECF3;
+    --orange: #F5A623; --orange-ink: #241804; --orange-tint: #FFF3E0;
+    --ok: #2F8F5B; --ok-tint: #E7F6EC; --rust: #D8483C; --rust-tint: #FCEAE8;
+    --radius: 14px;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; color: var(--ink);
-    background-color: var(--bp-0);
-    background-image:
-      linear-gradient(var(--line-soft) 1px, transparent 1px),
-      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
-    background-size: 26px 26px;
+    margin: 0; color: var(--ink); background: var(--bg);
     font-family: 'Work Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 15px; line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
+    font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased;
   }
   h1, h2, h3 { font-family: 'Archivo', sans-serif; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
   .num { font-family: 'Archivo', sans-serif; font-weight: 800; }
   input, select, button { font-family: inherit; font-size: 14px; color: var(--ink); }
-  input, select {
-    background: var(--bp-0); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 9px 10px; width: 100%;
-  }
-  input:focus, select:focus { outline: none; border-color: var(--line-bright); box-shadow: 0 0 0 2px rgba(143,203,239,0.25); }
+  input, select { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; width: 100%; }
+  input:focus, select:focus { outline: none; border-color: var(--orange); box-shadow: 0 0 0 3px rgba(245,166,35,0.15); }
   button { cursor: pointer; border: none; }
-  code { background: var(--bp-1); padding: 1px 5px; border-radius: 2px; }
+  svg { display: block; }
+  a { color: var(--orange); text-decoration: none; font-weight: 600; cursor: pointer; }
 
-  /* corner tick marks — blueprint registration marks, replaces the rounded-card+shadow default */
-  .tick { position: relative; background: var(--bp-1); border: 1px solid var(--line); border-radius: var(--radius); }
-  .tick::before, .tick::after {
-    content: ""; position: absolute; width: 9px; height: 9px; pointer-events: none;
-    border-color: var(--safety); border-style: solid;
-  }
-  .tick::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
-  .tick::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
-
-  header.topbar {
-    background: var(--bp-1); color: var(--ink); padding: 14px 20px;
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    border-bottom: 1px solid var(--line);
-  }
-  .brand { display: flex; align-items: center; gap: 9px; }
-  .brand .mark {
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-  }
-  .brand h1 { font-size: 19px; }
-  .brand h1 .now { color: var(--safety); }
-  .who { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--ink-soft); }
-  .who button { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); padding: 6px 12px; border-radius: var(--radius); }
-  .who button:hover { color: var(--ink); border-color: var(--line-bright); }
-  nav.tabs { display: flex; gap: 4px; }
-  nav.tabs button { padding: 8px 14px; border-radius: var(--radius); font-size: 13.5px; font-weight: 500; color: var(--ink-soft); background: none; }
-  nav.tabs button.active { background: var(--bp-2); color: var(--ink); }
-  nav.tabs button:hover:not(.active) { color: var(--ink); }
-
-  main { max-width: 1080px; margin: 0 auto; padding: 22px 18px 60px; }
-  #appScreen { opacity: 0; transform: translateY(6px); transition: opacity .5s ease, transform .5s ease; }
-  #appScreen.enter { opacity: 1; transform: translateY(0); }
-  section.panel { display: none; }
-  section.panel.active { display: block; }
-
-  /* ---- auth ---- */
-  .auth-wrap { max-width: 380px; margin: 70px auto; padding: 28px; }
-  .auth-wrap h2 { margin-bottom: 4px; font-size: 22px; }
-  .auth-wrap p { color: var(--ink-soft); font-size: 13.5px; margin-top: 2px; }
-  .auth-wrap .row { margin: 14px 0; }
-  .auth-wrap label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 5px; }
-  .auth-switch { text-align: center; margin-top: 16px; font-size: 13px; color: var(--ink-soft); }
-  .auth-switch a { color: var(--line-bright); cursor: pointer; text-decoration: underline; }
-  .error-box { background: var(--rust-tint); color: #FFB7A0; border-radius: var(--radius); padding: 9px 11px; font-size: 13px; margin-top: 12px; border: 1px solid rgba(226,87,43,0.4); }
-
-  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 10px 16px; border-radius: var(--radius); font-size: 13.5px; font-weight: 600; transition: transform .1s ease; }
-  .btn:active { transform: scale(0.97); }
-  .btn-primary { background: var(--bp-2); color: var(--ink); border: 1px solid var(--line-bright); }
-  .btn-primary:hover { background: #2B5F8F; }
-  .btn-outline { background: transparent; border: 1px solid var(--line); color: var(--ink-soft); }
-  .btn-outline:hover { color: var(--ink); border-color: var(--line-bright); }
-  .btn-safety { background: var(--safety); color: var(--safety-ink); }
-  .btn-safety:hover { background: #FFBD5C; }
+  .btn { padding: 11px 18px; border-radius: 10px; font-weight: 700; font-size: 14px; }
+  .btn-primary { background: var(--navy); color: #fff; }
+  .btn-safety { background: var(--orange); color: var(--orange-ink); }
+  .btn-outline { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
   .btn-block { width: 100%; }
-  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--line); }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 28px; }
-  .stat { padding: 14px 16px; }
-  .stat .num { font-size: 26px; display: block; }
-  .stat .label { font-size: 12px; color: var(--ink-soft); margin-top: 3px; }
+  /* ============ AUTH SCREEN ============ */
+  .auth-wrap { max-width: 400px; margin: 40px auto; padding: 32px 26px; }
+  .auth-wrap .tagline { text-align: center; color: var(--ink-soft); font-size: 12.5px; margin: -8px 0 20px; }
+  .auth-wrap h2 { text-align: center; font-size: 22px; }
+  .auth-wrap p { text-align: center; color: var(--ink-soft); font-size: 13.5px; margin: 6px 0 18px; }
+  .row { margin: 13px 0; }
+  .row label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 5px; font-weight: 600; }
+  .auth-switch { text-align: center; margin-top: 16px; font-size: 13.5px; color: var(--ink-soft); }
+  #authError { display: none; background: var(--rust-tint); color: var(--rust); padding: 10px 13px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; }
 
-  .section-head { display: flex; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
-  .section-head h2 { font-size: 21px; }
-  .section-head p { margin: 3px 0 0; color: var(--ink-soft); font-size: 13.5px; }
+  /* ============ APP SHELL ============ */
+  #appScreen { display: none; max-width: 480px; margin: 0 auto; min-height: 100vh; background: var(--bg); padding-bottom: 76px; position: relative; }
 
-  .filters { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  /* ---- top header (navy) ---- */
+  .top-header { background: var(--navy); color: #fff; padding: 16px 18px 20px; border-radius: 0 0 22px 22px; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; }
+  .loc-select { background: transparent; border: none; color: #fff; font-weight: 700; font-size: 14.5px; padding: 0; width: auto; }
+  .loc-select option { color: #17233A; }
+  .loc-wrap { display: flex; align-items: center; gap: 5px; }
+  .loc-wrap .pin { color: var(--orange); font-size: 15px; }
+  .header-icons { display: flex; align-items: center; gap: 12px; }
+  .icon-btn { background: rgba(255,255,255,0.12); border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 15px; }
+  .avatar-mini { width: 34px; height: 34px; border-radius: 50%; background: var(--orange); color: var(--orange-ink); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12.5px; }
+  .greeting { margin-top: 16px; }
+  .greeting .g1 { font-size: 19px; font-weight: 800; font-family: 'Archivo', sans-serif; }
+  .greeting .g2 { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 2px; }
+  .search-wrap { padding: 0 16px; margin-top: -18px; }
+  .search-wrap .inner { background: var(--card); border-radius: 12px; box-shadow: 0 8px 20px rgba(16,27,51,0.12); display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
+  .search-wrap input { border: none; padding: 0; box-shadow: none; }
+  .search-wrap input:focus { box-shadow: none; }
+  .search-wrap .mag { color: var(--ink-soft); flex-shrink: 0; }
 
-  .wcard { padding: 15px; display: flex; flex-direction: column; gap: 9px; }
-  .wcard-top { display: flex; gap: 10px; align-items: center; }
-  .avatar {
-    width: 40px; height: 40px; border-radius: 3px; display: flex; align-items: center; justify-content: center;
-    font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13px; color: #fff; flex-shrink: 0;
+  .main-pad { padding: 20px 16px 4px; }
+  .section-row { display: flex; justify-content: space-between; align-items: baseline; margin: 22px 0 12px; }
+  .section-row h2 { font-size: 16.5px; }
+  .section-row a { font-size: 12.5px; }
+
+  /* ---- promo banner ---- */
+  .promo-banner {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%);
+    border-radius: 16px; padding: 20px; display: flex; align-items: center; justify-content: space-between;
+    color: #fff; position: relative; overflow: hidden; margin-top: 18px;
   }
-  .wcard-name { font-size: 15px; font-weight: 600; }
-  .wcard-skill { font-size: 12.5px; color: var(--ink-soft); }
-  .badge-verified { font-size: 10px; font-weight: 600; color: var(--bp-0); background: var(--ok); border-radius: 2px; padding: 2px 6px; display: inline-block; margin-left: 6px; vertical-align: 1px; }
-  .rating { font-size: 13px; color: var(--safety); }
+  .promo-banner::after { content:""; position:absolute; right:-30px; top:-30px; width:120px; height:120px; border-radius:50%; background: rgba(245,166,35,0.14); }
+  .promo-text { position: relative; z-index: 1; }
+  .promo-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; }
+  .promo-sub { font-size: 12.5px; color: rgba(255,255,255,0.75); margin: 3px 0 12px; }
+  .btn-quick-hire { background: var(--orange); color: var(--orange-ink); padding: 9px 16px; border-radius: 9px; font-weight: 800; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; }
+  .promo-illustration { position: relative; z-index: 1; flex-shrink: 0; }
+
+  /* ---- category grid ---- */
+  .category-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px 8px; }
+  .cat-item { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+  .cat-circle { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: transform .15s ease; }
+  .cat-item:active .cat-circle { transform: scale(0.92); }
+  .cat-label { font-size: 10.8px; text-align: center; color: var(--ink); font-weight: 600; line-height: 1.2; }
+  .cat-item.selected .cat-label { color: var(--orange); }
+  .cat-item.selected .cat-circle { box-shadow: 0 0 0 2px var(--orange); }
+
+  /* ---- featured workers horizontal scroll ---- */
+  .featured-scroll { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; margin: 0 -16px; padding-left: 16px; padding-right: 16px; }
+  .featured-scroll::-webkit-scrollbar { display: none; }
+  .fcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; min-width: 122px; flex-shrink: 0; text-align: center; }
+  .fcard .avatar { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 16px; color: #fff; }
+  .fcard .fname { font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fcard .fskill { font-size: 10.5px; color: var(--ink-soft); margin-top: 2px; }
+  .fcard .frating { font-size: 10.5px; color: var(--orange); margin-top: 4px; font-weight: 700; }
+
+  /* ---- all-workers grid (search results) ---- */
+  .filters { display: flex; gap: 8px; margin-bottom: 4px; }
+  .filters select { font-size: 13px; padding: 9px 10px; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+  .wcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 15px; display: flex; flex-direction: column; gap: 9px; }
+  .wcard-top { display: flex; gap: 11px; align-items: center; }
+  .avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 13.5px; color: #fff; flex-shrink: 0; }
+  .wcard-name { font-weight: 700; font-size: 14.5px; }
+  .wcard-skill { font-size: 12px; color: var(--ink-soft); display: flex; align-items: center; gap: 5px; }
+  .skill-ico { display: inline-flex; width: 15px; height: 15px; border-radius: 50%; background: var(--orange-tint); align-items: center; justify-content: center; flex-shrink: 0; }
+  .badge-verified { font-size: 9.5px; font-weight: 700; color: var(--ok); background: var(--ok-tint); border-radius: 5px; padding: 2px 6px; display: inline-block; margin-left: 4px; }
+  .rating { font-size: 13px; color: var(--orange); }
   .rating span.count { color: var(--ink-soft); margin-left: 3px; }
   .tags { display: flex; flex-wrap: wrap; gap: 5px; }
-  .tag { font-size: 11px; padding: 3px 8px; border-radius: 2px; background: var(--bp-2); color: var(--ink-soft); }
-  .wcard-meta { font-size: 12.5px; color: var(--ink-soft); display: flex; justify-content: space-between; align-items: center; }
-  .wcard-price { font-size: 17px; color: var(--safety); }
-  .wcard-price small { font-size: 11px; font-weight: 400; color: var(--ink-soft); font-family: 'Work Sans', sans-serif; }
-  .empty { text-align: center; padding: 44px 20px; color: var(--ink-soft); border: 1px dashed var(--line); border-radius: var(--radius); }
+  .tag { font-size: 10.5px; padding: 3px 8px; border-radius: 6px; background: var(--bg); color: var(--ink-soft); }
+  .wcard-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--ink-soft); }
+  .wcard-price { font-size: 16px; color: var(--ink); }
+  .wcard-price small { font-size: 11px; color: var(--ink-soft); font-weight: 400; }
+  .empty { text-align: center; padding: 34px 20px 30px; color: var(--ink-soft); }
+  .empty svg { margin: 0 auto 12px; display: block; }
 
-  .bcard { padding: 18px; margin-bottom: 14px; }
-  .bcard-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 11px; }
+  /* ---- bottom nav ---- */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px;
+    background: var(--card); border-top: 1px solid var(--line); display: flex;
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 60;
+    box-shadow: 0 -4px 16px rgba(16,27,51,0.06);
+  }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; color: var(--ink-soft); padding: 5px 0; }
+  .nav-item span { font-size: 10.5px; font-weight: 600; }
+  .nav-item.active { color: var(--orange); }
+  .nav-item svg { width: 22px; height: 22px; }
+
+  section.panel { display: none; }
+  section.panel.active { display: block; animation: panelIn .3s ease; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .page-header { padding: 20px 16px 6px; }
+  .page-header h1 { font-size: 21px; }
+  .page-header p { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
+
+  /* ---- bookings ---- */
+  .bcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 13px; }
+  .bcard-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
   .bcard-who { display: flex; gap: 10px; align-items: center; }
   .bcard-price { text-align: right; }
-  .bcard-price .num { font-size: 18px; color: var(--safety); }
-  .status-pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 2px; display: inline-block; }
-  .stepper { display: flex; gap: 3px; margin: 14px 0; flex-wrap: wrap; }
-  .step { flex: 1; min-width: 68px; text-align: center; font-size: 10px; color: var(--ink-soft); padding-top: 8px; border-top: 3px solid var(--line); }
-  .step.done { border-top-color: var(--ok); color: var(--ink); font-weight: 500; }
-  .step.now { border-top-color: var(--safety); color: var(--ink); font-weight: 700; }
-  .log { background: var(--bp-0); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; }
-  .log div { padding: 2px 0; } .log strong { color: var(--ink); font-weight: 600; }
-  .bcard-actions { display: flex; gap: 8px; margin-top: 13px; flex-wrap: wrap; }
-  .pay-note { font-size: 12px; color: #FFB7A0; margin-top: 8px; }
+  .status-pill { font-size: 10.5px; font-weight: 700; padding: 4px 10px; border-radius: 7px; background: var(--bg); color: var(--ink); display: inline-block; margin-bottom: 11px; }
+  .bcard-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .bcard-actions .btn { font-size: 12.5px; padding: 9px 13px; }
 
-  .overlay { position: fixed; inset: 0; background: rgba(6,15,25,0.72); display: none; align-items: flex-start; justify-content: center; padding: 26px 14px; overflow-y: auto; z-index: 50; }
+  .timeline { display: flex; margin: 4px 0 14px; }
+  .tl-step { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .tl-line { position: absolute; top: 10px; left: -50%; width: 100%; height: 2px; background: var(--line); z-index: 1; }
+  .tl-step:first-child .tl-line { display: none; }
+  .tl-step.done .tl-line { background: var(--ok); }
+  .tl-node { width: 21px; height: 21px; border-radius: 50%; border: 2px solid var(--line); background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--ink-soft); z-index: 2; transition: all .3s ease; }
+  .tl-step.done .tl-node { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .tl-step.now .tl-node { background: var(--orange); border-color: var(--orange); color: var(--orange-ink); animation: nodePulse 1.7s ease-in-out infinite; }
+  @keyframes nodePulse { 0%, 100% { box-shadow: 0 0 0 4px rgba(245,166,35,0.28); } 50% { box-shadow: 0 0 0 8px rgba(245,166,35,0.08); } }
+  .tl-label { font-size: 9.2px; color: var(--ink-soft); margin-top: 6px; text-align: center; max-width: 62px; line-height: 1.25; }
+  .tl-step.done .tl-label, .tl-step.now .tl-label { color: var(--ink); font-weight: 600; }
+
+  /* ---- messages list ---- */
+  .msg-row { display: flex; align-items: center; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; margin-bottom: 10px; }
+  .msg-row .body { flex: 1; min-width: 0; }
+  .msg-row .name { font-weight: 700; font-size: 14px; }
+  .msg-row .preview { font-size: 12px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .msg-row .chev { color: var(--ink-soft); }
+
+  /* ---- profile ---- */
+  .profile-hero { display: flex; align-items: center; gap: 16px; padding: 22px; margin-bottom: 16px; }
+  .profile-avatar { width: 60px; height: 60px; border-radius: 50%; background: var(--orange-tint); color: var(--orange); display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 22px; flex-shrink: 0; }
+  .profile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .profile-field { padding: 14px; text-align: center; }
+  .profile-field .label { font-size: 10.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.03em; }
+  .profile-field .value { font-size: 17px; font-weight: 800; margin-top: 3px; }
+  .settings-block { padding: 18px; margin-bottom: 14px; }
+  .settings-block h3 { font-size: 14.5px; margin-bottom: 3px; }
+  .settings-block .sub { font-size: 12px; color: var(--ink-soft); margin-bottom: 12px; }
+  .choice-row { display: flex; gap: 9px; flex-wrap: wrap; }
+  .choice-btn { padding: 9px 15px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .choice-btn.selected { border-color: var(--orange); color: var(--ink); background: var(--orange-tint); }
+  .choice-btn .dot { width: 8px; height: 8px; border-radius: 50%; border: 2px solid var(--ink-soft); }
+  .choice-btn.selected .dot { border-color: var(--orange); background: var(--orange); }
+
+  /* ---- modal ---- */
+  .overlay { position: fixed; inset: 0; background: rgba(16,27,51,0.55); display: none; align-items: flex-start; justify-content: center; padding: 26px 14px; overflow-y: auto; z-index: 70; }
   .overlay.open { display: flex; }
-  .modal { background: var(--bp-1); border: 1px solid var(--line); border-radius: 6px; max-width: 480px; width: 100%; padding: 24px; position: relative; }
+  .modal { background: var(--card); border-radius: 16px; max-width: 420px; width: 100%; padding: 24px; position: relative; }
   .modal-close { float: right; font-size: 20px; line-height: 1; color: var(--ink-soft); background: none; }
   .modal .row { margin: 15px 0; }
-  .modal label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 5px; }
+  .modal label { font-size: 12.5px; color: var(--ink-soft); display: block; margin-bottom: 5px; font-weight: 600; }
   .modal .total { display: flex; justify-content: space-between; align-items: baseline; padding-top: 13px; border-top: 1px solid var(--line); margin-top: 15px; }
-  .modal .total .num { font-size: 23px; color: var(--safety); }
+  .modal .total .num { font-size: 22px; color: var(--orange); }
   .field-2 { display: flex; gap: 10px; } .field-2 > div { flex: 1; }
   .paying { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--ink-soft); }
-  .spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--safety); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--orange); border-radius: 50%; animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* the one deliberate "moment" — a stamp confirming payment */
+  .pay-note { font-size: 12.5px; color: var(--rust); margin-top: 8px; }
   .stamp-wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px 10px; }
-  .stamp {
-    border: 4px solid var(--ok); color: var(--ok); font-family: 'Archivo', sans-serif; font-weight: 900;
-    font-size: 20px; letter-spacing: 0.03em; padding: 10px 22px; border-radius: 6px;
-    transform: scale(2.2) rotate(-8deg); opacity: 0;
-    animation: stampIn .45s cubic-bezier(.2,1.4,.4,1) forwards;
-  }
+  .stamp { border: 4px solid var(--ok); color: var(--ok); font-family: 'Archivo', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: 0.02em; padding: 10px 20px; border-radius: 10px; transform: scale(2.2) rotate(-8deg); opacity: 0; animation: stampIn .45s cubic-bezier(.2,1.4,.4,1) forwards; }
   @keyframes stampIn { to { transform: scale(1) rotate(-8deg); opacity: 1; } }
   .stamp-sub { color: var(--ink-soft); font-size: 13px; margin-top: 14px; }
 
-  footer.note { margin-top: 34px; padding: 15px 17px; border: 1px dashed var(--line); border-radius: var(--radius); font-size: 12.5px; color: var(--ink-soft); }
+  /* ---- floating chat popup ---- */
+  .chat-btn { font-size: 12px; }
+  .chat-fab-panel {
+    position: fixed; right: 20px; bottom: 90px; width: 300px; max-width: calc(100vw - 32px);
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 16px 40px rgba(16,27,51,0.22); z-index: 80; display: flex; flex-direction: column;
+    max-height: 420px; transform: translateY(24px) scale(0.95); opacity: 0; pointer-events: none;
+    transition: transform .28s cubic-bezier(.2,1,.3,1), opacity .22s ease;
+  }
+  .chat-fab-panel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+  .chat-fab-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--bg); border-radius: 16px 16px 0 0; }
+  .chat-fab-head .who .name { font-weight: 700; font-size: 13.5px; color: var(--ink); }
+  .chat-fab-head .who .sub { font-size: 11px; color: var(--ink-soft); }
+  .chat-fab-head button { background: none; color: var(--ink-soft); font-size: 18px; line-height: 1; }
+  .chat-fab-log { flex: 1; overflow-y: auto; padding: 12px 14px; font-size: 13px; min-height: 100px; }
+  .chat-fab-msg { padding: 6px 0; }
+  .chat-fab-msg .who { font-size: 10px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+  .chat-fab-send { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .chat-fab-send input { flex: 1; }
 
-  .chat-toggle { font-size: 12.5px; color: var(--line-bright); text-decoration: underline; cursor: pointer; margin-top: 9px; display: inline-block; }
-  .chat-box { display: none; margin-top: 11px; border-top: 1px solid var(--line); padding-top: 11px; }
-  .chat-box.open { display: block; }
-  .chat-log { max-height: 160px; overflow-y: auto; font-size: 13px; margin-bottom: 8px; }
-  .chat-msg { padding: 5px 0; }
-  .chat-msg .who { font-size: 11px; color: var(--ink-soft); font-weight: 700; }
-  .chat-send { display: flex; gap: 6px; }
-  .chat-send input { flex: 1; }
-
-  @media (max-width: 760px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .filters { grid-template-columns: 1fr; }
-    .grid { grid-template-columns: 1fr; }
+  @media (max-width: 380px) {
+    .category-grid { grid-template-columns: repeat(4, 1fr); gap: 10px 4px; }
+    .cat-circle { width: 48px; height: 48px; }
   }
 </style>
 </head>
 <body>
 
 <!-- ============ AUTH SCREEN ============ -->
-<div id="authScreen" class="auth-wrap tick" style="display:none;">
-  <div style="display:flex;justify-content:center;margin-bottom:18px;">
-    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="12" width="7" height="24" rx="1.5" fill="#EAF2F7"/><rect x="9" y="21" width="21" height="7" rx="1.5" fill="#EAF2F7"/><path d="M26 20 L33.5 8 L41 20 L37 20 L37 36 L30 36 L30 20 Z" fill="#F5A623"/></svg>
+<div id="authScreen" class="auth-wrap card" style="display:none;">
+  <div style="display:flex;justify-content:center;margin-bottom:16px;">
+    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="10" y="3" width="6" height="12" rx="2" fill="#EAF2F7"/><path d="M34 1.5 L38 7.5 L30 7.5 Z" fill="#F5A623"/><rect x="31" y="7.5" width="6" height="7.5" rx="2" fill="#F5A623"/><clipPath id="hs-auth"><rect x="6" y="23" width="36" height="14" rx="6"/></clipPath><g clip-path="url(#hs-auth)"><polygon points="6,23 24,23 19,26.5 29,30 19,33.5 24,37 6,37" fill="#EAF2F7"/><polygon points="42,23 24,23 19,26.5 29,30 19,33.5 24,37 42,37" fill="#F5A623"/></g><circle cx="14" cy="21.5" r="3.2" fill="#EAF2F7"/><circle cx="34" cy="21.5" r="3.2" fill="#F5A623"/></svg>
   </div>
-  <h2 id="authTitle" style="text-align:center;">Login karein</h2>
-  <p style="text-align:center;">Apna account se hire karna shuru karein</p>
+  <h2 id="authTitle" data-i18n="login_title">Login karein</h2>
+  <p data-i18n="login_sub">Apna account se hire karna shuru karein</p>
+  <p class="tagline">Skilled People. Real Work. Faster.</p>
+  <div id="authError"></div>
 
   <div id="loginForm">
-    <div class="row"><label>Phone number</label><input type="tel" id="loginPhone" placeholder="9876543210"></div>
-    <div class="row"><label>Password</label><input type="password" id="loginPassword"></div>
-    <button class="btn btn-safety btn-block" id="loginBtn">Login</button>
-    <div class="auth-switch">Naya account? <a id="showRegister">Register karein</a></div>
+    <div class="row"><label data-i18n="phone_label">Phone number</label><input type="tel" id="loginPhone" placeholder="9876543210"></div>
+    <div class="row"><label data-i18n="password_label">Password</label><input type="password" id="loginPassword"></div>
+    <button class="btn btn-safety btn-block" id="loginBtn" data-i18n="login_btn">Login</button>
+    <div class="auth-switch"><span data-i18n="new_account">Naya account?</span> <a id="showRegister" data-i18n="register_link">Register karein</a></div>
   </div>
 
   <div id="registerForm" style="display:none;">
-    <div class="row"><label>Naam</label><input type="text" id="regName"></div>
-    <div class="row"><label>Phone number</label><input type="tel" id="regPhone" placeholder="9876543210"></div>
-    <div class="row"><label>Password</label><input type="password" id="regPassword"></div>
-    <button class="btn btn-safety btn-block" id="registerBtn">Account banayein</button>
-    <div class="auth-switch">Pehle se account hai? <a id="showLogin">Login karein</a></div>
+    <h2 style="font-size:18px;" data-i18n="register_title">Account banayein</h2>
+    <div class="row"><label data-i18n="name_label">Naam</label><input type="text" id="regName"></div>
+    <div class="row"><label data-i18n="phone_label">Phone number</label><input type="tel" id="regPhone" placeholder="9876543210"></div>
+    <div class="row"><label data-i18n="password_label">Password</label><input type="password" id="regPassword"></div>
+    <button class="btn btn-safety btn-block" id="registerBtn" data-i18n="register_btn">Account banayein</button>
+    <div class="auth-switch"><span data-i18n="have_account">Pehle se account hai?</span> <a id="showLogin" data-i18n="login_link">Login karein</a></div>
   </div>
-
-  <div id="authError" class="error-box" style="display:none;"></div>
 </div>
 
-<!-- ============ MAIN APP ============ -->
-<div id="appScreen" style="display:none;">
-  <header class="topbar">
-    <div class="brand">
-      <span class="mark"><svg viewBox="0 0 48 48" width="30" height="30" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="12" width="7" height="24" rx="1.5" fill="#EAF2F7"/><rect x="9" y="21" width="21" height="7" rx="1.5" fill="#EAF2F7"/><path d="M26 20 L33.5 8 L41 20 L37 20 L37 36 L30 36 L30 20 Z" fill="#F5A623"/></svg></span>
-      <h1>Hire<span class="now">Now</span></h1>
+<!-- ============ APP SHELL ============ -->
+<div id="appScreen">
+
+  <section class="panel active" id="panel-home">
+    <div class="top-header">
+      <div class="header-row">
+        <div class="loc-wrap">
+          <span class="pin">📍</span>
+          <select class="loc-select" id="fCity"><option value="">All India</option></select>
+        </div>
+        <div class="header-icons">
+          <button class="icon-btn" id="notifBtn">🔔</button>
+          <div class="avatar-mini" id="headerAvatar">?</div>
+        </div>
+      </div>
+      <div class="greeting">
+        <div class="g1" id="greetLine">Good Morning,</div>
+        <div class="g2" id="greetSub">Let's get your work done today!</div>
+      </div>
     </div>
-    <nav class="tabs">
-      <button class="active" data-tab="hire">Workers hire karein</button>
-      <button data-tab="bookings">Meri bookings</button>
-    </nav>
-    <div class="who">
-      <span id="whoName"></span>
-      <button id="logoutBtn">Logout</button>
+    <div class="search-wrap">
+      <div class="inner">
+        <span class="mag">🔍</span>
+        <input type="text" id="fSearch" data-i18n-ph="search_placeholder" placeholder="Search for a skill or service...">
+      </div>
     </div>
-  </header>
 
-  <main>
-    <div class="stats" id="statsRow"></div>
+    <div class="main-pad">
+      <div class="promo-banner">
+        <div class="promo-text">
+          <div class="promo-title">Need help now?</div>
+          <div class="promo-sub">Book a worker in minutes</div>
+          <button class="btn-quick-hire" id="quickHireBtn">⚡ Quick Hire</button>
+        </div>
+        <div class="promo-illustration">
+          <svg width="64" height="64" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="32" r="30" fill="rgba(255,255,255,0.08)"/><path d="M22 40l6-14 4 4 8-10" stroke="#F5A623" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="20" r="4" fill="#F5A623"/><rect x="18" y="40" width="28" height="5" rx="2.5" fill="#EAF2F7" opacity="0.85"/></svg>
+        </div>
+      </div>
 
-    <section class="panel active" id="panel-hire">
-      <div class="section-head">
-        <div><h2>Kaamgar dhundein aur hire karein</h2><p>Skill aur jagah ke hisaab se filter karein</p></div>
-      </div>
-      <div class="filters">
-        <input type="text" id="fSearch" placeholder="Naam ya skill search karein">
-        <select id="fSkill"><option value="">Sabhi skills</option></select>
-        <select id="fCity"><option value="">Sabhi jagah</option></select>
-      </div>
-      <div class="grid" id="workerGrid"><div class="empty">Loading...</div></div>
-    </section>
+      <div class="section-row"><h2 data-i18n="popular_categories">Popular Categories</h2><a data-scroll="allWorkersAnchor">See All</a></div>
+      <div class="category-grid" id="categoryGrid"></div>
 
-    <section class="panel" id="panel-bookings">
-      <div class="section-head">
-        <div><h2>Meri bookings aur kaam ka status</h2><p>Payment aur kaam ki progress yahan dikhegi</p></div>
-      </div>
+      <div class="section-row"><h2 data-i18n="featured_workers">Featured Workers</h2><a data-scroll="allWorkersAnchor">See All</a></div>
+      <div class="featured-scroll" id="featuredScroll"></div>
+
+      <div class="section-row" id="allWorkersAnchor"><h2 data-i18n="hire_heading">All Workers</h2></div>
+      <div class="filters"><select id="fSkill"><option value="" data-i18n="all_skills">Sabhi skills</option></select></div>
+      <div class="grid" id="workerGrid" style="margin-top:12px;"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-bookings">
+    <div class="page-header">
+      <h1 data-i18n="bookings_heading">Meri bookings aur kaam ka status</h1>
+      <p data-i18n="bookings_sub">Payment aur kaam ki progress yahan dikhegi</p>
+    </div>
+    <div class="main-pad" style="padding-top:6px;">
       <div id="bookingsList"></div>
-    </section>
+    </div>
+  </section>
 
-    <footer class="note">
-      Payment Razorpay se real integrate hai — agar server pe test keys set nahi hain to "Pay" karne pe
-      config error dikhega, ye normal hai jab tak aap <code>.env</code> mein apni Razorpay test keys nahi daalte
-      (README dekhein). Worker apna GPS check-in khud <code>/worker</code> se karta hai.
-    </footer>
-  </main>
+  <section class="panel" id="panel-messages">
+    <div class="page-header">
+      <h1 data-i18n="messages_heading">Messages</h1>
+      <p data-i18n="messages_sub">Apne bookings ke workers se baat karein</p>
+    </div>
+    <div class="main-pad" style="padding-top:6px;">
+      <div id="messagesList"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="panel-profile">
+    <div class="page-header"><h1 data-i18n="profile_heading">Mera Profile</h1></div>
+    <div class="main-pad" style="padding-top:10px;">
+      <div class="profile-hero card">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <div>
+          <div style="font-size:19px;font-weight:800;" id="profileName">—</div>
+          <div style="color:var(--ink-soft);font-size:13px;" id="profilePhone">—</div>
+        </div>
+      </div>
+      <div class="profile-grid">
+        <div class="profile-field card"><div class="label" data-i18n="stat_active">Active</div><div class="value" id="profileActive">0</div></div>
+        <div class="profile-field card"><div class="label" data-i18n="stat_completed">Poore hue</div><div class="value" id="profileCompleted">0</div></div>
+        <div class="profile-field card"><div class="label" data-i18n="stat_spent">Total paid</div><div class="value" id="profileSpent">₹0</div></div>
+      </div>
+      <div class="settings-block card">
+        <h3 data-i18n="settings_lang">Bhasha / Language</h3>
+        <div class="sub" data-i18n="settings_lang_sub">App ki bhasha chunein</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span data-i18n="settings_lang_hi">Hinglish</span></button>
+          <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span data-i18n="settings_lang_en">English</span></button>
+        </div>
+      </div>
+      <button class="btn btn-outline btn-block" id="logoutBtn" data-i18n="logout">Logout</button>
+    </div>
+  </section>
+
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+      <span data-i18n="nav_home">Home</span>
+    </button>
+    <button class="nav-item" data-tab="bookings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      <span data-i18n="nav_bookings">Bookings</span>
+    </button>
+    <button class="nav-item" data-tab="messages">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 01-8.5 8.5c-1.4 0-2.7-.3-3.9-.9L3 20l1-4.5A8.5 8.5 0 1121 11.5z"/></svg>
+      <span data-i18n="nav_messages">Messages</span>
+    </button>
+    <button class="nav-item" data-tab="profile">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+      <span data-i18n="nav_profile">Profile</span>
+    </button>
+  </nav>
 </div>
 
-<div class="overlay" id="overlay"><div class="modal tick" id="modalBody"></div></div>
+<!-- ============ MODAL ============ -->
+<div class="overlay" id="overlay">
+  <div class="modal" id="modalBody"></div>
+</div>
+
+<!-- ============ FLOATING CHAT ============ -->
+<div class="chat-fab-panel" id="chatPanel">
+  <div class="chat-fab-head">
+    <div class="who"><div class="name" id="chatWith">—</div><div class="sub" data-i18n="chat_title">Message</div></div>
+    <button id="chatClose">&times;</button>
+  </div>
+  <div class="chat-fab-log" id="chatLog"></div>
+  <div class="chat-fab-send">
+    <input type="text" id="chatInput" data-i18n-ph="chat_placeholder" placeholder="Message likhein...">
+    <button class="btn btn-primary" id="chatSendBtn" data-i18n="chat_send">Bhejein</button>
+  </div>
+</div>
 
 <script>
 (function () {
   "use strict";
 
-  var state = { hirer: null, workers: [], bookings: [] };
+  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "" };
 
+  // ---------------- i18n ----------------
+  var LANG = {
+    hi: {
+      login_title: "Login karein", login_sub: "Apna account se hire karna shuru karein",
+      phone_label: "Phone number", password_label: "Password", login_btn: "Login",
+      new_account: "Naya account?", register_link: "Register karein",
+      register_title: "Account banayein", name_label: "Naam", register_btn: "Account banayein",
+      have_account: "Pehle se account hai?", login_link: "Login karein", logout: "Logout",
+      nav_home: "Home", nav_bookings: "Bookings", nav_messages: "Messages", nav_profile: "Profile",
+      popular_categories: "Popular Categories", featured_workers: "Featured Workers",
+      hire_heading: "All Workers", bookings_heading: "Meri bookings aur kaam ka status", bookings_sub: "Payment aur kaam ki progress yahan dikhegi",
+      messages_heading: "Messages", messages_sub: "Apne bookings ke workers se baat karein",
+      search_placeholder: "Search for a skill or service...", all_skills: "Sabhi skills", all_cities: "All India",
+      stat_active: "Active", stat_completed: "Poore hue", stat_spent: "Total paid",
+      hire_btn: "Hire karein", per_day: "/din", verified: "ID verified",
+      no_workers: "Koi kaamgar nahi mila.", no_bookings: "Abhi tak koi booking nahi hai.", no_messages: "Koi messages nahi hai abhi.",
+      pay_now: "Ab pay karein", manual_update: "Manual update:", message_worker: "Message",
+      profile_heading: "Mera Profile",
+      settings_lang: "Bhasha / Language", settings_lang_sub: "App ki bhasha chunein", settings_lang_hi: "Hinglish", settings_lang_en: "English",
+      chat_title: "Message", chat_placeholder: "Message likhein...", chat_send: "Bhejein",
+      you: "Aap", worker_word: "Worker", days_word: "din", years_exp: "saal anubhav", paid: "Paid", payment_pending: "Payment pending",
+      good_morning: "Good Morning,", good_afternoon: "Good Afternoon,", good_evening: "Good Evening,", greet_sub: "Chaliye aapka kaam poora karte hain!"
+    },
+    en: {
+      login_title: "Log in", login_sub: "Sign in to your account to start hiring",
+      phone_label: "Phone number", password_label: "Password", login_btn: "Log in",
+      new_account: "New here?", register_link: "Create account",
+      register_title: "Create account", name_label: "Name", register_btn: "Create account",
+      have_account: "Already have an account?", login_link: "Log in", logout: "Logout",
+      nav_home: "Home", nav_bookings: "Bookings", nav_messages: "Messages", nav_profile: "Profile",
+      popular_categories: "Popular Categories", featured_workers: "Featured Workers",
+      hire_heading: "All Workers", bookings_heading: "My bookings and job status", bookings_sub: "Payment and job progress shown here",
+      messages_heading: "Messages", messages_sub: "Chat with the workers on your bookings",
+      search_placeholder: "Search for a skill or service...", all_skills: "All skills", all_cities: "All India",
+      stat_active: "Active", stat_completed: "Completed", stat_spent: "Total paid",
+      hire_btn: "Hire", per_day: "/day", verified: "ID verified",
+      no_workers: "No workers found.", no_bookings: "No bookings yet.", no_messages: "No messages yet.",
+      pay_now: "Pay now", manual_update: "Manual update:", message_worker: "Message",
+      profile_heading: "My Profile",
+      settings_lang: "Language", settings_lang_sub: "Choose the app language", settings_lang_hi: "Hinglish", settings_lang_en: "English",
+      chat_title: "Message", chat_placeholder: "Type a message...", chat_send: "Send",
+      you: "You", worker_word: "Worker", days_word: "days", years_exp: "yrs experience", paid: "Paid", payment_pending: "Payment pending",
+      good_morning: "Good Morning,", good_afternoon: "Good Afternoon,", good_evening: "Good Evening,", greet_sub: "Let's get your work done today!"
+    }
+  };
+  function t(key) { return (LANG[state.lang] && LANG[state.lang][key]) || key; }
+  function applyStaticI18n() {
+    document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.dataset.i18n); });
+    document.querySelectorAll("[data-i18n-ph]").forEach(function (el) { el.setAttribute("placeholder", t(el.dataset.i18nPh)); });
+    document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
+      btn.classList.toggle("selected", btn.dataset.langChoice === state.lang);
+    });
+    updateGreeting();
+  }
+  function setLanguage(lang) {
+    state.lang = lang;
+    try { localStorage.setItem("hirenow_lang", lang); } catch (e) {}
+    applyStaticI18n();
+    renderWorkers(); renderBookings(); renderMessages(); renderFeatured(); renderCategories();
+  }
+  (function initLang() {
+    var saved = "hi";
+    try { saved = localStorage.getItem("hirenow_lang") || "hi"; } catch (e) {}
+    state.lang = saved;
+  })();
+  document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setLanguage(btn.dataset.langChoice); });
+  });
+
+  function updateGreeting() {
+    var h = new Date().getHours();
+    var key = h < 12 ? "good_morning" : (h < 17 ? "good_afternoon" : "good_evening");
+    var name = state.hirer ? (", " + state.hirer.name.split(" ")[0] + "!") : "";
+    document.getElementById("greetLine").textContent = t(key).replace(",", name);
+    document.getElementById("greetSub").textContent = t("greet_sub");
+  }
+
+  // ---------------- helpers ----------------
   function api(path, opts) {
     opts = opts || {};
     opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
-    return fetch(path, opts).then(function (r) {
-      return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
-    });
+    opts.credentials = "same-origin";
+    return fetch(path, opts).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); });
   }
-
   function fmtMoney(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
   function fmtDate(d) {
     var dt = new Date(d + "T00:00:00");
-    return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+    return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
   }
-  function initials(name) { return name.split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
+  function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
   var COLORS = ["#2B5F8F", "#C77F1E", "#4A7A95", "#3E8F63", "#8B5FA8", "#B0872F"];
   function colorFor(id) { return COLORS[id % COLORS.length]; }
 
-  // one-time count-up for the stat numbers — the single orchestrated animation for this view
-  function countUp(el, target, isMoney) {
-    var start = 0, duration = 600, startTime = null;
-    function step(ts) {
-      if (!startTime) startTime = ts;
-      var p = Math.min((ts - startTime) / duration, 1);
-      var val = Math.round(start + (target - start) * (1 - Math.pow(1 - p, 3)));
-      el.textContent = isMoney ? fmtMoney(val) : val;
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
+  var ICON_NO_WORKERS =
+    '<svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 4"/><path d="M20 38c0-6 4.5-10 10-10s10 4 10 10" stroke="var(--ink-soft)" stroke-width="2.2" stroke-linecap="round"/><circle cx="30" cy="22" r="6" stroke="var(--ink-soft)" stroke-width="2.2"/></svg>';
+  var ICON_NO_BOOKINGS =
+    '<svg width="60" height="60" viewBox="0 0 60 60" fill="none"><rect x="16" y="12" width="28" height="36" rx="3" stroke="var(--line)" stroke-width="2"/><path d="M23 8h14v6H23z" fill="var(--bg)" stroke="var(--line)" stroke-width="2"/><path d="M22 26h16M22 33h16M22 40h10" stroke="var(--ink-soft)" stroke-width="2" stroke-linecap="round"/></svg>';
+  var ICON_NO_MESSAGES =
+    '<svg width="60" height="60" viewBox="0 0 60 60" fill="none"><path d="M15 20h30v20H27l-7 6v-6h-5z" stroke="var(--line)" stroke-width="2" stroke-linejoin="round"/><path d="M22 28h16M22 34h10" stroke="var(--ink-soft)" stroke-width="2" stroke-linecap="round"/></svg>';
+
+  // ---- category / skill icons (also used on worker cards) ----
+  var SKILL_ICONS = {
+    "electric": '<path d="M13 2 5 13h5l-1 9 8-12h-5z"/>',
+    "plumb": '<path d="M6 3v5a3 3 0 003 3h1v10M14 3v5a3 3 0 01-3 3"/><circle cx="7" cy="18" r="2"/>',
+    "paint": '<path d="M17 3h3v5l-8 8-4-4 8-8z"/><path d="M9 15l-5 5 2 2 5-5"/>',
+    "mason": '<rect x="3" y="10" width="8" height="5"/><rect x="13" y="10" width="8" height="5"/><rect x="8" y="5" width="8" height="5"/><rect x="3" y="15" width="8" height="5"/><rect x="13" y="15" width="8" height="5"/>',
+    "carpent": '<circle cx="7" cy="7" r="3"/><path d="M9.5 9.5 20 20M14 6l6 6-3 3-6-6"/>',
+    "weld": '<path d="M12 2v4M6 4l2 3M18 4l-2 3M4 12h4M16 12h4M6 20l2-3M18 20l-2-3M12 18v4"/><circle cx="12" cy="12" r="4"/>',
+    "helper": '<path d="M3 8h18v12H3z"/><path d="M3 8l9-5 9 5M9 12h6"/>',
+    "majdoor": '<path d="M3 8h18v12H3z"/><path d="M3 8l9-5 9 5M9 12h6"/>',
+    "tile": '<rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/>',
+    "ac ": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>',
+    "technician": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>'
+  };
+  var SKILL_ICON_DEFAULT = '<path d="M14.7 6.3a4 4 0 00-5.4 5.4L2 19v3h3l7.3-7.3a4 4 0 005.4-5.4l-2.8 2.8-2-2z"/>';
+  function skillIcon(skill) {
+    var s = (skill || "").toLowerCase();
+    for (var key in SKILL_ICONS) { if (s.indexOf(key) !== -1) return SKILL_ICONS[key]; }
+    return SKILL_ICON_DEFAULT;
+  }
+  function skillIconSvg(skill, stroke) {
+    return '<span class="skill-ico"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="' + (stroke || "var(--orange)") + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + skillIcon(skill) + '</svg></span>';
+  }
+  // category chip color pairs [bg, icon color]
+  var CAT_COLORS = {
+    "electric": ["#FFF2D6", "#E29A1F"], "plumb": ["#DCEEFB", "#2F8FD1"], "carpent": ["#FBE7D9", "#C97A3D"],
+    "paint": ["#FCE1E6", "#E15C7A"], "ac ": ["#DFF2FB", "#33A6C9"], "technician": ["#DFF2FB", "#33A6C9"],
+    "helper": ["#E3F5E6", "#3FA85C"], "majdoor": ["#E3F5E6", "#3FA85C"], "mason": ["#F6E4D2", "#B5652C"],
+    "tile": ["#F6E4D2", "#B5652C"], "weld": ["#E3E8F5", "#46538F"]
+  };
+  function catColors(skill) {
+    var s = (skill || "").toLowerCase();
+    for (var key in CAT_COLORS) { if (s.indexOf(key) !== -1) return CAT_COLORS[key]; }
+    return ["#E3E8F5", "#46538F"];
   }
 
   // ---------------- auth screen wiring ----------------
   var authScreen = document.getElementById("authScreen");
   var appScreen = document.getElementById("appScreen");
   var authError = document.getElementById("authError");
-
   function showAuthError(msg) { authError.textContent = msg; authError.style.display = "block"; }
   function clearAuthError() { authError.style.display = "none"; }
 
   document.getElementById("showRegister").addEventListener("click", function () {
     document.getElementById("loginForm").style.display = "none";
     document.getElementById("registerForm").style.display = "block";
-    document.getElementById("authTitle").textContent = "Account banayein";
+    document.getElementById("authTitle").style.display = "none";
     clearAuthError();
   });
   document.getElementById("showLogin").addEventListener("click", function () {
     document.getElementById("registerForm").style.display = "none";
     document.getElementById("loginForm").style.display = "block";
-    document.getElementById("authTitle").textContent = "Login karein";
+    document.getElementById("authTitle").style.display = "block";
     clearAuthError();
   });
-
   document.getElementById("loginBtn").addEventListener("click", function () {
     clearAuthError();
     api("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({
-        phone: document.getElementById("loginPhone").value,
-        password: document.getElementById("loginPassword").value
-      })
+      body: JSON.stringify({ phone: document.getElementById("loginPhone").value.trim(), password: document.getElementById("loginPassword").value })
     }).then(function (res) {
-      if (!res.ok) return showAuthError(res.data.error || "Login fail hua");
+      if (!res.ok) { showAuthError(res.data.error || "Login fail hua"); return; }
       startApp(res.data);
     });
   });
-
   document.getElementById("registerBtn").addEventListener("click", function () {
     clearAuthError();
     api("/api/auth/register", {
       method: "POST",
       body: JSON.stringify({
-        name: document.getElementById("regName").value,
-        phone: document.getElementById("regPhone").value,
+        name: document.getElementById("regName").value.trim(),
+        phone: document.getElementById("regPhone").value.trim(),
         password: document.getElementById("regPassword").value
       })
     }).then(function (res) {
-      if (!res.ok) return showAuthError(res.data.error || "Registration fail hua");
+      if (!res.ok) { showAuthError(res.data.error || "Registration fail hua"); return; }
       startApp(res.data);
     });
   });
-
   document.getElementById("logoutBtn").addEventListener("click", function () {
-    api("/api/auth/logout", { method: "POST" }).then(function () {
-      state.hirer = null;
-      appScreen.style.display = "none";
-      appScreen.classList.remove("enter");
-      authScreen.style.display = "block";
-    });
+    api("/api/auth/logout", { method: "POST" }).then(function () { window.location.reload(); });
   });
 
+  // ---------------- tabs ----------------
+  document.querySelectorAll(".nav-item").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".nav-item").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll("section.panel").forEach(function (p) { p.classList.remove("active"); });
+      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+      window.scrollTo(0, 0);
+    });
+  });
+  document.querySelectorAll("[data-scroll]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      document.getElementById(el.dataset.scroll).scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+  document.getElementById("quickHireBtn").addEventListener("click", function () {
+    document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  // ---------------- boot ----------------
   function startApp(hirer) {
     state.hirer = hirer;
     authScreen.style.display = "none";
     appScreen.style.display = "block";
-    requestAnimationFrame(function () { appScreen.classList.add("enter"); });
-    document.getElementById("whoName").textContent = hirer.name;
+    document.getElementById("headerAvatar").textContent = initials(hirer.name);
+    document.getElementById("profileAvatar").textContent = initials(hirer.name);
+    document.getElementById("profileName").textContent = hirer.name;
+    document.getElementById("profilePhone").textContent = hirer.phone;
+    applyStaticI18n();
     loadWorkers();
     loadBookings();
   }
 
-  // ---------------- tabs ----------------
-  document.querySelectorAll("nav.tabs button").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll("nav.tabs button").forEach(function (b) { b.classList.remove("active"); });
-      btn.classList.add("active");
-      document.querySelectorAll("section.panel").forEach(function (p) { p.classList.remove("active"); });
-      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
-      if (btn.dataset.tab === "bookings") loadBookings();
-    });
-  });
-
-  // ---------------- workers ----------------
+  // ---------------- workers / home ----------------
   function loadWorkers() {
     api("/api/workers").then(function (res) {
       state.workers = res.data || [];
@@ -384,10 +630,48 @@
       var cities = Array.from(new Set(state.workers.map(function (w) { return w.city; })));
       var fSkill = document.getElementById("fSkill");
       var fCity = document.getElementById("fCity");
-      fSkill.innerHTML = '<option value="">Sabhi skills</option>' + skills.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
-      fCity.innerHTML = '<option value="">Sabhi jagah</option>' + cities.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join("");
+      fSkill.innerHTML = '<option value="">' + t("all_skills") + '</option>' + skills.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
+      fCity.innerHTML = '<option value="">' + t("all_cities") + '</option>' + cities.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join("");
+      renderCategories(skills);
+      renderFeatured();
       renderWorkers();
-      renderStats();
+    });
+  }
+
+  function renderCategories(skills) {
+    skills = skills || Array.from(new Set(state.workers.map(function (w) { return w.skill; })));
+    var grid = document.getElementById("categoryGrid");
+    grid.innerHTML = skills.map(function (s) {
+      var c = catColors(s);
+      var sel = state.selectedSkill === s ? "selected" : "";
+      return '<div class="cat-item ' + sel + '" data-cat="' + s + '">' +
+        '<div class="cat-circle" style="background:' + c[0] + '"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="' + c[1] + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + skillIcon(s) + '</svg></div>' +
+        '<div class="cat-label">' + s.split(" / ")[0] + '</div></div>';
+    }).join("");
+    grid.querySelectorAll("[data-cat]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var skill = el.dataset.cat;
+        state.selectedSkill = state.selectedSkill === skill ? "" : skill;
+        document.getElementById("fSkill").value = state.selectedSkill;
+        renderCategories(skills);
+        renderWorkers();
+        document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
+
+  function renderFeatured() {
+    var wrap = document.getElementById("featuredScroll");
+    var top = state.workers.slice().sort(function (a, b) { return b.rating - a.rating; }).slice(0, 8);
+    wrap.innerHTML = top.map(function (w) {
+      return '<div class="fcard" data-hire="' + w.id + '">' +
+        '<div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
+        '<div class="fname">' + w.name + '</div>' +
+        '<div class="fskill">' + w.skill + '</div>' +
+        '<div class="frating">★ ' + w.rating + '</div></div>';
+    }).join("");
+    wrap.querySelectorAll("[data-hire]").forEach(function (el) {
+      el.addEventListener("click", function () { openHireModal(Number(el.dataset.hire)); });
     });
   }
 
@@ -403,21 +687,23 @@
 
   function renderWorkers() {
     var grid = document.getElementById("workerGrid");
+    if (!state.workers.length) return;
     var list = state.workers.filter(matchesFilters);
-    if (!list.length) { grid.innerHTML = '<div class="empty">Koi kaamgar nahi mila.</div>'; return; }
+    if (!list.length) { grid.innerHTML = '<div class="empty">' + ICON_NO_WORKERS + t("no_workers") + '</div>'; return; }
     grid.innerHTML = list.map(function (w) {
       var stars = "★".repeat(Math.round(w.rating)) + "☆".repeat(5 - Math.round(w.rating));
       var skillsDetail = (w.skills_detail || "").split(",").slice(0, 3);
-      var tags = skillsDetail.map(function (t) { return '<span class="tag">' + t.trim() + '</span>'; }).join("");
+      var tags = skillsDetail.map(function (tg) { return '<span class="tag">' + tg.trim() + '</span>'; }).join("");
       return (
-        '<div class="wcard tick">' +
+        '<div class="wcard">' +
           '<div class="wcard-top"><div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
-          '<div><div class="wcard-name">' + w.name + (w.verification_status === "verified" ? '<span class="badge-verified">ID verified</span>' : '') + '</div><div class="wcard-skill">' + w.skill + '</div></div></div>' +
-          '<div class="rating">' + stars + ' <span class="count">' + w.rating + ' · ' + w.jobs_completed + ' kaam</span></div>' +
+          '<div><div class="wcard-name">' + w.name + '</div><div class="wcard-skill">' + skillIconSvg(w.skill) + ' ' + w.skill +
+          (w.verified ? '<span class="badge-verified">' + t("verified") + '</span>' : '') + '</div></div></div>' +
+          '<div class="rating">' + stars + ' <span class="count">' + w.rating + ' · ' + w.jobs_completed + '</span></div>' +
           '<div class="tags">' + tags + '</div>' +
-          '<div class="wcard-meta"><span>' + w.city + '</span><span>' + w.experience_years + ' saal anubhav</span></div>' +
-          '<div class="wcard-meta"><span class="wcard-price">' + fmtMoney(w.daily_wage) + '<small> /din</small></span>' +
-          '<button class="btn btn-primary" data-hire="' + w.id + '">Hire karein</button></div>' +
+          '<div class="wcard-meta"><span>' + w.city + '</span><span>' + w.experience_years + ' ' + t("years_exp") + '</span></div>' +
+          '<div class="wcard-meta"><span class="wcard-price num">' + fmtMoney(w.daily_wage) + '<small> ' + t("per_day") + '</small></span>' +
+          '<button class="btn btn-primary" data-hire="' + w.id + '">' + t("hire_btn") + '</button></div>' +
         '</div>'
       );
     }).join("");
@@ -425,27 +711,20 @@
       btn.addEventListener("click", function () { openHireModal(Number(btn.dataset.hire)); });
     });
   }
-  ["fSearch", "fSkill", "fCity"].forEach(function (id) {
+  ["fSearch", "fSkill"].forEach(function (id) {
     document.getElementById(id).addEventListener("input", renderWorkers);
   });
+  document.getElementById("fCity").addEventListener("change", function () { renderWorkers(); renderFeatured(); });
 
-  // ---------------- stats ----------------
-  function renderStats() {
+  // ---------------- profile ----------------
+  function renderProfile() {
+    if (!state.hirer) return;
     var active = state.bookings.filter(function (b) { return b.status !== "completed"; }).length;
-    var spent = state.bookings.reduce(function (s, b) { return s + (b.payment_status === "paid" ? b.total_amount : 0); }, 0);
     var completed = state.bookings.filter(function (b) { return b.status === "completed"; }).length;
-    var defs = [
-      ["Available kaamgar", state.workers.length, false],
-      ["Active bookings", active, false],
-      ["Kaam poore hue", completed, false],
-      ["Total paid", spent, true]
-    ];
-    document.getElementById("statsRow").innerHTML = defs.map(function (s) {
-      return '<div class="stat tick"><span class="num" data-target="' + s[1] + '" data-money="' + s[2] + '">0</span><div class="label">' + s[0] + '</div></div>';
-    }).join("");
-    document.querySelectorAll("#statsRow .num").forEach(function (el) {
-      countUp(el, Number(el.dataset.target), el.dataset.money === "true");
-    });
+    var spent = state.bookings.reduce(function (s, b) { return s + (b.payment_status === "paid" ? b.total_amount : 0); }, 0);
+    document.getElementById("profileActive").textContent = active;
+    document.getElementById("profileCompleted").textContent = completed;
+    document.getElementById("profileSpent").textContent = fmtMoney(spent);
   }
 
   // ---------------- hire + pay modal ----------------
@@ -459,7 +738,7 @@
     var today = new Date().toISOString().slice(0, 10);
     modalBody.innerHTML =
       '<button class="modal-close" data-close>&times;</button>' +
-      '<h3>' + w.name + ' ko hire karein</h3>' +
+      '<h3>' + w.name + '</h3>' +
       '<div class="wcard-skill">' + w.skill + ' · ' + w.city + '</div>' +
       '<div class="row field-2">' +
         '<div><label>Kab se chahiye</label><input type="date" id="mDate" min="' + today + '" value="' + today + '"></div>' +
@@ -513,12 +792,8 @@
       }
       var order = res.data;
       var options = {
-        key: order.key_id,
-        amount: order.amount,
-        currency: order.currency,
-        order_id: order.order_id,
-        name: "HireNow",
-        description: "Booking #" + bookingId,
+        key: order.key_id, amount: order.amount, currency: order.currency, order_id: order.order_id,
+        name: "HireNow", description: "Booking #" + bookingId,
         handler: function (response) {
           payMsg.innerHTML = '<div class="paying"><span class="spinner"></span> Payment verify ho raha hai...</div>';
           api("/api/payments/verify", {
@@ -530,17 +805,16 @@
             })
           }).then(function (vr) {
             if (!vr.ok) { payMsg.innerHTML = '<div class="pay-note">Verify fail: ' + vr.data.error + '</div>'; return; }
-            // the one deliberate animated moment: a stamp confirming the booking, then close
             modalBody.innerHTML = '<div class="stamp-wrap"><div class="stamp">CONFIRM HO GAYI</div><div class="stamp-sub">Booking #' + bookingId + ' — payment safal</div></div>';
             setTimeout(function () {
               closeModal();
               loadBookings();
-              document.querySelector('nav.tabs button[data-tab="bookings"]').click();
+              document.querySelector('.nav-item[data-tab="bookings"]').click();
             }, 1100);
           });
         },
         modal: { ondismiss: function () { payMsg.innerHTML = '<div class="pay-note">Checkout band kar diya.</div>'; } },
-        theme: { color: "#F2A93B" }
+        theme: { color: "#F5A623" }
       };
       var rzp = new Razorpay(options);
       rzp.on("payment.failed", function (resp) { payMsg.innerHTML = '<div class="pay-note">Payment fail: ' + resp.error.description + '</div>'; });
@@ -550,46 +824,45 @@
   }
 
   // ---------------- bookings ----------------
-  var STATUS_LABELS = {
-    requested: "Requested", confirmed: "Confirmed", en_route: "Worker aa raha hai",
-    checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua"
-  };
   var STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"];
+  var STATUS_LABELS_BY_LANG = {
+    hi: { requested: "Requested", confirmed: "Confirmed", en_route: "Worker aa raha hai", checked_in: "Site check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua" },
+    en: { requested: "Requested", confirmed: "Confirmed", en_route: "Worker en route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed" }
+  };
+  function statusLabel(s) { return STATUS_LABELS_BY_LANG[state.lang][s]; }
 
   function loadBookings() {
     api("/api/bookings").then(function (res) {
       state.bookings = res.data || [];
       renderBookings();
-      renderStats();
+      renderMessages();
+      renderProfile();
     });
   }
 
   function renderBookings() {
     var wrap = document.getElementById("bookingsList");
-    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">Abhi tak koi booking nahi hai.</div>'; return; }
+    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_BOOKINGS + t("no_bookings") + '</div>'; return; }
     wrap.innerHTML = state.bookings.map(function (b) {
       var idx = STATUS_FLOW.indexOf(b.status);
-      var steps = STATUS_FLOW.map(function (s, i) {
+      var nodes = STATUS_FLOW.map(function (s, i) {
         var cls = i < idx ? "done" : (i === idx ? "now" : "");
-        return '<div class="step ' + cls + '">' + STATUS_LABELS[s] + '</div>';
+        var inner = i < idx ? "✓" : (i + 1);
+        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + statusLabel(s) + '</div></div>';
       }).join("");
       var needsPay = b.payment_status !== "paid";
-      var nextLabel = idx < STATUS_FLOW.length - 1 ? STATUS_LABELS[STATUS_FLOW[idx + 1]] : null;
+      var nextLabel = idx < STATUS_FLOW.length - 1 ? statusLabel(STATUS_FLOW[idx + 1]) : null;
       return (
-        '<div class="bcard tick">' +
+        '<div class="bcard" data-booking-id="' + b.id + '" data-worker-name="' + b.worker_name + '">' +
           '<div class="bcard-head"><div class="bcard-who"><div class="avatar" style="background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
           '<div><div class="wcard-name">' + b.worker_name + '</div><div class="wcard-skill">' + b.worker_skill + ' · ' + b.worker_city + '</div></div></div>' +
-          '<div class="bcard-price"><div class="num">' + fmtMoney(b.total_amount) + '</div><div class="wcard-skill">' + fmtDate(b.start_date) + ' · ' + b.days + ' din</div></div></div>' +
-          '<span class="status-pill" style="background:var(--bp-2);color:var(--ink)">' + STATUS_LABELS[b.status] + (needsPay ? " · Payment pending" : " · Paid") + '</span>' +
-          '<div class="stepper">' + steps + '</div>' +
+          '<div class="bcard-price"><div class="num">' + fmtMoney(b.total_amount) + '</div><div class="wcard-skill">' + fmtDate(b.start_date) + ' · ' + b.days + ' ' + t("days_word") + '</div></div></div>' +
+          '<span class="status-pill">' + statusLabel(b.status) + (needsPay ? " · " + t("payment_pending") : " · " + t("paid")) + '</span>' +
+          '<div class="timeline">' + nodes + '</div>' +
           '<div class="bcard-actions">' +
-          (needsPay ? '<button class="btn btn-safety" data-pay="' + b.id + '">Ab pay karein</button>' :
-            (nextLabel ? '<button class="btn btn-outline" data-advance="' + b.id + '" title="Worker khud check-in kar sakta hai /worker se — ye sirf manual override hai">Manual update: ' + nextLabel + '</button>' : '')) +
-          '</div>' +
-          '<span class="chat-toggle" data-chat-toggle="' + b.id + '">Worker se message karein</span>' +
-          '<div class="chat-box" id="chat-' + b.id + '">' +
-            '<div class="chat-log" id="chatlog-' + b.id + '"></div>' +
-            '<div class="chat-send"><input type="text" id="chatinput-' + b.id + '" placeholder="Message likhein..."><button class="btn btn-primary" data-send="' + b.id + '">Bhejein</button></div>' +
+          (needsPay ? '<button class="btn btn-safety" data-pay="' + b.id + '">' + t("pay_now") + '</button>' :
+            (nextLabel ? '<button class="btn btn-outline" data-advance="' + b.id + '" title="Worker khud check-in kar sakta hai /worker se">' + t("manual_update") + ' ' + nextLabel + '</button>' : '')) +
+          '<button class="btn btn-outline chat-btn" data-open-chat="' + b.id + '">💬 ' + t("message_worker") + '</button>' +
           '</div>' +
         '</div>'
       );
@@ -612,42 +885,71 @@
         }).then(function () { loadBookings(); });
       });
     });
-    wrap.querySelectorAll("[data-chat-toggle]").forEach(function (el) {
-      el.addEventListener("click", function () {
-        var id = el.dataset.chatToggle;
-        var box = document.getElementById("chat-" + id);
-        box.classList.toggle("open");
-        if (box.classList.contains("open")) loadMessages(id);
+    wrap.querySelectorAll("[data-open-chat]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var card = btn.closest("[data-booking-id]");
+        openChat(Number(card.dataset.bookingId), card.dataset.workerName);
       });
     });
-    wrap.querySelectorAll("[data-send]").forEach(function (btn) {
-      btn.addEventListener("click", function () { sendMessage(btn.dataset.send); });
+  }
+
+  // ---------------- messages tab (inbox list over bookings) ----------------
+  function renderMessages() {
+    var wrap = document.getElementById("messagesList");
+    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_MESSAGES + t("no_messages") + '</div>'; return; }
+    wrap.innerHTML = state.bookings.map(function (b) {
+      return '<div class="msg-row" data-booking-id="' + b.id + '" data-worker-name="' + b.worker_name + '">' +
+        '<div class="avatar" style="background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
+        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="preview">' + statusLabel(b.status) + ' · ' + b.worker_skill + '</div></div>' +
+        '<div class="chev">›</div></div>';
+    }).join("");
+    wrap.querySelectorAll("[data-booking-id]").forEach(function (row) {
+      row.addEventListener("click", function () { openChat(Number(row.dataset.bookingId), row.dataset.workerName); });
     });
   }
 
-  function loadMessages(bookingId) {
-    api("/api/bookings/" + bookingId + "/messages").then(function (res) {
-      var log = document.getElementById("chatlog-" + bookingId);
-      if (!res.ok) { log.innerHTML = '<div style="color:#FFB7A0;">Messages load nahi hue</div>'; return; }
-      if (!res.data.length) { log.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
-      log.innerHTML = res.data.map(function (m) {
-        return '<div class="chat-msg"><div class="who">' + (m.sender_role === "hirer" ? "Aap" : "Worker") + '</div>' + m.body + '</div>';
+  // ---------------- floating chat popup ----------------
+  var chatPanel = document.getElementById("chatPanel");
+  var chatLog = document.getElementById("chatLog");
+  var chatWith = document.getElementById("chatWith");
+  var chatInput = document.getElementById("chatInput");
+
+  function openChat(bookingId, workerName) {
+    state.chatBookingId = bookingId;
+    chatWith.textContent = workerName;
+    chatPanel.classList.add("open");
+    loadMessages();
+  }
+  document.getElementById("chatClose").addEventListener("click", function () {
+    chatPanel.classList.remove("open");
+    state.chatBookingId = null;
+  });
+
+  function loadMessages() {
+    if (!state.chatBookingId) return;
+    api("/api/bookings/" + state.chatBookingId + "/messages").then(function (res) {
+      if (!res.ok) { chatLog.innerHTML = '<div style="color:var(--rust);">Messages load nahi hue</div>'; return; }
+      if (!res.data.length) { chatLog.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
+      chatLog.innerHTML = res.data.map(function (m) {
+        return '<div class="chat-fab-msg"><div class="who">' + (m.sender_role === "hirer" ? t("you") : t("worker_word")) + '</div>' + m.body + '</div>';
       }).join("");
-      log.scrollTop = log.scrollHeight;
+      chatLog.scrollTop = chatLog.scrollHeight;
     });
   }
 
-  function sendMessage(bookingId) {
-    var input = document.getElementById("chatinput-" + bookingId);
-    var body = input.value.trim();
-    if (!body) return;
-    api("/api/bookings/" + bookingId + "/messages", { method: "POST", body: JSON.stringify({ body: body }) }).then(function (res) {
-      if (res.ok) { input.value = ""; loadMessages(bookingId); }
+  document.getElementById("chatSendBtn").addEventListener("click", sendChatMessage);
+  chatInput.addEventListener("keydown", function (e) { if (e.key === "Enter") sendChatMessage(); });
+
+  function sendChatMessage() {
+    var body = chatInput.value.trim();
+    if (!body || !state.chatBookingId) return;
+    api("/api/bookings/" + state.chatBookingId + "/messages", { method: "POST", body: JSON.stringify({ body: body }) }).then(function (res) {
+      if (res.ok) { chatInput.value = ""; loadMessages(); }
     });
   }
-
 
   // ---------------- boot ----------------
+  applyStaticI18n();
   api("/api/auth/me").then(function (res) {
     if (res.data.logged_in) { startApp(res.data); }
     else { authScreen.style.display = "block"; }
