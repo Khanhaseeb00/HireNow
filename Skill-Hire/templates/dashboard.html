@@ -146,6 +146,31 @@
   .page-header h1 { font-size: 21px; }
   .page-header p { color: var(--ink-soft); font-size: 13px; margin: 4px 0 0; }
 
+  /* ---- pushed screens (full-screen stack, no bottom nav) ---- */
+  .pushed-screen {
+    position: fixed; inset: 0; max-width: 480px; margin: 0 auto; background: var(--bg);
+    z-index: 90; display: none; flex-direction: column; animation: slideIn .28s cubic-bezier(.2,1,.3,1);
+  }
+  .pushed-screen.active { display: flex; }
+  @keyframes slideIn { from { transform: translateX(24px); opacity: 0.4; } to { transform: translateX(0); opacity: 1; } }
+  .pushed-header { background: var(--navy); color: #fff; padding: 16px 14px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .pushed-header h2 { font-size: 17px; flex: 1; color: #fff; }
+  .pushed-header .back-btn, .pushed-header .icon-btn-header { background: rgba(255,255,255,0.12); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; font-size: 15px; }
+  .pushed-body { flex: 1; overflow-y: auto; padding: 16px; }
+
+  .chip-row { display: flex; gap: 8px; padding: 14px 14px 4px; overflow-x: auto; flex-shrink: 0; }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip { background: var(--card); border: 1px solid var(--line); color: var(--ink-soft); padding: 8px 15px; border-radius: 20px; font-size: 12.5px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+  .chip.active { background: var(--orange); color: var(--orange-ink); border-color: var(--orange); }
+
+  .cat-row-list { display: flex; flex-direction: column; gap: 10px; }
+  .cat-row { display: flex; align-items: center; gap: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; }
+  .cat-row .cat-row-circle { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cat-row .cat-row-body { flex: 1; min-width: 0; }
+  .cat-row .cat-row-name { font-weight: 700; font-size: 14.5px; }
+  .cat-row .cat-row-count { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+  .cat-row .chev { color: var(--ink-soft); font-size: 17px; }
+
   /* ---- bookings ---- */
   .bcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 13px; }
   .bcard-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
@@ -233,6 +258,35 @@
     .category-grid { grid-template-columns: repeat(4, 1fr); gap: 10px 4px; }
     .cat-circle { width: 48px; height: 48px; }
   }
+
+  /* ============ STACKED SCREENS (back-arrow pages that sit above the tabs) ============ */
+  .stack-screen {
+    display: none; position: fixed; inset: 0; max-width: 480px; margin: 0 auto; background: var(--bg);
+    z-index: 90; overflow-y: auto;
+  }
+  .stack-screen.open { display: block; }
+  .stack-header {
+    background: var(--navy); color: #fff; display: flex; align-items: center; gap: 12px;
+    padding: 16px 14px; position: sticky; top: 0; z-index: 2;
+  }
+  .stack-header .icon-btn-plain { background: none; color: #fff; font-size: 19px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .stack-header .stack-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; flex: 1; }
+  .stack-search-row { padding: 10px 14px 0; display: none; }
+  .stack-search-row.open { display: block; }
+  .stack-search-row input { background: var(--card); }
+  .stack-body { padding: 14px 14px 30px; }
+
+  .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
+  .filter-chips::-webkit-scrollbar { display: none; }
+  .chip { flex-shrink: 0; padding: 8px 15px; border-radius: 20px; background: var(--card); border: 1px solid var(--line); color: var(--ink-soft); font-size: 12.5px; font-weight: 600; }
+  .chip.active { background: var(--orange); color: var(--orange-ink); border-color: var(--orange); }
+
+  .cat-row { display: flex; align-items: center; gap: 13px; background: var(--card); border-radius: 14px; padding: 13px 14px; margin-bottom: 10px; }
+  .cat-row .cat-circle-sm { width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .cat-row .cat-row-body { flex: 1; }
+  .cat-row .cat-row-name { font-weight: 700; font-size: 14.5px; }
+  .cat-row .cat-row-count { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
+  .cat-row .chev { color: var(--ink-soft); font-size: 18px; }
 </style>
 </head>
 <body>
@@ -303,7 +357,7 @@
         </div>
       </div>
 
-      <div class="section-row"><h2 data-i18n="popular_categories">Popular Categories</h2><a data-scroll="allWorkersAnchor">See All</a></div>
+      <div class="section-row"><h2 data-i18n="popular_categories">Popular Categories</h2><a data-open-screen="categories">See All</a></div>
       <div class="category-grid" id="categoryGrid"></div>
 
       <div class="section-row"><h2 data-i18n="featured_workers">Featured Workers</h2><a data-scroll="allWorkersAnchor">See All</a></div>
@@ -382,6 +436,35 @@
   </nav>
 </div>
 
+<!-- ============ PUSHED SCREEN: CATEGORIES ============ -->
+<div class="pushed-screen" id="screen-categories">
+  <div class="pushed-header">
+    <button class="back-btn" data-back>←</button>
+    <h2 data-i18n="categories_title">Categories</h2>
+    <button class="icon-btn-header">🔍</button>
+  </div>
+  <div class="chip-row" id="catChipRow">
+    <button class="chip active" data-chip="all" data-i18n="chip_all">All</button>
+    <button class="chip" data-chip="home" data-i18n="chip_home">Home Services</button>
+    <button class="chip" data-chip="labour" data-i18n="chip_labour">Labour</button>
+    <button class="chip" data-chip="technical" data-i18n="chip_technical">Technical</button>
+  </div>
+  <div class="pushed-body">
+    <div class="cat-row-list" id="catRowList"></div>
+  </div>
+</div>
+
+<!-- ============ STACKED SCREEN (Categories, Worker List, Worker Profile, etc.) ============ -->
+<div class="stack-screen" id="stackScreen">
+  <div class="stack-header">
+    <button class="icon-btn-plain" id="stackBack">←</button>
+    <div class="stack-title" id="stackTitle">Title</div>
+    <button class="icon-btn-plain" id="stackSearchToggle" style="display:none;">🔍</button>
+  </div>
+  <div class="stack-search-row" id="stackSearchRow"><input type="text" id="stackSearchInput" placeholder="Search..."></div>
+  <div class="stack-body" id="stackBody"></div>
+</div>
+
 <!-- ============ MODAL ============ -->
 <div class="overlay" id="overlay">
   <div class="modal" id="modalBody"></div>
@@ -417,6 +500,7 @@
       nav_home: "Home", nav_bookings: "Bookings", nav_messages: "Messages", nav_profile: "Profile",
       popular_categories: "Popular Categories", featured_workers: "Featured Workers",
       hire_heading: "All Workers", bookings_heading: "Meri bookings aur kaam ka status", bookings_sub: "Payment aur kaam ki progress yahan dikhegi",
+      categories_title: "Categories", chip_all: "All", chip_home: "Home Services", chip_labour: "Labour", chip_technical: "Technical",
       messages_heading: "Messages", messages_sub: "Apne bookings ke workers se baat karein",
       search_placeholder: "Search for a skill or service...", all_skills: "Sabhi skills", all_cities: "All India",
       stat_active: "Active", stat_completed: "Poore hue", stat_spent: "Total paid",
@@ -604,6 +688,99 @@
       document.getElementById(el.dataset.scroll).scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
+
+  // ---------------- stacked screens (Categories, Worker List, Worker Profile, ...) ----------------
+  var stackScreen = document.getElementById("stackScreen");
+  var stackTitle = document.getElementById("stackTitle");
+  var stackBody = document.getElementById("stackBody");
+  var stackSearchToggle = document.getElementById("stackSearchToggle");
+  var stackSearchRow = document.getElementById("stackSearchRow");
+  var stackSearchInput = document.getElementById("stackSearchInput");
+  var stackHistory = [];
+
+  function openStack(name, title, renderFn, opts) {
+    opts = opts || {};
+    stackHistory.push(name);
+    stackTitle.textContent = title;
+    stackSearchRow.classList.remove("open");
+    stackSearchInput.value = "";
+    stackSearchToggle.style.display = opts.search ? "flex" : "none";
+    stackSearchToggle.onclick = function () { stackSearchRow.classList.toggle("open"); if (stackSearchRow.classList.contains("open")) stackSearchInput.focus(); };
+    stackSearchInput.oninput = opts.onSearch || null;
+    renderFn();
+    stackScreen.classList.add("open");
+    document.querySelector(".bottom-nav").style.display = "none";
+    window.scrollTo(0, 0);
+  }
+  function closeStack() {
+    stackHistory.pop();
+    stackScreen.classList.remove("open");
+    document.querySelector(".bottom-nav").style.display = "flex";
+  }
+  document.getElementById("stackBack").addEventListener("click", closeStack);
+
+  document.querySelectorAll("[data-open-screen]").forEach(function (el) {
+    el.addEventListener("click", function () { openScreen(el.dataset.openScreen); });
+  });
+
+  function openScreen(name, arg) {
+    if (name === "categories") openCategoriesScreen();
+  }
+
+  // ---- Categories screen ----
+  var CAT_GROUPS = {
+    "Home Services": ["Plumber", "Carpenter", "Painter", "Tile Worker"],
+    "Labour": ["Mistri / Mason", "Helper / Majdoor"],
+    "Technical": ["Electrician", "AC Technician", "Welder"]
+  };
+  function openCategoriesScreen() {
+    var currentGroup = "All";
+    openStack("categories", "Categories", function () { renderCategoriesScreen(currentGroup); }, {
+      search: true,
+      onSearch: function () { renderCategoriesScreen(currentGroup); }
+    });
+    function renderCategoriesScreen(activeGroup) {
+      currentGroup = activeGroup;
+      renderCategoriesScreenImpl(activeGroup, function (g) { renderCategoriesScreen(g); });
+    }
+  }
+  function renderCategoriesScreenImpl(activeGroup, onChipClick) {
+    activeGroup = activeGroup || "All";
+    var skills = Array.from(new Set(state.workers.map(function (w) { return w.skill; })));
+    var groups = ["All", "Home Services", "Labour", "Technical"];
+    var chipsHtml = groups.map(function (g) {
+      return '<button class="chip ' + (g === activeGroup ? "active" : "") + '" data-group="' + g + '">' + g + '</button>';
+    }).join("");
+    var q = (stackSearchInput.value || "").trim().toLowerCase();
+    var list = skills.filter(function (s) {
+      if (activeGroup !== "All" && (CAT_GROUPS[activeGroup] || []).indexOf(s) === -1) return false;
+      if (q && s.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+    var rowsHtml = list.map(function (s) {
+      var c = catColors(s);
+      var count = state.workers.filter(function (w) { return w.skill === s; }).length;
+      return '<div class="cat-row" data-goto-skill="' + s + '">' +
+        '<div class="cat-circle-sm" style="background:' + c[0] + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="' + c[1] + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + skillIcon(s) + '</svg></div>' +
+        '<div class="cat-row-body"><div class="cat-row-name">' + s + '</div><div class="cat-row-count">' + count + ' worker' + (count === 1 ? "" : "s") + '</div></div>' +
+        '<div class="chev">›</div></div>';
+    }).join("") || '<div class="empty">' + t("no_workers") + '</div>';
+    stackBody.innerHTML = '<div class="filter-chips">' + chipsHtml + '</div><div id="catRows">' + rowsHtml + '</div>';
+    stackBody.querySelectorAll(".chip").forEach(function (chip) {
+      chip.addEventListener("click", function () { onChipClick(chip.dataset.group); });
+    });
+    stackBody.querySelectorAll("[data-goto-skill]").forEach(function (row) {
+      row.addEventListener("click", function () {
+        state.selectedSkill = row.dataset.gotoSkill;
+        document.getElementById("fSkill").value = state.selectedSkill;
+        renderWorkers();
+        renderCategories();
+        closeStack();
+        document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  }
+
   document.getElementById("quickHireBtn").addEventListener("click", function () {
     document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
   });
