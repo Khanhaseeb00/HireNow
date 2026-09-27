@@ -17,6 +17,14 @@
     --ok: #58B37C; --ok-tint: rgba(88,179,124,0.16);
     --radius: 3px;
   }
+  :root[data-theme="light"] {
+    --bp-0: #E8EEF3; --bp-1: #FFFFFF; --bp-2: #DCE6EF;
+    --line: #C4D2DE; --line-soft: rgba(43,95,143,0.10); --line-bright: #2B5F8F;
+    --ink: #142338; --ink-soft: #5B7086;
+    --safety: #D9962E; --safety-ink: #2A1C05;
+    --rust: #C24A28; --rust-tint: rgba(194,74,40,0.10);
+    --ok: #2F8F5B; --ok-tint: rgba(47,143,91,0.10);
+  }
   * { box-sizing: border-box; }
   body {
     margin: 0; color: var(--ink);
@@ -44,8 +52,52 @@
   header.topbar {
     background: var(--bp-1); color: var(--ink); padding: 14px 20px;
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--line); flex-wrap: wrap;
   }
+  body { transition: background-color .3s ease, color .3s ease; }
+  nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav.tabs button { padding: 8px 13px; border-radius: var(--radius); font-size: 13px; font-weight: 500; color: var(--ink-soft); background: none; }
+  nav.tabs button.active { background: var(--bp-2); color: var(--ink); }
+  nav.tabs button:hover:not(.active) { color: var(--ink); }
+  section.panel { display: none; }
+  section.panel.active { display: block; animation: panelIn .35s ease; }
+  @keyframes panelIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .flatcard { background: var(--bp-1); border: 1px solid var(--line); border-radius: 8px; }
+  .settings-block { padding: 20px; margin-bottom: 16px; }
+  .settings-block h3 { font-size: 15px; margin-bottom: 4px; }
+  .settings-block .sub { font-size: 12.5px; color: var(--ink-soft); margin-bottom: 14px; }
+  .choice-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .choice-btn { padding: 10px 18px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bp-0); color: var(--ink-soft); font-size: 13.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .choice-btn.selected { border-color: var(--safety); color: var(--ink); background: var(--bp-2); }
+  .choice-btn .dot { width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--ink-soft); }
+  .choice-btn.selected .dot { border-color: var(--safety); background: var(--safety); }
+  .profile-hero { display: flex; align-items: center; gap: 18px; padding: 24px; margin-bottom: 18px; }
+  .profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--bp-2); display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 24px; color: var(--safety); flex-shrink: 0; }
+  .profile-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .profile-field { padding: 15px; }
+  .profile-field .label { font-size: 11.5px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; }
+  .profile-field .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  @media (max-width: 480px) { .profile-grid { grid-template-columns: 1fr; } }
+  .chat-btn { font-size: 12.5px; }
+  .chat-fab-panel {
+    position: fixed; right: 20px; bottom: 20px; width: 320px; max-width: calc(100vw - 32px);
+    background: var(--bp-1); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.4); z-index: 80; display: flex; flex-direction: column;
+    max-height: 440px; transform: translateY(24px) scale(0.95); opacity: 0; pointer-events: none;
+    transition: transform .28s cubic-bezier(.2,1,.3,1), opacity .22s ease;
+  }
+  .chat-fab-panel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: auto; }
+  .chat-fab-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--bp-2); border-radius: 10px 10px 0 0; }
+  .chat-fab-head .who { display: flex; flex-direction: column; gap: 0; align-items: flex-start; }
+  .chat-fab-head .who .name { font-weight: 700; font-size: 13.5px; color: var(--ink); }
+  .chat-fab-head .who .sub { font-size: 11px; color: var(--ink-soft); }
+  .chat-fab-head button { background: none; color: var(--ink-soft); font-size: 18px; line-height: 1; }
+  .chat-fab-log { flex: 1; overflow-y: auto; padding: 12px 14px; font-size: 13px; min-height: 120px; }
+  .chat-fab-msg { padding: 6px 0; }
+  .chat-fab-msg .who { font-size: 10.5px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+  .chat-fab-send { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); }
+  .chat-fab-send input { flex: 1; }
+  @media (max-width: 480px) { .chat-fab-panel { right: 10px; left: 10px; width: auto; bottom: 10px; } }
   .brand { display: flex; align-items: center; gap: 9px; }
   .brand .mark { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .brand h1 { font-size: 18px; }
@@ -100,6 +152,23 @@
   .bcard-head .num { font-size: 17px; color: var(--safety); }
   .status-pill { font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 2px; background: var(--bp-2); color: var(--ink); display: inline-block; margin-bottom: 11px; }
 
+  /* ---- status timeline — node-and-line tracker ---- */
+  .timeline { display: flex; margin: 4px 0 14px; }
+  .tl-step { flex: 1; display: flex; flex-direction: column; align-items: center; position: relative; }
+  .tl-line { position: absolute; top: 10px; left: -50%; width: 100%; height: 2px; background: var(--line); z-index: 1; }
+  .tl-step:first-child .tl-line { display: none; }
+  .tl-step.done .tl-line { background: var(--ok); }
+  .tl-node {
+    width: 21px; height: 21px; border-radius: 50%; border: 2px solid var(--line); background: var(--bp-1);
+    display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+    color: var(--ink-soft); z-index: 2; transition: all .3s ease;
+  }
+  .tl-step.done .tl-node { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .tl-step.now .tl-node { background: var(--safety); border-color: var(--safety); color: var(--safety-ink); animation: nodePulse 1.7s ease-in-out infinite; }
+  @keyframes nodePulse { 0%, 100% { box-shadow: 0 0 0 4px rgba(245,166,35,0.28); } 50% { box-shadow: 0 0 0 8px rgba(245,166,35,0.08); } }
+  .tl-label { font-size: 9.5px; color: var(--ink-soft); margin-top: 6px; text-align: center; max-width: 66px; line-height: 1.3; }
+  .tl-step.done .tl-label, .tl-step.now .tl-label { color: var(--ink); font-weight: 600; }
+
   /* GPS check-in — a location pin that pulses while acquiring a fix, ties motion to the actual wait */
   .gps-note { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; min-height: 18px; display: flex; align-items: center; gap: 7px; }
   .pin { width: 9px; height: 9px; border-radius: 50%; background: var(--safety); flex-shrink: 0; }
@@ -116,21 +185,14 @@
   }
   @keyframes stampIn { to { transform: scale(1) rotate(-6deg); opacity: 1; } }
 
-  .chat-toggle { font-size: 12.5px; color: var(--line-bright); text-decoration: underline; cursor: pointer; margin-top: 9px; display: inline-block; }
-  .chat-box { display: none; margin-top: 11px; border-top: 1px solid var(--line); padding-top: 11px; }
-  .chat-box.open { display: block; }
-  .chat-log { max-height: 160px; overflow-y: auto; font-size: 13px; margin-bottom: 8px; }
-  .chat-msg { padding: 5px 0; }
-  .chat-msg .who { font-size: 11px; color: var(--ink-soft); font-weight: 700; }
-  .chat-send { display: flex; gap: 6px; }
-  .chat-send input { flex: 1; }
+  .chat-toggle { display: none; }
 </style>
 </head>
 <body>
 
 <div id="authScreen" class="auth-wrap tick" style="display:none;">
   <div style="display:flex;justify-content:center;margin-bottom:18px;">
-    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="12" width="7" height="24" rx="1.5" fill="#EAF2F7"/><rect x="9" y="21" width="21" height="7" rx="1.5" fill="#EAF2F7"/><path d="M26 20 L33.5 8 L41 20 L37 20 L37 36 L30 36 L30 20 Z" fill="#F5A623"/></svg>
+    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hs-w1"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hs-w1)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg>
   </div>
   <h2 id="authTitle" style="text-align:center;">Worker Login</h2>
   <p style="text-align:center;">Apne kaam aur bookings dekhne ke liye login karein</p>
@@ -160,35 +222,157 @@
 <div id="appScreen" style="display:none;">
   <header class="topbar">
     <div class="brand">
-      <span class="mark"><svg viewBox="0 0 48 48" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="12" width="7" height="24" rx="1.5" fill="#EAF2F7"/><rect x="9" y="21" width="21" height="7" rx="1.5" fill="#EAF2F7"/><path d="M26 20 L33.5 8 L41 20 L37 20 L37 36 L30 36 L30 20 Z" fill="#F5A623"/></svg></span>
+      <span class="mark"><svg viewBox="0 0 48 48" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hs-w2"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hs-w2)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg></span>
       <h1>Hire<span class="now">Now</span></h1>
     </div>
+    <nav class="tabs">
+      <button class="active" data-tab="work" id="navWork">Mera Kaam</button>
+      <button data-tab="profile" id="navProfile">Profile</button>
+      <button data-tab="settings" id="navSettings">Settings</button>
+    </nav>
     <div class="who"><span id="whoName"></span><button id="logoutBtn">Logout</button></div>
   </header>
 
   <main>
-    <p style="color:var(--ink-soft);font-size:13px;margin:-6px 0 18px;">Mera Kaam — apne jobs aur bookings yahan dekhein</p>
+    <section class="panel active" id="panel-work">
+      <p style="color:var(--ink-soft);font-size:13px;margin:-6px 0 18px;" id="workSubtitle">Mera Kaam — apne jobs aur bookings yahan dekhein</p>
 
-    <div class="verify-box tick">
-      <div class="row">
-        <div>
-          <div class="title">ID Verification</div>
-          <div class="sub">Verified badge se hirers zyada trust karte hain</div>
+      <div class="verify-box tick">
+        <div class="row">
+          <div>
+            <div class="title">ID Verification</div>
+            <div class="sub">Verified badge se hirers zyada trust karte hain</div>
+          </div>
+          <span class="badge" id="verifyBadge">—</span>
         </div>
-        <span class="badge" id="verifyBadge">—</span>
+        <div id="verifyUploadArea" style="margin-top:10px;"></div>
       </div>
-      <div id="verifyUploadArea" style="margin-top:10px;"></div>
-    </div>
 
-    <h2 class="section-title">Meri bookings</h2>
-    <div id="bookingsList"><div class="empty">Loading...</div></div>
+      <h2 class="section-title">Meri bookings</h2>
+      <div id="bookingsList"><div class="empty">Loading...</div></div>
+    </section>
+
+    <section class="panel" id="panel-profile">
+      <h2 class="section-title" id="profileHeading">Mera Profile</h2>
+      <div class="profile-hero flatcard">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <div>
+          <div style="font-size:20px;font-weight:800;" id="profileName">—</div>
+          <div style="color:var(--ink-soft);font-size:13.5px;" id="profilePhone">—</div>
+        </div>
+      </div>
+      <div class="profile-grid">
+        <div class="profile-field flatcard"><div class="label" id="profLabelSkill">Skill</div><div class="value" id="profileSkill">—</div></div>
+        <div class="profile-field flatcard"><div class="label" id="profLabelCity">Shahar</div><div class="value" id="profileCity">—</div></div>
+        <div class="profile-field flatcard"><div class="label" id="profLabelWage">Daily wage</div><div class="value num" id="profileWage">—</div></div>
+        <div class="profile-field flatcard"><div class="label" id="profLabelRating">Rating</div><div class="value" id="profileRating">—</div></div>
+        <div class="profile-field flatcard"><div class="label" id="profLabelJobs">Jobs poore hue</div><div class="value num" id="profileJobs">0</div></div>
+        <div class="profile-field flatcard"><div class="label" id="profLabelVerify">ID Verification</div><div class="value"><span class="badge" id="profileVerifyBadge">—</span></div></div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-settings">
+      <h2 class="section-title">Settings</h2>
+      <div class="settings-block flatcard">
+        <h3>Theme</h3>
+        <div class="sub">Dark ya Light mode chunein</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-theme-choice="dark"><span class="dot"></span><span>Dark</span></button>
+          <button class="choice-btn" data-theme-choice="light"><span class="dot"></span><span>Light</span></button>
+        </div>
+      </div>
+      <div class="settings-block flatcard">
+        <h3>Bhasha / Language</h3>
+        <div class="sub">App ki bhasha chunein</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span>Hinglish</span></button>
+          <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span>English</span></button>
+        </div>
+      </div>
+    </section>
   </main>
+</div>
+
+<!-- floating chat widget — single shared panel, opened per-booking -->
+<div class="chat-fab-panel" id="chatPanel">
+  <div class="chat-fab-head">
+    <div class="who"><div class="name" id="chatWith">—</div><div class="sub" id="chatSubLabel">Message</div></div>
+    <button id="chatClose">&times;</button>
+  </div>
+  <div class="chat-fab-log" id="chatLog"></div>
+  <div class="chat-fab-send">
+    <input type="text" id="chatInput" placeholder="Message likhein...">
+    <button class="btn btn-primary" id="chatSendBtn">Bhejein</button>
+  </div>
 </div>
 
 <script>
 (function () {
   "use strict";
-  var state = { worker: null, bookings: [] };
+  var state = { worker: null, bookings: [], lang: "hi", theme: "dark", chatBookingId: null };
+
+  var W_LANG = {
+    hi: { subtitle: "Mera Kaam — apne jobs aur bookings yahan dekhein", bookings_heading: "Meri bookings", no_bookings: "Abhi tak koi booking assign nahi hui.", chat_title: "Message", chat_send: "Bhejein", chat_ph: "Message likhein...", chat_toggle: "Message bhejein", nav_work: "Mera Kaam", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "Mera Profile", lbl_skill: "Skill", lbl_city: "Shahar", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs poore hue", lbl_verify: "ID Verification" },
+    en: { subtitle: "My Work — see your jobs and bookings here", bookings_heading: "My bookings", no_bookings: "No bookings assigned yet.", chat_title: "Message", chat_send: "Send", chat_ph: "Type a message...", chat_toggle: "Message", nav_work: "My Work", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "My Profile", lbl_skill: "Skill", lbl_city: "City", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs completed", lbl_verify: "ID Verification" }
+  };
+  function wt(key) { return (W_LANG[state.lang] && W_LANG[state.lang][key]) || key; }
+  function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
+  function applyWorkerI18n() {
+    document.getElementById("workSubtitle").textContent = wt("subtitle");
+    document.querySelector("#panel-work .section-title").textContent = wt("bookings_heading");
+    document.getElementById("navWork").textContent = wt("nav_work");
+    document.getElementById("navProfile").textContent = wt("nav_profile");
+    document.getElementById("navSettings").textContent = wt("nav_settings");
+    document.getElementById("profileHeading").textContent = wt("profile_heading");
+    document.getElementById("profLabelSkill").textContent = wt("lbl_skill");
+    document.getElementById("profLabelCity").textContent = wt("lbl_city");
+    document.getElementById("profLabelWage").textContent = wt("lbl_wage");
+    document.getElementById("profLabelRating").textContent = wt("lbl_rating");
+    document.getElementById("profLabelJobs").textContent = wt("lbl_jobs");
+    document.getElementById("profLabelVerify").textContent = wt("lbl_verify");
+    document.getElementById("chatSubLabel").textContent = wt("chat_title");
+    document.getElementById("chatInput").setAttribute("placeholder", wt("chat_ph"));
+    document.getElementById("chatSendBtn").textContent = wt("chat_send");
+    document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
+      btn.classList.toggle("selected", btn.dataset.langChoice === state.lang);
+    });
+    renderBookings();
+    renderProfile();
+  }
+  function setWorkerLanguage(lang) {
+    state.lang = lang;
+    try { localStorage.setItem("hirenow_worker_lang", lang); } catch (e) {}
+    applyWorkerI18n();
+  }
+  function setWorkerTheme(theme) {
+    state.theme = theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    try { localStorage.setItem("hirenow_worker_theme", theme); } catch (e) {}
+    document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
+      btn.classList.toggle("selected", btn.dataset.themeChoice === theme);
+    });
+  }
+  (function initWorkerPrefs() {
+    var savedTheme = "dark", savedLang = "hi";
+    try { savedTheme = localStorage.getItem("hirenow_worker_theme") || "dark"; } catch (e) {}
+    try { savedLang = localStorage.getItem("hirenow_worker_lang") || "hi"; } catch (e) {}
+    state.theme = savedTheme; state.lang = savedLang;
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  })();
+  document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setWorkerTheme(btn.dataset.themeChoice); });
+  });
+  document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
+    btn.addEventListener("click", function () { setWorkerLanguage(btn.dataset.langChoice); });
+  });
+  document.querySelectorAll("nav.tabs button").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll("nav.tabs button").forEach(function (b) { b.classList.remove("active"); });
+      btn.classList.add("active");
+      document.querySelectorAll("section.panel").forEach(function (p) { p.classList.remove("active"); });
+      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+    });
+  });
 
   function api(path, opts) {
     opts = opts || {};
@@ -264,8 +448,33 @@
     appScreen.style.display = "block";
     requestAnimationFrame(function () { appScreen.classList.add("enter"); });
     document.getElementById("whoName").textContent = worker.name;
+    applyWorkerI18n();
+    document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
+      btn.classList.toggle("selected", btn.dataset.themeChoice === state.theme);
+    });
     renderVerifyBox();
     loadBookings();
+    // login/register responses are minimal (id, name, phone) — refresh full profile fields
+    api("/api/worker-auth/me").then(function (res) {
+      if (res.data && res.data.logged_in) { state.worker = res.data; renderVerifyBox(); renderProfile(); }
+    });
+  }
+
+  // ---------------- profile ----------------
+  function renderProfile() {
+    if (!state.worker) return;
+    document.getElementById("profileAvatar").textContent = initials(state.worker.name);
+    document.getElementById("profileName").textContent = state.worker.name;
+    document.getElementById("profilePhone").textContent = state.worker.phone;
+    document.getElementById("profileSkill").textContent = state.worker.skill || "—";
+    document.getElementById("profileCity").textContent = state.worker.city || "—";
+    document.getElementById("profileWage").textContent = state.worker.daily_wage ? fmtMoney(state.worker.daily_wage) : "—";
+    document.getElementById("profileRating").textContent = state.worker.rating != null ? ("★ " + state.worker.rating) : "—";
+    document.getElementById("profileJobs").textContent = state.worker.jobs_completed != null ? state.worker.jobs_completed : (state.bookings.filter(function (b) { return b.status === "completed"; }).length);
+    var status = state.worker.verification_status || "unverified";
+    var vb = document.getElementById("profileVerifyBadge");
+    vb.textContent = status;
+    vb.className = "badge " + status;
   }
 
   // ---------------- verification ----------------
@@ -298,40 +507,46 @@
   }
 
   // ---------------- bookings + real GPS check-in ----------------
-  var STATUS_LABELS = {
-    requested: "Requested", confirmed: "Confirmed", en_route: "Aap ja rahe hain",
-    checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua"
+  var STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"];
+  var STATUS_LABELS_BY_LANG = {
+    hi: { requested: "Requested", confirmed: "Confirmed", en_route: "Aap ja rahe hain", checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua" },
+    en: { requested: "Requested", confirmed: "Confirmed", en_route: "En route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed" }
   };
-  var NEXT_ACTION_LABEL = {
-    confirmed: "Nikal raha hoon (check-in)", en_route: "Site pahunch gaya", checked_in: "Kaam shuru karta hoon", in_progress: "Kaam poora hua"
+  var NEXT_ACTION_BY_LANG = {
+    hi: { confirmed: "Nikal raha hoon (check-in)", en_route: "Site pahunch gaya", checked_in: "Kaam shuru karta hoon", in_progress: "Kaam poora hua" },
+    en: { confirmed: "Heading out (check-in)", en_route: "Arrived at site", checked_in: "Starting work", in_progress: "Job done" }
   };
 
   function loadBookings() {
     api("/api/worker/bookings").then(function (res) {
       state.bookings = res.data || [];
       renderBookings();
+      renderProfile();
     });
   }
 
   function renderBookings() {
     var wrap = document.getElementById("bookingsList");
-    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">Abhi tak koi booking assign nahi hui.</div>'; return; }
+    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + wt("no_bookings") + '</div>'; return; }
     wrap.innerHTML = state.bookings.map(function (b) {
-      var actionLabel = NEXT_ACTION_LABEL[b.status];
+      var actionLabel = NEXT_ACTION_BY_LANG[state.lang][b.status];
       var canAct = b.payment_status === "paid" && actionLabel;
+      var idx = STATUS_FLOW.indexOf(b.status);
+      var nodes = STATUS_FLOW.map(function (s, i) {
+        var cls = i < idx ? "done" : (i === idx ? "now" : "");
+        var inner = i < idx ? "✓" : (i + 1);
+        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + STATUS_LABELS_BY_LANG[state.lang][s] + '</div></div>';
+      }).join("");
       return (
-        '<div class="bcard tick" data-booking="' + b.id + '">' +
+        '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + b.hirer_name + '">' +
           '<div class="bcard-head"><div><div class="name">' + b.hirer_name + '</div>' +
           '<div class="meta">' + fmtDate(b.start_date) + ' · ' + b.days + ' din</div></div>' +
           '<div class="num">' + fmtMoney(b.total_amount) + '</div></div>' +
-          '<span class="status-pill">' + STATUS_LABELS[b.status] + (b.payment_status === "paid" ? "" : " · Payment pending") + '</span><br>' +
+          '<span class="status-pill">' + STATUS_LABELS_BY_LANG[state.lang][b.status] + (b.payment_status === "paid" ? "" : " · Payment pending") + '</span>' +
+          '<div class="timeline">' + nodes + '</div>' +
           (canAct ? '<button class="btn btn-safety" data-checkin="' + b.id + '">' + actionLabel + '</button>' : '') +
           '<div class="gps-note" id="gps-' + b.id + '"></div>' +
-          '<span class="chat-toggle" data-chat-toggle="' + b.id + '">Message dekhein / bhejein</span>' +
-          '<div class="chat-box" id="chat-' + b.id + '">' +
-            '<div class="chat-log" id="chatlog-' + b.id + '"></div>' +
-            '<div class="chat-send"><input type="text" id="chatinput-' + b.id + '" placeholder="Message likhein..."><button class="btn btn-primary" data-send="' + b.id + '">Bhejein</button></div>' +
-          '</div>' +
+          '<button class="btn btn-outline chat-btn" data-open-chat="' + b.id + '" style="margin-top:9px;">💬 ' + wt("chat_toggle") + '</button>' +
         '</div>'
       );
     }).join("");
@@ -339,16 +554,11 @@
     wrap.querySelectorAll("[data-checkin]").forEach(function (btn) {
       btn.addEventListener("click", function () { doCheckIn(Number(btn.dataset.checkin)); });
     });
-    wrap.querySelectorAll("[data-chat-toggle]").forEach(function (el) {
-      el.addEventListener("click", function () {
-        var id = el.dataset.chatToggle;
-        var box = document.getElementById("chat-" + id);
-        box.classList.toggle("open");
-        if (box.classList.contains("open")) loadMessages(id);
+    wrap.querySelectorAll("[data-open-chat]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var card = btn.closest("[data-booking]");
+        openChat(Number(btn.dataset.openChat), card.dataset.hirerName);
       });
-    });
-    wrap.querySelectorAll("[data-send]").forEach(function (btn) {
-      btn.addEventListener("click", function () { sendMessage(btn.dataset.send); });
     });
   }
 
@@ -380,25 +590,43 @@
     );
   }
 
-  // ---------------- messaging ----------------
-  function loadMessages(bookingId) {
-    api("/api/bookings/" + bookingId + "/messages").then(function (res) {
-      var log = document.getElementById("chatlog-" + bookingId);
-      if (!res.ok) { log.innerHTML = '<div style="color:#FFB7A0;">Messages load nahi hue</div>'; return; }
-      if (!res.data.length) { log.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
-      log.innerHTML = res.data.map(function (m) {
-        return '<div class="chat-msg"><div class="who">' + (m.sender_role === "worker" ? "Aap" : "Hirer") + '</div>' + m.body + '</div>';
+  // ---------------- floating chat popup ----------------
+  var chatPanel = document.getElementById("chatPanel");
+  var chatLog = document.getElementById("chatLog");
+  var chatWith = document.getElementById("chatWith");
+  var chatInput = document.getElementById("chatInput");
+
+  function openChat(bookingId, hirerName) {
+    state.chatBookingId = bookingId;
+    chatWith.textContent = hirerName;
+    chatPanel.classList.add("open");
+    loadMessages();
+  }
+  document.getElementById("chatClose").addEventListener("click", function () {
+    chatPanel.classList.remove("open");
+    state.chatBookingId = null;
+  });
+
+  function loadMessages() {
+    if (!state.chatBookingId) return;
+    api("/api/bookings/" + state.chatBookingId + "/messages").then(function (res) {
+      if (!res.ok) { chatLog.innerHTML = '<div style="color:#FFB7A0;">Messages load nahi hue</div>'; return; }
+      if (!res.data.length) { chatLog.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
+      chatLog.innerHTML = res.data.map(function (m) {
+        return '<div class="chat-fab-msg"><div class="who">' + (m.sender_role === "worker" ? "Aap" : "Hirer") + '</div>' + m.body + '</div>';
       }).join("");
-      log.scrollTop = log.scrollHeight;
+      chatLog.scrollTop = chatLog.scrollHeight;
     });
   }
 
-  function sendMessage(bookingId) {
-    var input = document.getElementById("chatinput-" + bookingId);
-    var body = input.value.trim();
-    if (!body) return;
-    api("/api/bookings/" + bookingId + "/messages", { method: "POST", body: JSON.stringify({ body: body }) }).then(function (res) {
-      if (res.ok) { input.value = ""; loadMessages(bookingId); }
+  document.getElementById("chatSendBtn").addEventListener("click", sendChatMessage);
+  chatInput.addEventListener("keydown", function (e) { if (e.key === "Enter") sendChatMessage(); });
+
+  function sendChatMessage() {
+    var body = chatInput.value.trim();
+    if (!body || !state.chatBookingId) return;
+    api("/api/bookings/" + state.chatBookingId + "/messages", { method: "POST", body: JSON.stringify({ body: body }) }).then(function (res) {
+      if (res.ok) { chatInput.value = ""; loadMessages(); }
     });
   }
 
