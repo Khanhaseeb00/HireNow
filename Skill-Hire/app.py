@@ -218,7 +218,7 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rating, jobs_completed FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
