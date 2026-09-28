@@ -250,7 +250,10 @@ def list_workers():
     conn = get_db()
     workers = conn.execute(query, params).fetchall()
     conn.close()
-    return jsonify(rows_to_list(workers))
+    result = rows_to_list(workers)
+    for w in result:
+        w.pop("password_hash", None)
+    return jsonify(result)
 
 
 @app.get("/api/workers/<int:worker_id>")
@@ -260,7 +263,9 @@ def get_worker(worker_id):
     conn.close()
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
-    return jsonify(row_to_dict(worker))
+    result = row_to_dict(worker)
+    result.pop("password_hash", None)
+    return jsonify(result)
 
 
 # ----------------------------------------------------------- booking routes
