@@ -216,7 +216,7 @@
   .choice-btn.selected .dot { border-color: var(--orange); background: var(--orange); }
 
   /* ---- modal ---- */
-  .overlay { position: fixed; inset: 0; background: rgba(16,27,51,0.55); display: none; align-items: flex-start; justify-content: center; padding: 26px 14px; overflow-y: auto; z-index: 70; }
+  .overlay { position: fixed; inset: 0; background: rgba(16,27,51,0.55); display: none; align-items: flex-start; justify-content: center; padding: 26px 14px; overflow-y: auto; z-index: 100; }
   .overlay.open { display: flex; }
   .modal { background: var(--card); border-radius: 16px; max-width: 420px; width: 100%; padding: 24px; position: relative; }
   .modal-close { float: right; font-size: 20px; line-height: 1; color: var(--ink-soft); background: none; }
@@ -239,7 +239,7 @@
   .chat-fab-panel {
     position: fixed; right: 20px; bottom: 90px; width: 300px; max-width: calc(100vw - 32px);
     background: var(--card); border: 1px solid var(--line); border-radius: 16px;
-    box-shadow: 0 16px 40px rgba(16,27,51,0.22); z-index: 80; display: flex; flex-direction: column;
+    box-shadow: 0 16px 40px rgba(16,27,51,0.22); z-index: 95; display: flex; flex-direction: column;
     max-height: 420px; transform: translateY(24px) scale(0.95); opacity: 0; pointer-events: none;
     transition: transform .28s cubic-bezier(.2,1,.3,1), opacity .22s ease;
   }
@@ -270,11 +270,13 @@
     padding: 16px 14px; position: sticky; top: 0; z-index: 2;
   }
   .stack-header .icon-btn-plain { background: none; color: #fff; font-size: 19px; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-  .stack-header .stack-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; flex: 1; }
+  .stack-title-wrap { flex: 1; min-width: 0; }
+  .stack-header .stack-title { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px; }
+  .stack-header .stack-subtitle { font-size: 11.5px; color: rgba(255,255,255,0.68); margin-top: 1px; }
   .stack-search-row { padding: 10px 14px 0; display: none; }
   .stack-search-row.open { display: block; }
   .stack-search-row input { background: var(--card); }
-  .stack-body { padding: 14px 14px 30px; }
+  .stack-body { padding: 14px 14px 90px; }
 
   .filter-chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px; }
   .filter-chips::-webkit-scrollbar { display: none; }
@@ -287,6 +289,26 @@
   .cat-row .cat-row-name { font-weight: 700; font-size: 14.5px; }
   .cat-row .cat-row-count { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
   .cat-row .chev { color: var(--ink-soft); font-size: 18px; }
+
+  /* ---- worker list rows (Worker List screen) ---- */
+  .wl-row { display: flex; gap: 12px; background: var(--card); border-radius: 14px; padding: 13px 14px; margin-bottom: 11px; position: relative; }
+  .wl-row .avatar { width: 50px; height: 50px; font-size: 14px; flex-shrink: 0; }
+  .wl-row .wl-body { flex: 1; min-width: 0; }
+  .wl-row .wl-name { font-weight: 700; font-size: 14.5px; }
+  .wl-row .wl-rating { font-size: 12px; color: var(--orange); margin-top: 2px; }
+  .wl-row .wl-rating .count { color: var(--ink-soft); }
+  .wl-row .wl-dist { font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; }
+  .wl-row .wl-badges { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+  .wl-badge { font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 3px; }
+  .wl-badge.verified { background: #E3F2FC; color: #2F8FD1; }
+  .wl-badge.avail-today { background: var(--ok-tint); color: var(--ok); }
+  .wl-badge.avail-tmrw { background: var(--orange-tint); color: #B5762A; }
+  .wl-side { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; }
+  .wl-heart { font-size: 16px; color: var(--line); background: none; }
+  .wl-heart.active { color: #E15C7A; }
+  .wl-price { font-weight: 800; font-size: 15px; color: var(--ink); margin-top: auto; }
+  .filter-sort-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 60%, rgba(243,246,251,0)); z-index: 3; }
+  .filter-sort-bar button { width: 100%; }
 </style>
 </head>
 <body>
@@ -360,12 +382,8 @@
       <div class="section-row"><h2 data-i18n="popular_categories">Popular Categories</h2><a data-open-screen="categories">See All</a></div>
       <div class="category-grid" id="categoryGrid"></div>
 
-      <div class="section-row"><h2 data-i18n="featured_workers">Featured Workers</h2><a data-scroll="allWorkersAnchor">See All</a></div>
+      <div class="section-row"><h2 data-i18n="featured_workers">Featured Workers</h2><a data-open-screen="worker-list">See All</a></div>
       <div class="featured-scroll" id="featuredScroll"></div>
-
-      <div class="section-row" id="allWorkersAnchor"><h2 data-i18n="hire_heading">All Workers</h2></div>
-      <div class="filters"><select id="fSkill"><option value="" data-i18n="all_skills">Sabhi skills</option></select></div>
-      <div class="grid" id="workerGrid" style="margin-top:12px;"></div>
     </div>
   </section>
 
@@ -458,8 +476,12 @@
 <div class="stack-screen" id="stackScreen">
   <div class="stack-header">
     <button class="icon-btn-plain" id="stackBack">←</button>
-    <div class="stack-title" id="stackTitle">Title</div>
+    <div class="stack-title-wrap">
+      <div class="stack-title" id="stackTitle">Title</div>
+      <div class="stack-subtitle" id="stackSubtitle" style="display:none;"></div>
+    </div>
     <button class="icon-btn-plain" id="stackSearchToggle" style="display:none;">🔍</button>
+    <button class="icon-btn-plain" id="stackRightIcon" style="display:none;"></button>
   </div>
   <div class="stack-search-row" id="stackSearchRow"><input type="text" id="stackSearchInput" placeholder="Search..."></div>
   <div class="stack-body" id="stackBody"></div>
@@ -487,7 +509,7 @@
 (function () {
   "use strict";
 
-  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "" };
+  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "", favorites: {} };
 
   // ---------------- i18n ----------------
   var LANG = {
@@ -692,8 +714,10 @@
   // ---------------- stacked screens (Categories, Worker List, Worker Profile, ...) ----------------
   var stackScreen = document.getElementById("stackScreen");
   var stackTitle = document.getElementById("stackTitle");
+  var stackSubtitle = document.getElementById("stackSubtitle");
   var stackBody = document.getElementById("stackBody");
   var stackSearchToggle = document.getElementById("stackSearchToggle");
+  var stackRightIcon = document.getElementById("stackRightIcon");
   var stackSearchRow = document.getElementById("stackSearchRow");
   var stackSearchInput = document.getElementById("stackSearchInput");
   var stackHistory = [];
@@ -702,11 +726,15 @@
     opts = opts || {};
     stackHistory.push(name);
     stackTitle.textContent = title;
+    if (opts.subtitle) { stackSubtitle.textContent = opts.subtitle; stackSubtitle.style.display = "block"; }
+    else { stackSubtitle.style.display = "none"; }
     stackSearchRow.classList.remove("open");
     stackSearchInput.value = "";
     stackSearchToggle.style.display = opts.search ? "flex" : "none";
     stackSearchToggle.onclick = function () { stackSearchRow.classList.toggle("open"); if (stackSearchRow.classList.contains("open")) stackSearchInput.focus(); };
     stackSearchInput.oninput = opts.onSearch || null;
+    if (opts.rightIcon) { stackRightIcon.style.display = "flex"; stackRightIcon.textContent = opts.rightIcon; stackRightIcon.onclick = opts.onRightIcon || null; }
+    else { stackRightIcon.style.display = "none"; }
     renderFn();
     stackScreen.classList.add("open");
     document.querySelector(".bottom-nav").style.display = "none";
@@ -725,6 +753,7 @@
 
   function openScreen(name, arg) {
     if (name === "categories") openCategoriesScreen();
+    if (name === "worker-list") openWorkerListScreen(arg);
   }
 
   // ---- Categories screen ----
@@ -770,19 +799,93 @@
       chip.addEventListener("click", function () { onChipClick(chip.dataset.group); });
     });
     stackBody.querySelectorAll("[data-goto-skill]").forEach(function (row) {
-      row.addEventListener("click", function () {
-        state.selectedSkill = row.dataset.gotoSkill;
-        document.getElementById("fSkill").value = state.selectedSkill;
-        renderWorkers();
-        renderCategories();
-        closeStack();
-        document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      row.addEventListener("click", function () { openWorkerListScreen(row.dataset.gotoSkill); });
     });
   }
 
-  document.getElementById("quickHireBtn").addEventListener("click", function () {
-    document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
+  // ---- Worker List screen ----
+  var SORT_CHIPS = ["All", "Nearby", "Top Rated", "Price: Low to High"];
+  function openWorkerListScreen(skill, opts) {
+    opts = opts || {};
+    var currentSort = "All";
+    var title = skill || opts.title || t("hire_heading");
+    var city = document.getElementById("fCity").value;
+    openStack("worker-list", title, function () { render(currentSort); }, {
+      subtitle: city || t("all_cities"),
+      search: !skill,
+      onSearch: function () { render(currentSort); },
+      rightIcon: "⚙",
+      onRightIcon: openSortSheet
+    });
+    function openSortSheet() {
+      modalBody.innerHTML = '<button class="modal-close" data-close>&times;</button><h3>Filter &amp; Sort</h3>' +
+        SORT_CHIPS.map(function (s) { return '<button class="btn btn-outline btn-block" style="margin-top:9px;" data-sort-opt="' + s + '">' + s + '</button>'; }).join("");
+      modalBody.querySelector("[data-close]").addEventListener("click", closeModal);
+      modalBody.querySelectorAll("[data-sort-opt]").forEach(function (b) {
+        b.addEventListener("click", function () { currentSort = b.dataset.sortOpt; render(currentSort); closeModal(); });
+      });
+      overlay.classList.add("open");
+    }
+    function render(sortMode) {
+      currentSort = sortMode;
+      var q = (stackSearchInput.value || "").trim().toLowerCase();
+      var list = state.workers.filter(function (w) {
+        if (skill && w.skill !== skill) return false;
+        var ct = document.getElementById("fCity").value;
+        if (ct && w.city !== ct) return false;
+        if (q && w.name.toLowerCase().indexOf(q) === -1 && w.skill.toLowerCase().indexOf(q) === -1) return false;
+        return true;
+      });
+      if (sortMode === "Nearby") list = list.slice().sort(function (a, b) { return (a.distance_km == null ? 999 : a.distance_km) - (b.distance_km == null ? 999 : b.distance_km); });
+      else if (sortMode === "Top Rated") list = list.slice().sort(function (a, b) { return b.rating - a.rating; });
+      else if (sortMode === "Price: Low to High") list = list.slice().sort(function (a, b) { return (a.hourly_wage || a.daily_wage) - (b.hourly_wage || b.daily_wage); });
+
+      var chipsHtml = SORT_CHIPS.map(function (s) {
+        return '<button class="chip ' + (s === sortMode ? "active" : "") + '" data-sort="' + s + '">' + s + '</button>';
+      }).join("");
+      var rowsHtml = list.map(function (w) {
+        var isVerified = w.verification_status === "verified";
+        var priceHtml = w.hourly_wage
+          ? '<div class="wl-price num">' + fmtMoney(w.hourly_wage) + '<small>/hr</small></div>'
+          : '<div class="wl-price num">' + fmtMoney(w.daily_wage) + '<small>' + t("per_day") + '</small></div>';
+        return '<div class="wl-row" data-worker="' + w.id + '">' +
+          '<div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
+          '<div class="wl-body">' +
+            '<div class="wl-name">' + w.name + '</div>' +
+            '<div class="wl-rating">★ ' + w.rating + ' <span class="count">(' + w.jobs_completed + ' reviews)</span></div>' +
+            (w.distance_km != null ? '<div class="wl-dist">📍 ' + w.distance_km + ' km away</div>' : '<div class="wl-dist">📍 ' + w.city + '</div>') +
+            '<div class="wl-badges">' +
+              (isVerified ? '<span class="wl-badge verified">✓ ' + t("verified") + '</span>' : '') +
+              (w.availability === "today" ? '<span class="wl-badge avail-today">Available Today</span>' : (w.availability === "tomorrow" ? '<span class="wl-badge avail-tmrw">Available Tomorrow</span>' : '')) +
+            '</div>' +
+          '</div>' +
+          '<div class="wl-side"><button class="wl-heart" data-heart="' + w.id + '">♥</button>' + priceHtml + '</div>' +
+        '</div>';
+      }).join("") || '<div class="empty">' + ICON_NO_WORKERS + t("no_workers") + '</div>';
+
+      stackBody.innerHTML = '<div class="filter-chips">' + chipsHtml + '</div><div id="wlRows">' + rowsHtml + '</div>' +
+        '<div class="filter-sort-bar"><button class="btn btn-primary" id="filterSortBtn">⚙ Filter &amp; Sort</button></div>';
+      stackBody.querySelectorAll(".chip").forEach(function (chip) {
+        chip.addEventListener("click", function () { render(chip.dataset.sort); });
+      });
+      stackBody.querySelectorAll("[data-heart]").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          state.favorites[btn.dataset.heart] = !state.favorites[btn.dataset.heart];
+          btn.classList.toggle("active", !!state.favorites[btn.dataset.heart]);
+        });
+        if (state.favorites[btn.dataset.heart]) btn.classList.add("active");
+      });
+      stackBody.querySelectorAll("[data-worker]").forEach(function (row) {
+        row.addEventListener("click", function () { openHireModal(Number(row.dataset.worker)); });
+      });
+      document.getElementById("filterSortBtn").addEventListener("click", openSortSheet);
+    }
+  }
+
+  document.getElementById("quickHireBtn").addEventListener("click", function () { openWorkerListScreen(null); });
+  document.getElementById("fSearch").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { var q = document.getElementById("fSearch").value; openWorkerListScreen(null, { title: "Search Results" }); document.getElementById("stackSearchToggle").click(); document.getElementById("stackSearchInput").value = q; document.getElementById("stackSearchInput").dispatchEvent(new Event("input")); }
   });
 
   // ---------------- boot ----------------
@@ -805,13 +908,10 @@
       state.workers = res.data || [];
       var skills = Array.from(new Set(state.workers.map(function (w) { return w.skill; })));
       var cities = Array.from(new Set(state.workers.map(function (w) { return w.city; })));
-      var fSkill = document.getElementById("fSkill");
       var fCity = document.getElementById("fCity");
-      fSkill.innerHTML = '<option value="">' + t("all_skills") + '</option>' + skills.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join("");
       fCity.innerHTML = '<option value="">' + t("all_cities") + '</option>' + cities.map(function (c) { return '<option value="' + c + '">' + c + '</option>'; }).join("");
       renderCategories(skills);
       renderFeatured();
-      renderWorkers();
     });
   }
 
@@ -826,14 +926,7 @@
         '<div class="cat-label">' + s.split(" / ")[0] + '</div></div>';
     }).join("");
     grid.querySelectorAll("[data-cat]").forEach(function (el) {
-      el.addEventListener("click", function () {
-        var skill = el.dataset.cat;
-        state.selectedSkill = state.selectedSkill === skill ? "" : skill;
-        document.getElementById("fSkill").value = state.selectedSkill;
-        renderCategories(skills);
-        renderWorkers();
-        document.getElementById("allWorkersAnchor").scrollIntoView({ behavior: "smooth", block: "start" });
-      });
+      el.addEventListener("click", function () { openWorkerListScreen(el.dataset.cat); });
     });
   }
 
@@ -852,46 +945,7 @@
     });
   }
 
-  function matchesFilters(w) {
-    var q = document.getElementById("fSearch").value.trim().toLowerCase();
-    var sk = document.getElementById("fSkill").value;
-    var ct = document.getElementById("fCity").value;
-    if (sk && w.skill !== sk) return false;
-    if (ct && w.city !== ct) return false;
-    if (q && w.name.toLowerCase().indexOf(q) === -1 && w.skill.toLowerCase().indexOf(q) === -1) return false;
-    return true;
-  }
-
-  function renderWorkers() {
-    var grid = document.getElementById("workerGrid");
-    if (!state.workers.length) return;
-    var list = state.workers.filter(matchesFilters);
-    if (!list.length) { grid.innerHTML = '<div class="empty">' + ICON_NO_WORKERS + t("no_workers") + '</div>'; return; }
-    grid.innerHTML = list.map(function (w) {
-      var stars = "★".repeat(Math.round(w.rating)) + "☆".repeat(5 - Math.round(w.rating));
-      var skillsDetail = (w.skills_detail || "").split(",").slice(0, 3);
-      var tags = skillsDetail.map(function (tg) { return '<span class="tag">' + tg.trim() + '</span>'; }).join("");
-      return (
-        '<div class="wcard">' +
-          '<div class="wcard-top"><div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
-          '<div><div class="wcard-name">' + w.name + '</div><div class="wcard-skill">' + skillIconSvg(w.skill) + ' ' + w.skill +
-          (w.verified ? '<span class="badge-verified">' + t("verified") + '</span>' : '') + '</div></div></div>' +
-          '<div class="rating">' + stars + ' <span class="count">' + w.rating + ' · ' + w.jobs_completed + '</span></div>' +
-          '<div class="tags">' + tags + '</div>' +
-          '<div class="wcard-meta"><span>' + w.city + '</span><span>' + w.experience_years + ' ' + t("years_exp") + '</span></div>' +
-          '<div class="wcard-meta"><span class="wcard-price num">' + fmtMoney(w.daily_wage) + '<small> ' + t("per_day") + '</small></span>' +
-          '<button class="btn btn-primary" data-hire="' + w.id + '">' + t("hire_btn") + '</button></div>' +
-        '</div>'
-      );
-    }).join("");
-    grid.querySelectorAll("[data-hire]").forEach(function (btn) {
-      btn.addEventListener("click", function () { openHireModal(Number(btn.dataset.hire)); });
-    });
-  }
-  ["fSearch", "fSkill"].forEach(function (id) {
-    document.getElementById(id).addEventListener("input", renderWorkers);
-  });
-  document.getElementById("fCity").addEventListener("change", function () { renderWorkers(); renderFeatured(); });
+  document.getElementById("fCity").addEventListener("change", function () { renderFeatured(); });
 
   // ---------------- profile ----------------
   function renderProfile() {
