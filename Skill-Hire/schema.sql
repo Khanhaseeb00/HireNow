@@ -1,4 +1,4 @@
--- Kaamgar database schema (SQLite for local dev; same schema works on Postgres
+-- HireNow database schema (SQLite for local dev; same schema works on Postgres
 -- with minor type tweaks — see README "Moving to Postgres").
 
 CREATE TABLE IF NOT EXISTS workers (
@@ -10,6 +10,9 @@ CREATE TABLE IF NOT EXISTS workers (
     skills_detail       TEXT,               -- comma-separated specific skills
     city                TEXT NOT NULL,
     daily_wage          INTEGER NOT NULL,   -- in rupees
+    hourly_wage         INTEGER,            -- in rupees, optional — shown on worker list/profile cards
+    distance_km         REAL,               -- distance from hirer, filled in once real geolocation matching exists
+    availability        TEXT,               -- 'today' | 'tomorrow' | NULL (unknown) — worker-set availability status
     rating              REAL DEFAULT 0,
     jobs_completed      INTEGER DEFAULT 0,
     experience_years    INTEGER DEFAULT 0,
