@@ -418,6 +418,16 @@
     border-bottom:1px solid var(--line); padding:13px 14px; color:var(--ink); font-size:12.5px; text-align:left; }
   .ref-menu button:last-child { border-bottom:none; }
 
+
+  .pay-choice-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .pay-choice {
+    border:1px solid var(--line); border-radius:12px; padding:12px; background:var(--card);
+    text-align:left; font-size:12px; color:var(--ink); font-weight:700;
+  }
+  .pay-choice.active { border-color:var(--orange); background:var(--orange-tint); }
+  .pay-choice small { display:block; color:var(--ink-soft); font-weight:500; margin-top:3px; line-height:1.35; }
+  .accept-note { margin-top:10px; font-size:11.5px; color:var(--ink-soft); }
+
 </style>
 </head>
 <body>
@@ -1166,7 +1176,7 @@
     var now = new Date();
     var today = now.toISOString().slice(0,10);
     var tomorrowDate = new Date(now.getTime() + 86400000).toISOString().slice(0,10);
-    var selectedDate = today, selectedTime = "09:00 AM", selectedHours = 2, selectedService = "regular";
+    var selectedDate = today, selectedTime = "09:00 AM", selectedHours = 2, selectedService = "regular", selectedPayment = "cash";
 
     openStack("booking", "Book Worker", renderBooking, {});
 
@@ -1198,9 +1208,15 @@
             '<button class="ref-service-btn '+(selectedService==="overtime"?'active':'')+'" data-ref-service="overtime">Overtime (' + fmtMoney(overtime) + '/hr)</button>' +
           '</div>' +
           '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="e.g. 12th Main Road, Koramangala">' +
+          '<div class="ref-label">Payment Method</div>' +
+          '<div class="pay-choice-grid">' +
+            '<button class="pay-choice '+(selectedPayment==="cash"?"active":"")+'" data-pay-choice="cash">Cash after Work<small>No advance payment. Worker acceptance required.</small></button>' +
+            '<button class="pay-choice '+(selectedPayment==="online"?"active":"")+'" data-pay-choice="online">Online Payment<small>Pay only after worker accepts the request.</small></button>' +
+          '</div>' +
+          '<div class="accept-note">Booking request pehle worker ke paas jayegi. Accept hone ke baad hi next payment step active hoga.</div>' +
           '<div class="ref-label">Special Instructions (Optional)</div><textarea class="ref-notes" id="refNotes" placeholder="e.g. specific tools, location details..."></textarea>' +
           '<div class="ref-total"><span>Total: ' + fmtMoney(rate) + ' × ' + selectedHours + ' hrs</span><span class="amt">' + fmtMoney(rate*selectedHours) + '</span></div>' +
-          '<button class="btn btn-safety btn-block" id="refProceed">Proceed to Payment</button>' +
+          '<button class="btn btn-safety btn-block" id="refProceed">Send Booking Request</button>' +
           '<div id="refBookingMsg"></div>' +
         '</div>';
 
@@ -1208,13 +1224,14 @@
       stackBody.querySelectorAll("[data-ref-time]").forEach(function(btn){btn.addEventListener("click",function(){selectedTime=btn.dataset.refTime;renderBooking();});});
       stackBody.querySelectorAll("[data-ref-hours]").forEach(function(btn){btn.addEventListener("click",function(){selectedHours=Number(btn.dataset.refHours);renderBooking();});});
       stackBody.querySelectorAll("[data-ref-service]").forEach(function(btn){btn.addEventListener("click",function(){selectedService=btn.dataset.refService;renderBooking();});});
+      stackBody.querySelectorAll("[data-pay-choice]").forEach(function(btn){btn.addEventListener("click",function(){selectedPayment=btn.dataset.payChoice;renderBooking();});});
       stackBody.querySelector("#refCustomDateBtn").addEventListener("click",function(){var input=stackBody.querySelector("#refCustomDate");input.style.display="block";input.click();});
       stackBody.querySelector("#refCustomDate").addEventListener("change",function(){if(this.value){selectedDate=this.value;renderBooking();}});
       stackBody.querySelector("#refProceed").addEventListener("click",function(){
         var address=stackBody.querySelector("#refAddress").value.trim();
         var notes=stackBody.querySelector("#refNotes").value.trim();
         if(!address){ stackBody.querySelector("#refBookingMsg").innerHTML='<div class="pay-note">Work address enter karein.</div>'; return; }
-        createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,hours:selectedHours,service_type:selectedService,address:address,special_instructions:notes});
+        createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,hours:selectedHours,service_type:selectedService,payment_method:selectedPayment,address:address,special_instructions:notes});
       });
     }
   }
@@ -1222,42 +1239,23 @@
   function createReferenceBooking(worker, payload) {
     var msg = stackBody.querySelector("#refBookingMsg");
     var btn = stackBody.querySelector("#refProceed");
-    if (btn) { btn.disabled = true; btn.textContent = "Booking ban rahi hai..."; }
+    if (btn) { btn.disabled = true; btn.textContent = "Request bheji ja rahi hai..."; }
     payload.worker_id = worker.id;
     api("/api/bookings", { method: "POST", body: JSON.stringify(payload) }).then(function (res) {
       if (!res.ok) {
-        if (btn) { btn.disabled = false; btn.textContent = "Proceed to Payment"; }
-        msg.innerHTML = '<div class="pay-note">' + (res.data.error || "Booking create nahi hui") + '</div>';
+        if (btn) { btn.disabled = false; btn.textContent = "Send Booking Request"; }
+        msg.innerHTML = '<div class="pay-note">' + (res.data.error || "Booking request nahi bani") + '</div>';
         return;
       }
-      var bookingId = res.data.id;
-      api("/api/bookings/" + bookingId + "/create-order", { method: "POST" }).then(function (orderRes) {
-        if (!orderRes.ok || typeof Razorpay === "undefined") {
-          msg.innerHTML = '<div class="pay-note">Booking #' + bookingId + ' create ho gayi. Payment setup abhi active nahi hai.</div>';
-          loadBookings();
-          setTimeout(function(){ stackScreen.classList.remove("open"); document.querySelector(".bottom-nav").style.display="flex"; document.querySelector('.nav-item[data-tab="bookings"]').click(); },900);
-          return;
-        }
-        var order=orderRes.data;
-        var rzp=new Razorpay({
-          key:order.key_id, amount:order.amount, currency:order.currency, order_id:order.order_id,
-          name:"HireNow", description:"Booking #"+bookingId, theme:{color:"#F5A623"},
-          handler:function(response){
-            api("/api/payments/verify",{method:"POST",body:JSON.stringify({
-              razorpay_order_id:response.razorpay_order_id,
-              razorpay_payment_id:response.razorpay_payment_id,
-              razorpay_signature:response.razorpay_signature
-            })}).then(function(vr){
-              if(!vr.ok){msg.innerHTML='<div class="pay-note">Payment verify nahi hua: '+vr.data.error+'</div>';return;}
-              msg.innerHTML='<div style="color:var(--ok);font-weight:800;margin-top:10px;">Booking confirmed ✓</div>';
-              loadBookings();
-              setTimeout(function(){ stackScreen.classList.remove("open"); document.querySelector(".bottom-nav").style.display="flex"; document.querySelector('.nav-item[data-tab="bookings"]').click(); },800);
-            });
-          }
-        });
-        rzp.on("payment.failed",function(resp){msg.innerHTML='<div class="pay-note">Payment failed: '+(resp.error.description||"Please try again")+'</div>';});
-        rzp.open();
-      });
+      var methodLabel = res.data.payment_method === "cash" ? "Cash after work" : "Online payment after acceptance";
+      msg.innerHTML = '<div style="color:var(--ok);font-weight:800;margin-top:10px;">Request sent ✓</div>' +
+        '<div class="accept-note">Worker ke Accept/Reject ka wait karein. Payment method: ' + methodLabel + '.</div>';
+      loadBookings();
+      setTimeout(function(){
+        stackScreen.classList.remove("open");
+        document.querySelector(".bottom-nav").style.display="flex";
+        document.querySelector('.nav-item[data-tab="bookings"]').click();
+      },900);
     });
   }
 
@@ -1318,7 +1316,11 @@
     hi: { requested: "Requested", confirmed: "Confirmed", en_route: "Worker aa raha hai", checked_in: "Site check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua" },
     en: { requested: "Requested", confirmed: "Confirmed", en_route: "Worker en route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed" }
   };
-  function statusLabel(s) { return STATUS_LABELS_BY_LANG[state.lang][s]; }
+  function statusLabel(s) {
+    if (s === "rejected") return "Rejected";
+    if (s === "cancelled") return "Cancelled";
+    return STATUS_LABELS_BY_LANG[state.lang][s] || s;
+  }
 
   function loadBookings() {
     api("/api/bookings").then(function (res) {
@@ -1330,15 +1332,15 @@
   }
 
   function bookingStatusClass(status) {
-    return status === "confirmed" ? "confirmed" : status === "completed" ? "completed" : status === "cancelled" ? "cancelled" : "requested";
+    return status === "confirmed" ? "confirmed" : status === "completed" ? "completed" : (status === "cancelled" || status === "rejected") ? "cancelled" : "requested";
   }
   function renderBookings() {
     var wrap = document.getElementById("bookingsList");
     if (!wrap) return;
     var list = state.bookings.filter(function(b){
       if (state.bookingFilter === "completed") return b.status === "completed";
-      if (state.bookingFilter === "cancelled") return b.status === "cancelled";
-      return b.status !== "completed" && b.status !== "cancelled";
+      if (state.bookingFilter === "cancelled") return b.status === "cancelled" || b.status === "rejected";
+      return b.status !== "completed" && b.status !== "cancelled" && b.status !== "rejected";
     });
     document.querySelectorAll("[data-booking-filter]").forEach(function(btn){
       btn.classList.toggle("active", btn.dataset.bookingFilter === state.bookingFilter);
@@ -1351,7 +1353,9 @@
         '<div class="schedule-date"><b>' + String(dt.getDate()).padStart(2,"0") + '</b>' + dt.toLocaleDateString("en",{month:"short"}) + '</div>' +
         '<div class="avatar" style="width:42px;height:42px;background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
         '<div class="body"><div class="name">' + b.worker_name + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
-          '<div class="amount">' + fmtMoney(b.total_amount) + '</div><span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + statusLabel(b.status) + '</span></div>' +
+          '<div class="amount">' + fmtMoney(b.total_amount) + '</div>' +
+          '<div class="sub">' + (b.payment_method === "cash" ? "Cash after work" : (b.payment_status === "paid" ? "Online paid" : "Online payment pending")) + '</div>' +
+          '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + (b.status === "rejected" ? "Rejected" : statusLabel(b.status)) + '</span></div>' +
         '<div style="color:var(--ink-soft);">›</div>' +
       '</div>';
     }).join("");
@@ -1426,15 +1430,48 @@
             '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+statusLabel(b.status)+'</span></div></div>' +
           '</div>' +
           '<div class="ref-detail-actions">' +
-            ((!["completed","cancelled","in_progress"].includes(b.status))?'<button class="btn btn-outline" id="refCancelBooking">Cancel Booking</button>':'<div></div>') +
+            ((!["completed","cancelled","in_progress","rejected"].includes(b.status))?'<button class="btn btn-outline" id="refCancelBooking">Cancel Booking</button>':'<div></div>') +
             '<button class="btn btn-primary" id="refContactWorker">Contact Worker</button>' +
-          '</div>';
+          '</div>' +
+          ((b.payment_method==="online" && b.status==="confirmed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refPayOnline" style="margin-top:10px;">Pay Online Now</button>' : '') +
+          ((b.payment_method==="cash" && b.status==="completed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refCashOtp" style="margin-top:10px;">Generate Cash Payment OTP</button><div id="refOtpBox"></div>' : '');
         var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
         var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
           if(!window.confirm("Cancel this booking?"))return;
           api("/api/bookings/"+b.id+"/cancel",{method:"POST",body:JSON.stringify({reason:"Cancelled by hirer"})}).then(function(cr){
             if(!cr.ok){window.alert(cr.data.error||"Cancel nahi hui");return;}
             loadBookings(); goBack();
+          });
+        });
+        var payOnline=stackBody.querySelector("#refPayOnline"); if(payOnline)payOnline.addEventListener("click",function(){
+          payOnline.disabled=true; payOnline.textContent="Opening payment...";
+          api("/api/bookings/"+b.id+"/create-order",{method:"POST"}).then(function(orderRes){
+            if(!orderRes.ok){payOnline.disabled=false;payOnline.textContent="Pay Online Now";window.alert(orderRes.data.error||"Payment start nahi hua");return;}
+            var order=orderRes.data;
+            var rzp=new Razorpay({
+              key:order.key_id, amount:order.amount, currency:order.currency, order_id:order.order_id,
+              name:"HireNow", description:"Booking #"+b.id, theme:{color:"#F5A623"},
+              handler:function(response){
+                api("/api/payments/verify",{method:"POST",body:JSON.stringify({
+                  razorpay_order_id:response.razorpay_order_id,
+                  razorpay_payment_id:response.razorpay_payment_id,
+                  razorpay_signature:response.razorpay_signature
+                })}).then(function(vr){
+                  if(!vr.ok){window.alert(vr.data.error||"Payment verify nahi hua");return;}
+                  loadBookings(); openBookingDetailsScreen(b.id);
+                });
+              }
+            });
+            rzp.open();
+          });
+        });
+        var otpBtn=stackBody.querySelector("#refCashOtp"); if(otpBtn)otpBtn.addEventListener("click",function(){
+          otpBtn.disabled=true; otpBtn.textContent="Generating OTP...";
+          api("/api/bookings/"+b.id+"/cash-otp",{method:"POST"}).then(function(or){
+            if(!or.ok){otpBtn.disabled=false;otpBtn.textContent="Generate Cash Payment OTP";window.alert(or.data.error||"OTP generate nahi hua");return;}
+            var box=stackBody.querySelector("#refOtpBox");
+            box.innerHTML='<div class="ref-card" style="margin-top:10px;text-align:center;"><div class="ref-label">Cash Payment OTP</div><div style="font-size:28px;font-weight:900;letter-spacing:6px;">'+or.data.otp+'</div><div class="accept-note">Cash dene ke baad hi worker ko OTP batayein. 10 minutes valid.</div></div>';
+            otpBtn.style.display="none";
           });
         });
       });
