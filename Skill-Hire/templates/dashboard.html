@@ -339,6 +339,85 @@
   .wl-price { font-weight: 800; font-size: 15px; color: var(--ink); margin-top: auto; }
   .filter-sort-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px)); background: linear-gradient(to top, var(--bg) 60%, rgba(243,246,251,0)); z-index: 3; }
   .filter-sort-bar button { width: 100%; }
+
+  /* ============ REFERENCE FLOW: BOOKING / BOOKINGS / CHAT / DETAILS / PROFILE ============ */
+  .ref-card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+  .ref-worker-mini { display:flex; align-items:center; gap:11px; margin-bottom:14px; }
+  .ref-worker-mini .avatar { width:46px; height:46px; }
+  .ref-worker-mini .body { flex:1; min-width:0; }
+  .ref-worker-mini .name { font-weight:800; font-size:14px; }
+  .ref-worker-mini .sub { font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .ref-label { font-size:12px; font-weight:700; margin:14px 0 8px; }
+  .ref-date-tabs, .ref-time-grid, .ref-service-row, .booking-filter-tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  .ref-date-btn, .ref-time-btn, .ref-service-btn, .booking-filter-btn {
+    border:1px solid var(--line); background:var(--card); color:var(--ink-soft);
+    border-radius:10px; padding:9px 13px; font-size:11.5px; font-weight:600;
+  }
+  .ref-date-btn.active, .ref-time-btn.active, .ref-service-btn.active {
+    background:var(--navy); color:#fff; border-color:var(--navy);
+  }
+  .ref-service-btn { flex:1; min-width:150px; }
+  .ref-time-grid { display:grid; grid-template-columns:repeat(3,1fr); }
+  .ref-time-btn { width:100%; }
+  .ref-notes, .ref-address {
+    width:100%; border:1px solid var(--line); background:var(--card); border-radius:10px;
+    padding:11px 12px; color:var(--ink); resize:vertical;
+  }
+  .ref-notes { min-height:72px; }
+  .ref-total { display:flex; align-items:center; justify-content:space-between; margin:16px 0 12px; font-weight:800; }
+  .ref-total .amt { font-size:18px; }
+  .booking-filter-tabs { padding:0 0 12px; flex-wrap:nowrap; }
+  .booking-filter-btn { flex:1; padding:8px 6px; background:#F5F7FA; }
+  .booking-filter-btn.active { background:var(--orange-tint); color:var(--orange); border-color:transparent; }
+  .schedule-card {
+    display:flex; align-items:center; gap:11px; background:var(--card); border:1px solid var(--line);
+    border-radius:14px; padding:12px; margin-bottom:10px; cursor:pointer;
+  }
+  .schedule-date { width:48px; min-width:48px; height:54px; border-radius:12px; background:var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--ink-soft); font-size:10px; line-height:1.05; }
+  .schedule-date b { font-family:'Archivo',sans-serif; font-size:17px; color:var(--ink); }
+  .schedule-card .body { flex:1; min-width:0; }
+  .schedule-card .name { font-weight:800; font-size:13px; }
+  .schedule-card .sub { font-size:11px; color:var(--ink-soft); margin:2px 0; }
+  .schedule-card .amount { font-weight:800; font-size:13px; }
+  .ref-status { display:inline-block; margin-top:4px; border-radius:999px; padding:3px 8px; font-size:9.5px; font-weight:700; background:#E8F2FF; color:#2E6FB5; }
+  .ref-status.confirmed, .ref-status.completed { background:var(--ok-tint); color:var(--ok); }
+  .ref-status.cancelled { background:var(--rust-tint); color:var(--rust); }
+  .ref-status.requested { background:var(--orange-tint); color:#A96B04; }
+  .ref-detail-list { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .ref-detail-row { padding:13px 14px; border-bottom:1px solid var(--line); }
+  .ref-detail-row:last-child { border-bottom:none; }
+  .ref-detail-row .k { color:var(--ink-soft); font-size:10.5px; margin-bottom:3px; }
+  .ref-detail-row .v { font-size:13px; font-weight:600; }
+  .ref-detail-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .ref-chat-head { display:flex; align-items:center; gap:10px; }
+  .ref-chat-head .online { font-size:10px; color:#58C686; }
+  .ref-chat-log { display:flex; flex-direction:column; gap:12px; min-height:calc(100vh - 220px); padding-bottom:74px; }
+  .ref-chat-bubble { max-width:80%; border-radius:16px; padding:11px 13px; font-size:12px; line-height:1.45; }
+  .ref-chat-bubble.them { align-self:flex-start; background:#EEF2F7; color:var(--ink); }
+  .ref-chat-bubble.me { align-self:flex-end; background:var(--navy); color:#fff; }
+  .ref-chat-bubble .time { display:block; opacity:.6; font-size:8px; text-align:right; margin-top:4px; }
+  .ref-chat-composer {
+    position:sticky; bottom:0; display:flex; gap:8px; background:var(--card); border-top:1px solid var(--line);
+    padding:10px 0 0; margin-top:8px;
+  }
+  .ref-chat-composer input { flex:1; border-radius:999px; }
+  .ref-chat-send { width:42px; height:42px; border-radius:50%; background:var(--navy); color:#fff; }
+  .ref-profile-top { background:var(--navy); color:#fff; margin:-20px -16px 0; padding:16px 16px 18px; }
+  .ref-profile-top h1 { font-size:17px; }
+  .ref-profile-card { margin-top:-2px; border-radius:0 0 18px 18px; background:var(--card); padding:14px; }
+  .ref-profile-person { display:flex; align-items:center; gap:12px; }
+  .ref-profile-person .avatar { width:54px; height:54px; }
+  .ref-profile-stats { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--line); border-radius:11px; margin:14px 0; }
+  .ref-profile-stat { text-align:center; padding:10px 4px; border-right:1px solid var(--line); }
+  .ref-profile-stat:last-child { border-right:none; }
+  .ref-profile-stat b { display:block; font-family:'Archivo',sans-serif; font-size:16px; }
+  .ref-profile-stat span { font-size:9px; color:var(--ink-soft); }
+  .ref-menu { border:1px solid var(--line); border-radius:12px; overflow:hidden; background:var(--card); }
+  .ref-menu button { width:100%; display:flex; justify-content:space-between; align-items:center; background:var(--card);
+    border-bottom:1px solid var(--line); padding:13px 14px; color:var(--ink); font-size:12.5px; text-align:left; }
+  .ref-menu button:last-child { border-bottom:none; }
+
 </style>
 </head>
 <body>
@@ -419,10 +498,14 @@
 
   <section class="panel" id="panel-bookings">
     <div class="page-header">
-      <h1 data-i18n="bookings_heading">Meri bookings aur kaam ka status</h1>
-      <p data-i18n="bookings_sub">Payment aur kaam ki progress yahan dikhegi</p>
+      <h1>My Bookings</h1>
     </div>
     <div class="main-pad" style="padding-top:6px;">
+      <div class="booking-filter-tabs">
+        <button class="booking-filter-btn active" data-booking-filter="upcoming">Upcoming</button>
+        <button class="booking-filter-btn" data-booking-filter="completed">Completed</button>
+        <button class="booking-filter-btn" data-booking-filter="cancelled">Cancelled</button>
+      </div>
       <div id="bookingsList"></div>
     </div>
   </section>
@@ -438,29 +521,38 @@
   </section>
 
   <section class="panel" id="panel-profile">
-    <div class="page-header"><h1 data-i18n="profile_heading">Mera Profile</h1></div>
-    <div class="main-pad" style="padding-top:10px;">
-      <div class="profile-hero card">
-        <div class="profile-avatar" id="profileAvatar">?</div>
-        <div>
-          <div style="font-size:19px;font-weight:800;" id="profileName">—</div>
-          <div style="color:var(--ink-soft);font-size:13px;" id="profilePhone">—</div>
+    <div class="main-pad" style="padding-top:0;">
+      <div class="ref-profile-top"><h1>Profile</h1></div>
+      <div class="ref-profile-card">
+        <div class="ref-profile-person">
+          <div class="profile-avatar" id="profileAvatar">?</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;" id="profileName">—</div>
+            <div style="color:var(--ink-soft);font-size:11px;" id="profilePhone">—</div>
+          </div>
         </div>
-      </div>
-      <div class="profile-grid">
-        <div class="profile-field card"><div class="label" data-i18n="stat_active">Active</div><div class="value" id="profileActive">0</div></div>
-        <div class="profile-field card"><div class="label" data-i18n="stat_completed">Poore hue</div><div class="value" id="profileCompleted">0</div></div>
-        <div class="profile-field card"><div class="label" data-i18n="stat_spent">Total paid</div><div class="value" id="profileSpent">₹0</div></div>
-      </div>
-      <div class="settings-block card">
-        <h3 data-i18n="settings_lang">Bhasha / Language</h3>
-        <div class="sub" data-i18n="settings_lang_sub">App ki bhasha chunein</div>
-        <div class="choice-row">
-          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span data-i18n="settings_lang_hi">Hinglish</span></button>
-          <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span data-i18n="settings_lang_en">English</span></button>
+        <div class="ref-profile-stats">
+          <div class="ref-profile-stat"><b id="profileBookings">0</b><span>Bookings</span></div>
+          <div class="ref-profile-stat"><b>—</b><span>Rating</span></div>
+          <div class="ref-profile-stat"><b>—</b><span>Reviews</span></div>
         </div>
+        <div class="ref-menu">
+          <button id="profileMyBookings">▣ &nbsp; My Bookings <span>›</span></button>
+          <button data-profile-soon>▤ &nbsp; Payment Methods <span>›</span></button>
+          <button data-profile-soon>♟ &nbsp; Address Book <span>›</span></button>
+          <button data-profile-soon>? &nbsp; Help &amp; Support <span>›</span></button>
+          <button data-profile-soon>⚙ &nbsp; Settings <span>›</span></button>
+        </div>
+        <div class="settings-block card" style="margin-top:14px;">
+          <h3 data-i18n="settings_lang">Bhasha / Language</h3>
+          <div class="sub" data-i18n="settings_lang_sub">App ki bhasha chunein</div>
+          <div class="choice-row">
+            <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span data-i18n="settings_lang_hi">Hinglish</span></button>
+            <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span data-i18n="settings_lang_en">English</span></button>
+          </div>
+        </div>
+        <button class="btn btn-outline btn-block" id="logoutBtn" data-i18n="logout" style="margin-top:14px;">Logout</button>
       </div>
-      <button class="btn btn-outline btn-block" id="logoutBtn" data-i18n="logout">Logout</button>
     </div>
   </section>
 
@@ -539,7 +631,7 @@
 (function () {
   "use strict";
 
-  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "", favorites: {} };
+  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "", favorites: {}, bookingFilter: "upcoming" };
 
   // ---------------- i18n ----------------
   var LANG = {
@@ -723,6 +815,13 @@
   });
   document.getElementById("logoutBtn").addEventListener("click", function () {
     api("/api/auth/logout", { method: "POST" }).then(function () { window.location.reload(); });
+  });
+  var profileBookingsBtn = document.getElementById("profileMyBookings");
+  if (profileBookingsBtn) profileBookingsBtn.addEventListener("click", function () {
+    document.querySelector('.nav-item[data-tab="bookings"]').click();
+  });
+  document.querySelectorAll("[data-profile-soon]").forEach(function(btn){
+    btn.addEventListener("click",function(){ window.alert("This section will be added in the next phase."); });
   });
 
   // ---------------- tabs ----------------
@@ -977,9 +1076,11 @@
       stackBody.querySelector("#wpShare").addEventListener("click", function () {
         if (navigator.share) { navigator.share({ title: w.name, text: w.name + " — " + w.skill + " on HireNow" }).catch(function () {}); }
       });
-      stackBody.querySelector("#wpBookBtn").addEventListener("click", function () { openHireModal(w.id); });
+      stackBody.querySelector("#wpBookBtn").addEventListener("click", function () { nav(function () { openBookingScreen(w.id); }); });
       stackBody.querySelector("#wpChatBtn").addEventListener("click", function () {
-        stackBody.querySelector("#wpChatBtn").outerHTML = '<div class="pay-note" style="margin:0;">Booking ke baad chat available hoga</div>';
+        var existing = state.bookings.filter(function (b) { return b.worker_id === w.id && b.status !== "cancelled"; })[0];
+        if (existing) { nav(function () { openChatScreen(existing.id, existing.worker_name); }); }
+        else { stackBody.querySelector("#wpChatBtn").outerHTML = '<div class="pay-note" style="margin:0;">Booking ke baad chat available hoga</div>'; }
       });
     }
   }
@@ -1046,12 +1147,9 @@
   // ---------------- profile ----------------
   function renderProfile() {
     if (!state.hirer) return;
-    var active = state.bookings.filter(function (b) { return b.status !== "completed"; }).length;
-    var completed = state.bookings.filter(function (b) { return b.status === "completed"; }).length;
-    var spent = state.bookings.reduce(function (s, b) { return s + (b.payment_status === "paid" ? b.total_amount : 0); }, 0);
-    document.getElementById("profileActive").textContent = active;
-    document.getElementById("profileCompleted").textContent = completed;
-    document.getElementById("profileSpent").textContent = fmtMoney(spent);
+    var count = state.bookings.length;
+    var el = document.getElementById("profileBookings");
+    if (el) el.textContent = count;
   }
 
   // ---------------- hire + pay modal ----------------
@@ -1060,43 +1158,107 @@
   function closeModal() { overlay.classList.remove("open"); }
   overlay.addEventListener("click", function (e) { if (e.target === overlay) closeModal(); });
 
-  function openHireModal(workerId) {
+  function openBookingScreen(workerId) {
     var w = state.workers.filter(function (x) { return x.id === workerId; })[0];
-    var today = new Date().toISOString().slice(0, 10);
-    modalBody.innerHTML =
-      '<button class="modal-close" data-close>&times;</button>' +
-      '<h3>' + w.name + '</h3>' +
-      '<div class="wcard-skill">' + w.skill + ' · ' + w.city + '</div>' +
-      '<div class="row field-2">' +
-        '<div><label>Kab se chahiye</label><input type="date" id="mDate" min="' + today + '" value="' + today + '"></div>' +
-        '<div><label>Kitne din</label><input type="number" id="mDays" min="1" max="30" value="1"></div>' +
-      '</div>' +
-      '<div class="total"><span>Total</span><span class="num" id="mTotal">' + fmtMoney(w.daily_wage) + '</span></div>' +
-      '<div class="row" id="hireArea"><button class="btn btn-primary btn-block" id="hireBtn">Booking banayein</button></div>';
+    if (!w) return;
+    var regular = w.hourly_wage || Math.max(1, Math.round(w.daily_wage / 8));
+    var overtime = w.overtime_wage || Math.round(regular * 1.4);
+    var now = new Date();
+    var today = now.toISOString().slice(0,10);
+    var tomorrowDate = new Date(now.getTime() + 86400000).toISOString().slice(0,10);
+    var selectedDate = today, selectedTime = "09:00 AM", selectedHours = 2, selectedService = "regular";
 
-    var daysInput = modalBody.querySelector("#mDays");
-    var totalEl = modalBody.querySelector("#mTotal");
-    daysInput.addEventListener("input", function () {
-      var days = Math.max(1, Number(daysInput.value) || 1);
-      totalEl.textContent = fmtMoney(w.daily_wage * days);
-    });
-    modalBody.querySelector("[data-close]").addEventListener("click", closeModal);
-    modalBody.querySelector("#hireBtn").addEventListener("click", function () {
-      var days = Math.max(1, Number(daysInput.value) || 1);
-      var date = modalBody.querySelector("#mDate").value || today;
-      createBooking(w, date, days);
-    });
-    overlay.classList.add("open");
+    openStack("booking", "Book Worker", renderBooking, {});
+
+    function renderBooking() {
+      var rate = selectedService === "overtime" ? overtime : regular;
+      stackBody.innerHTML =
+        '<div class="ref-worker-mini ref-card">' +
+          '<div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
+          '<div class="body"><div class="name">' + w.name + '</div><div class="sub">' + w.skill + ' · ' + (w.distance_km != null ? w.distance_km + ' km away' : w.city) + '</div>' +
+          '<div class="sub" style="color:var(--orange);font-weight:700;">★ ' + w.rating + '</div></div>' +
+        '</div>' +
+        '<div class="ref-card">' +
+          '<div class="ref-label">Select Date &amp; Time</div>' +
+          '<div class="ref-date-tabs">' +
+            '<button class="ref-date-btn ' + (selectedDate===today?'active':'') + '" data-ref-date="' + today + '">Today</button>' +
+            '<button class="ref-date-btn ' + (selectedDate===tomorrowDate?'active':'') + '" data-ref-date="' + tomorrowDate + '">Tomorrow</button>' +
+            '<button class="ref-date-btn" id="refCustomDateBtn">Custom Date</button>' +
+            '<input type="date" id="refCustomDate" min="' + today + '" style="display:none;">' +
+          '</div>' +
+          '<div class="ref-label" id="refDateLabel">' + new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) + '</div>' +
+          '<div class="ref-time-grid">' +
+            ["09:00 AM","10:00 AM","11:00 AM","12:00 PM","02:00 PM","04:00 PM"].map(function(ti){return '<button class="ref-time-btn '+(selectedTime===ti?'active':'')+'" data-ref-time="'+ti+'">'+ti+'</button>';}).join("") +
+          '</div>' +
+          '<div class="ref-label">Duration</div>' +
+          '<div class="ref-date-tabs">' + [1,2,3,4].map(function(h){return '<button class="ref-date-btn '+(selectedHours===h?'active':'')+'" data-ref-hours="'+h+'">'+h+' hr'+(h>1?'s':'')+'</button>';}).join("") + '</div>' +
+          '<div class="ref-label">Service Type</div>' +
+          '<div class="ref-service-row">' +
+            '<button class="ref-service-btn '+(selectedService==="regular"?'active':'')+'" data-ref-service="regular">Regular Work (' + fmtMoney(regular) + '/hr)</button>' +
+            '<button class="ref-service-btn '+(selectedService==="overtime"?'active':'')+'" data-ref-service="overtime">Overtime (' + fmtMoney(overtime) + '/hr)</button>' +
+          '</div>' +
+          '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="e.g. 12th Main Road, Koramangala">' +
+          '<div class="ref-label">Special Instructions (Optional)</div><textarea class="ref-notes" id="refNotes" placeholder="e.g. specific tools, location details..."></textarea>' +
+          '<div class="ref-total"><span>Total: ' + fmtMoney(rate) + ' × ' + selectedHours + ' hrs</span><span class="amt">' + fmtMoney(rate*selectedHours) + '</span></div>' +
+          '<button class="btn btn-safety btn-block" id="refProceed">Proceed to Payment</button>' +
+          '<div id="refBookingMsg"></div>' +
+        '</div>';
+
+      stackBody.querySelectorAll("[data-ref-date]").forEach(function(btn){btn.addEventListener("click",function(){selectedDate=btn.dataset.refDate;renderBooking();});});
+      stackBody.querySelectorAll("[data-ref-time]").forEach(function(btn){btn.addEventListener("click",function(){selectedTime=btn.dataset.refTime;renderBooking();});});
+      stackBody.querySelectorAll("[data-ref-hours]").forEach(function(btn){btn.addEventListener("click",function(){selectedHours=Number(btn.dataset.refHours);renderBooking();});});
+      stackBody.querySelectorAll("[data-ref-service]").forEach(function(btn){btn.addEventListener("click",function(){selectedService=btn.dataset.refService;renderBooking();});});
+      stackBody.querySelector("#refCustomDateBtn").addEventListener("click",function(){var input=stackBody.querySelector("#refCustomDate");input.style.display="block";input.click();});
+      stackBody.querySelector("#refCustomDate").addEventListener("change",function(){if(this.value){selectedDate=this.value;renderBooking();}});
+      stackBody.querySelector("#refProceed").addEventListener("click",function(){
+        var address=stackBody.querySelector("#refAddress").value.trim();
+        var notes=stackBody.querySelector("#refNotes").value.trim();
+        if(!address){ stackBody.querySelector("#refBookingMsg").innerHTML='<div class="pay-note">Work address enter karein.</div>'; return; }
+        createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,hours:selectedHours,service_type:selectedService,address:address,special_instructions:notes});
+      });
+    }
   }
 
-  function createBooking(worker, date, days) {
-    var hireArea = document.getElementById("hireArea");
-    hireArea.innerHTML = '<div class="paying"><span class="spinner"></span> Booking ban rahi hai...</div>';
-    api("/api/bookings", { method: "POST", body: JSON.stringify({ worker_id: worker.id, start_date: date, days: days }) })
-      .then(function (res) {
-        if (!res.ok) { hireArea.innerHTML = '<div class="pay-note">' + (res.data.error || "Kuch galat ho gaya") + '</div>'; return; }
-        showPayStep(res.data.id, res.data.total_amount);
+  function createReferenceBooking(worker, payload) {
+    var msg = stackBody.querySelector("#refBookingMsg");
+    var btn = stackBody.querySelector("#refProceed");
+    if (btn) { btn.disabled = true; btn.textContent = "Booking ban rahi hai..."; }
+    payload.worker_id = worker.id;
+    api("/api/bookings", { method: "POST", body: JSON.stringify(payload) }).then(function (res) {
+      if (!res.ok) {
+        if (btn) { btn.disabled = false; btn.textContent = "Proceed to Payment"; }
+        msg.innerHTML = '<div class="pay-note">' + (res.data.error || "Booking create nahi hui") + '</div>';
+        return;
+      }
+      var bookingId = res.data.id;
+      api("/api/bookings/" + bookingId + "/create-order", { method: "POST" }).then(function (orderRes) {
+        if (!orderRes.ok || typeof Razorpay === "undefined") {
+          msg.innerHTML = '<div class="pay-note">Booking #' + bookingId + ' create ho gayi. Payment setup abhi active nahi hai.</div>';
+          loadBookings();
+          setTimeout(function(){ stackScreen.classList.remove("open"); document.querySelector(".bottom-nav").style.display="flex"; document.querySelector('.nav-item[data-tab="bookings"]').click(); },900);
+          return;
+        }
+        var order=orderRes.data;
+        var rzp=new Razorpay({
+          key:order.key_id, amount:order.amount, currency:order.currency, order_id:order.order_id,
+          name:"HireNow", description:"Booking #"+bookingId, theme:{color:"#F5A623"},
+          handler:function(response){
+            api("/api/payments/verify",{method:"POST",body:JSON.stringify({
+              razorpay_order_id:response.razorpay_order_id,
+              razorpay_payment_id:response.razorpay_payment_id,
+              razorpay_signature:response.razorpay_signature
+            })}).then(function(vr){
+              if(!vr.ok){msg.innerHTML='<div class="pay-note">Payment verify nahi hua: '+vr.data.error+'</div>';return;}
+              msg.innerHTML='<div style="color:var(--ok);font-weight:800;margin-top:10px;">Booking confirmed ✓</div>';
+              loadBookings();
+              setTimeout(function(){ stackScreen.classList.remove("open"); document.querySelector(".bottom-nav").style.display="flex"; document.querySelector('.nav-item[data-tab="bookings"]').click(); },800);
+            });
+          }
+        });
+        rzp.on("payment.failed",function(resp){msg.innerHTML='<div class="pay-note">Payment failed: '+(resp.error.description||"Please try again")+'</div>';});
+        rzp.open();
       });
+    });
   }
 
   function showPayStep(bookingId, total) {
@@ -1167,72 +1329,116 @@
     });
   }
 
+  function bookingStatusClass(status) {
+    return status === "confirmed" ? "confirmed" : status === "completed" ? "completed" : status === "cancelled" ? "cancelled" : "requested";
+  }
   function renderBookings() {
     var wrap = document.getElementById("bookingsList");
-    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_BOOKINGS + t("no_bookings") + '</div>'; return; }
-    wrap.innerHTML = state.bookings.map(function (b) {
-      var idx = STATUS_FLOW.indexOf(b.status);
-      var nodes = STATUS_FLOW.map(function (s, i) {
-        var cls = i < idx ? "done" : (i === idx ? "now" : "");
-        var inner = i < idx ? "✓" : (i + 1);
-        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + statusLabel(s) + '</div></div>';
-      }).join("");
-      var needsPay = b.payment_status !== "paid";
-      var nextLabel = idx < STATUS_FLOW.length - 1 ? statusLabel(STATUS_FLOW[idx + 1]) : null;
-      return (
-        '<div class="bcard" data-booking-id="' + b.id + '" data-worker-name="' + b.worker_name + '">' +
-          '<div class="bcard-head"><div class="bcard-who"><div class="avatar" style="background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
-          '<div><div class="wcard-name">' + b.worker_name + '</div><div class="wcard-skill">' + b.worker_skill + ' · ' + b.worker_city + '</div></div></div>' +
-          '<div class="bcard-price"><div class="num">' + fmtMoney(b.total_amount) + '</div><div class="wcard-skill">' + fmtDate(b.start_date) + ' · ' + b.days + ' ' + t("days_word") + '</div></div></div>' +
-          '<span class="status-pill">' + statusLabel(b.status) + (needsPay ? " · " + t("payment_pending") : " · " + t("paid")) + '</span>' +
-          '<div class="timeline">' + nodes + '</div>' +
-          '<div class="bcard-actions">' +
-          (needsPay ? '<button class="btn btn-safety" data-pay="' + b.id + '">' + t("pay_now") + '</button>' :
-            (nextLabel ? '<button class="btn btn-outline" data-advance="' + b.id + '" title="Worker khud check-in kar sakta hai /worker se">' + t("manual_update") + ' ' + nextLabel + '</button>' : '')) +
-          '<button class="btn btn-outline chat-btn" data-open-chat="' + b.id + '">💬 ' + t("message_worker") + '</button>' +
-          '</div>' +
-        '</div>'
-      );
+    if (!wrap) return;
+    var list = state.bookings.filter(function(b){
+      if (state.bookingFilter === "completed") return b.status === "completed";
+      if (state.bookingFilter === "cancelled") return b.status === "cancelled";
+      return b.status !== "completed" && b.status !== "cancelled";
+    });
+    document.querySelectorAll("[data-booking-filter]").forEach(function(btn){
+      btn.classList.toggle("active", btn.dataset.bookingFilter === state.bookingFilter);
+      btn.onclick = function(){ state.bookingFilter = btn.dataset.bookingFilter; renderBookings(); };
+    });
+    if (!list.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_BOOKINGS + 'No bookings in this section.</div>'; return; }
+    wrap.innerHTML = list.map(function(b){
+      var dt = new Date(b.start_date + "T00:00:00");
+      return '<div class="schedule-card" data-ref-booking="' + b.id + '">' +
+        '<div class="schedule-date"><b>' + String(dt.getDate()).padStart(2,"0") + '</b>' + dt.toLocaleDateString("en",{month:"short"}) + '</div>' +
+        '<div class="avatar" style="width:42px;height:42px;background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
+        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
+          '<div class="amount">' + fmtMoney(b.total_amount) + '</div><span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + statusLabel(b.status) + '</span></div>' +
+        '<div style="color:var(--ink-soft);">›</div>' +
+      '</div>';
     }).join("");
-
-    wrap.querySelectorAll("[data-pay]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var bookingId = Number(btn.dataset.pay);
-        modalBody.innerHTML = '<button class="modal-close" data-close>&times;</button><h3>Payment</h3><div id="hireArea"></div>';
-        modalBody.querySelector("[data-close]").addEventListener("click", closeModal);
-        overlay.classList.add("open");
-        var b = state.bookings.filter(function (x) { return x.id === bookingId; })[0];
-        showPayStep(bookingId, b.total_amount);
-      });
-    });
-    wrap.querySelectorAll("[data-advance]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        api("/api/bookings/" + btn.dataset.advance + "/advance-status", {
-          method: "POST", body: JSON.stringify({ note: "Manual update from dashboard" })
-        }).then(function () { loadBookings(); });
-      });
-    });
-    wrap.querySelectorAll("[data-open-chat]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var card = btn.closest("[data-booking-id]");
-        openChat(Number(card.dataset.bookingId), card.dataset.workerName);
-      });
+    wrap.querySelectorAll("[data-ref-booking]").forEach(function(row){
+      row.addEventListener("click",function(){ var id=Number(row.dataset.refBooking); nav(function(){ openBookingDetailsScreen(id); }); });
     });
   }
 
   // ---------------- messages tab (inbox list over bookings) ----------------
   function renderMessages() {
     var wrap = document.getElementById("messagesList");
-    if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_MESSAGES + t("no_messages") + '</div>'; return; }
-    wrap.innerHTML = state.bookings.map(function (b) {
-      return '<div class="msg-row" data-booking-id="' + b.id + '" data-worker-name="' + b.worker_name + '">' +
+    if (!wrap) return;
+    var list = state.bookings.filter(function(b){ return b.status !== "cancelled"; });
+    if (!list.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_MESSAGES + 'Your booking conversations will appear here.</div>'; return; }
+    wrap.innerHTML = list.map(function(b){
+      return '<div class="msg-row" data-ref-chat="' + b.id + '">' +
         '<div class="avatar" style="background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
-        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="preview">' + statusLabel(b.status) + ' · ' + b.worker_skill + '</div></div>' +
+        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="preview">' + b.worker_skill + ' · Booking #' + b.id + '</div></div>' +
         '<div class="chev">›</div></div>';
     }).join("");
-    wrap.querySelectorAll("[data-booking-id]").forEach(function (row) {
-      row.addEventListener("click", function () { openChat(Number(row.dataset.bookingId), row.dataset.workerName); });
+    wrap.querySelectorAll("[data-ref-chat]").forEach(function(row){
+      row.addEventListener("click",function(){ var id=Number(row.dataset.refChat); var b=state.bookings.filter(function(x){return x.id===id;})[0]; nav(function(){openChatScreen(id,b.worker_name);}); });
     });
+  }
+
+  function openChatScreen(bookingId, workerName) {
+    state.chatBookingId = bookingId;
+    openStack("chat", workerName, renderChatScreen, { subtitle:"● Online" });
+    function renderChatScreen() {
+      stackBody.innerHTML =
+        '<div id="refChatLog" class="ref-chat-log"><div class="paying"><span class="spinner"></span> Messages load ho rahe hain...</div></div>' +
+        '<div class="ref-chat-composer"><input type="text" id="refChatInput" placeholder="Type a message..."><button class="ref-chat-send" id="refChatSend">➤</button></div>';
+      loadRefMessages();
+      stackBody.querySelector("#refChatSend").addEventListener("click",sendRefMessage);
+      stackBody.querySelector("#refChatInput").addEventListener("keydown",function(e){if(e.key==="Enter")sendRefMessage();});
+    }
+    function loadRefMessages(){
+      api("/api/bookings/"+bookingId+"/messages").then(function(res){
+        var log=stackBody.querySelector("#refChatLog"); if(!log)return;
+        if(!res.ok){log.innerHTML='<div class="pay-note">Messages load nahi hue.</div>';return;}
+        if(!res.data.length){log.innerHTML='<div class="empty">Start the conversation.</div>';return;}
+        log.innerHTML=res.data.map(function(m){
+          var mine=m.sender_role==="hirer";
+          return '<div class="ref-chat-bubble '+(mine?'me':'them')+'">'+m.body+'<span class="time">'+((m.created_at||"").slice(11,16))+'</span></div>';
+        }).join("");
+        log.scrollTop=log.scrollHeight;
+      });
+    }
+    function sendRefMessage(){
+      var input=stackBody.querySelector("#refChatInput"); var body=input.value.trim(); if(!body)return;
+      api("/api/bookings/"+bookingId+"/messages",{method:"POST",body:JSON.stringify({body:body})}).then(function(res){
+        if(res.ok){input.value="";loadRefMessages();}
+      });
+    }
+  }
+
+  function openBookingDetailsScreen(bookingId) {
+    openStack("booking-details","Booking Details",function(){
+      stackBody.innerHTML='<div class="paying"><span class="spinner"></span> Booking load ho rahi hai...</div>';
+      api("/api/bookings/"+bookingId).then(function(res){
+        if(!res.ok){stackBody.innerHTML='<div class="pay-note">'+(res.data.error||"Booking load nahi hui")+'</div>';return;}
+        var b=res.data;
+        stackBody.innerHTML =
+          '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+initials(b.worker_name)+'</div>' +
+            '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
+          '<div class="ref-detail-list">' +
+            '<div class="ref-detail-row"><div class="k">Date &amp; Time</div><div class="v">📅 '+b.start_date+' &nbsp; ◷ '+(b.start_time||"Time not set")+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.service_type||"regular")+' work</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Address</div><div class="v">'+(b.address||"Not provided")+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Special Instructions</div><div class="v">'+(b.special_instructions||"None")+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Total Amount</div><div class="v" style="font-size:18px;">'+fmtMoney(b.total_amount)+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+statusLabel(b.status)+'</span></div></div>' +
+          '</div>' +
+          '<div class="ref-detail-actions">' +
+            ((!["completed","cancelled","in_progress"].includes(b.status))?'<button class="btn btn-outline" id="refCancelBooking">Cancel Booking</button>':'<div></div>') +
+            '<button class="btn btn-primary" id="refContactWorker">Contact Worker</button>' +
+          '</div>';
+        var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
+        var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
+          if(!window.confirm("Cancel this booking?"))return;
+          api("/api/bookings/"+b.id+"/cancel",{method:"POST",body:JSON.stringify({reason:"Cancelled by hirer"})}).then(function(cr){
+            if(!cr.ok){window.alert(cr.data.error||"Cancel nahi hui");return;}
+            loadBookings(); goBack();
+          });
+        });
+      });
+    },{});
   }
 
   // ---------------- floating chat popup ----------------
