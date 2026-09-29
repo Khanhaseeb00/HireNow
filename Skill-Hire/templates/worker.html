@@ -226,6 +226,20 @@
   .worker-stats{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;color:var(--app-text);border:1px solid var(--app-border);border-radius:18px;margin:-15px 0 17px;box-shadow:0 6px 18px rgba(20,48,78,.06)}.worker-stat{text-align:center;padding:14px 5px;border-right:1px solid #E7EDF4}.worker-stat:last-child{border:0}.worker-stat strong{display:block;font-family:'Archivo';font-size:20px}.worker-stat span{font-size:10.5px;color:var(--app-muted)}
   .new-jobs-banner{background:linear-gradient(145deg,#073153,#031D37);color:#fff;border-radius:17px;padding:17px;margin-bottom:18px}.new-jobs-banner strong{font-family:'Archivo';font-size:18px}.new-jobs-banner p{font-size:12px;opacity:.78;margin:3px 0 11px}.new-jobs-banner button{background:var(--app-orange);border-radius:10px;padding:9px 20px;font-weight:800}
   @media(max-width:390px){.profile-grid{grid-template-columns:1fr 1fr}.worker-wordmark{font-size:31px}}
+
+  /* Separate worker screens */
+  nav.tabs{grid-template-columns:repeat(5,1fr)}
+  #navJobs:before{content:"⌕"}#navEarnings:before{content:"₹"}#navMessages:before{content:"✉"}
+  .screen-head{display:flex;align-items:center;gap:12px;margin-bottom:15px}.screen-head h2{font-size:22px}.screen-back{width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--app-border);color:var(--app-navy);font-size:20px}
+  .job-filter-row{display:flex;gap:8px;overflow:auto;margin-bottom:13px}.job-filter{white-space:nowrap;padding:8px 13px;border-radius:18px;background:#EAF1FA;color:#24415F;font-weight:700}.job-filter.active{background:var(--app-orange);color:#fff}
+  .detail-card,.earn-card,.message-row,.map-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 5px 18px rgba(20,48,78,.05)}
+  .detail-title{font-family:'Archivo';font-size:21px;font-weight:800}.detail-line{display:flex;gap:8px;color:var(--app-muted);margin:7px 0}.detail-amount{font-family:'Archivo';font-size:24px;font-weight:800;color:var(--app-text)}
+  .detail-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+  .map-placeholder{height:260px;border-radius:18px;background:linear-gradient(135deg,#E8EEF3 25%,#F8FAFC 25%,#F8FAFC 50%,#E8EEF3 50%,#E8EEF3 75%,#F8FAFC 75%);background-size:34px 34px;position:relative;overflow:hidden;margin:12px 0}.map-placeholder:before{content:"●";position:absolute;left:48%;top:53%;font-size:42px;color:#1677F2}.map-route{position:absolute;left:28%;top:42%;width:46%;height:4px;background:#1677F2;transform:rotate(-24deg);border-radius:4px}
+  .earn-total{font-family:'Archivo';font-size:34px;font-weight:900;margin:6px 0 15px}.earn-break{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #EEF2F6}.earn-break:last-child{border:0}
+  .message-row{display:flex;align-items:center;gap:12px}.msg-avatar{width:48px;height:48px;border-radius:50%;background:#EAF1FA;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--app-navy)}.msg-body{min-width:0;flex:1}.msg-name{font-weight:800}.msg-preview{color:var(--app-muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .empty-soft{padding:34px 18px;text-align:center;color:var(--app-muted);background:#fff;border:1px dashed #D7E1EB;border-radius:18px}
+  @media(max-width:430px){nav.tabs button{font-size:9.5px;padding-left:1px;padding-right:1px}}
 </style>
 </head>
 <body>
@@ -264,9 +278,11 @@
       <h1>Hire<span class="now">Now</span></h1>
     </div>
     <nav class="tabs">
-      <button class="active" data-tab="work" id="navWork">Mera Kaam</button>
+      <button class="active" data-tab="work" id="navWork">Home</button>
+      <button data-tab="jobs" id="navJobs">My Jobs</button>
+      <button data-tab="earnings" id="navEarnings">Earnings</button>
+      <button data-tab="messages" id="navMessages">Messages</button>
       <button data-tab="profile" id="navProfile">Profile</button>
-      <button data-tab="settings" id="navSettings">Settings</button>
     </nav>
     <div class="who"><span id="whoName"></span><button id="logoutBtn">Logout</button></div>
   </header>
@@ -305,6 +321,42 @@
       <div id="bookingsList"><div class="empty">Loading...</div></div>
     </section>
 
+    <section class="panel" id="panel-jobs">
+      <div class="screen-head"><h2>My Jobs</h2></div>
+      <div class="job-filter-row">
+        <button class="job-filter active" data-job-filter="all">All</button>
+        <button class="job-filter" data-job-filter="ongoing">Ongoing</button>
+        <button class="job-filter" data-job-filter="upcoming">Upcoming</button>
+        <button class="job-filter" data-job-filter="completed">Completed</button>
+        <button class="job-filter" data-job-filter="cancelled">Cancelled</button>
+      </div>
+      <div id="jobsScreenList"><div class="empty-soft">Loading jobs...</div></div>
+    </section>
+
+    <section class="panel" id="panel-job-detail">
+      <div class="screen-head"><button class="screen-back" data-back-tab="jobs">‹</button><h2>Job Details</h2></div>
+      <div id="jobDetailContent"></div>
+    </section>
+
+    <section class="panel" id="panel-navigation">
+      <div class="screen-head"><button class="screen-back" data-back-tab="job-detail">‹</button><h2>Job Location</h2></div>
+      <div id="navigationContent"></div>
+    </section>
+
+    <section class="panel" id="panel-earnings">
+      <div class="screen-head"><h2>Earnings</h2></div>
+      <div class="earn-card">
+        <div style="color:var(--app-muted)">Total earnings from completed jobs</div>
+        <div class="earn-total" id="earningsTotal">₹0</div>
+        <div id="earningsBreakdown"></div>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-messages">
+      <div class="screen-head"><h2>Messages</h2></div>
+      <div id="messagesScreenList"></div>
+    </section>
+
     <section class="panel" id="panel-profile">
       <h2 class="section-title" id="profileHeading">Mera Profile</h2>
       <div class="profile-hero flatcard">
@@ -322,6 +374,7 @@
         <div class="profile-field flatcard"><div class="label" id="profLabelJobs">Jobs poore hue</div><div class="value num" id="profileJobs">0</div></div>
         <div class="profile-field flatcard"><div class="label" id="profLabelVerify">ID Verification</div><div class="value"><span class="badge" id="profileVerifyBadge">—</span></div></div>
       </div>
+      <button class="btn btn-outline btn-block" id="openSettingsBtn" style="margin-top:14px;">⚙ Settings</button>
     </section>
 
     <section class="panel" id="panel-settings">
@@ -384,7 +437,7 @@
     document.querySelector("#panel-work .section-title").textContent = wt("bookings_heading");
     document.getElementById("navWork").textContent = wt("nav_work");
     document.getElementById("navProfile").textContent = wt("nav_profile");
-    document.getElementById("navSettings").textContent = wt("nav_settings");
+
     document.getElementById("profileHeading").textContent = wt("profile_heading");
     document.getElementById("profLabelSkill").textContent = wt("lbl_skill");
     document.getElementById("profLabelCity").textContent = wt("lbl_city");
@@ -429,17 +482,21 @@
   document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
     btn.addEventListener("click", function () { setWorkerLanguage(btn.dataset.langChoice); });
   });
-  document.querySelectorAll("nav.tabs button").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      document.querySelectorAll("nav.tabs button").forEach(function (b) { b.classList.remove("active"); });
-      btn.classList.add("active");
-      document.querySelectorAll("section.panel").forEach(function (p) { p.classList.remove("active"); });
-      document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
-    });
-  });
+  function showWorkerPanel(tab) {
+    document.querySelectorAll("section.panel").forEach(function(p){p.classList.remove("active");});
+    var target=document.getElementById("panel-"+tab); if(target) target.classList.add("active");
+    document.querySelectorAll("nav.tabs button").forEach(function(b){b.classList.toggle("active",b.dataset.tab===tab);});
+    window.scrollTo({top:0,behavior:"smooth"});
+    if(tab==="jobs") renderJobsScreen();
+    if(tab==="earnings") renderEarningsScreen();
+    if(tab==="messages") renderMessagesScreen();
+  }
+  document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.tab);});});
+  document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.backTab);});});
+  document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
 
   var viewJobsBtn=document.getElementById("viewJobsBtn");
-  if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){document.getElementById("bookingsList").scrollIntoView({behavior:"smooth",block:"start"});});
+  if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){showWorkerPanel("jobs");});
     function api(path, opts) {
     opts = opts || {};
     if (!(opts.body instanceof FormData)) {
@@ -597,6 +654,9 @@
       var rc=document.getElementById("requestCountText"); if(rc)rc.textContent=requested ? (requested+" new job request"+(requested===1?"":"s")+" in your queue") : "No new requests right now";
       renderBookings();
       renderProfile();
+      renderJobsScreen();
+      renderEarningsScreen();
+      renderMessagesScreen();
     });
   }
 
@@ -686,8 +746,66 @@
     });
   }
 
-  function doCheckIn(bookingId) {
-    var note = document.getElementById("gps-" + bookingId);
+  var jobFilter="all";
+  function filteredJobs(){
+    return state.bookings.filter(function(b){
+      if(jobFilter==="all") return true;
+      if(jobFilter==="ongoing") return ["en_route","checked_in","in_progress"].indexOf(b.status)>=0;
+      if(jobFilter==="upcoming") return ["requested","confirmed"].indexOf(b.status)>=0;
+      if(jobFilter==="completed") return b.status==="completed";
+      if(jobFilter==="cancelled") return ["cancelled","rejected"].indexOf(b.status)>=0;
+      return true;
+    });
+  }
+  function jobTitle(b){ return b.service_name || b.skill || b.category || "Service Job"; }
+  function renderJobsScreen(){
+    var wrap=document.getElementById("jobsScreenList"); if(!wrap)return;
+    var rows=filteredJobs();
+    if(!rows.length){wrap.innerHTML='<div class="empty-soft">No jobs in this section.</div>';return;}
+    wrap.innerHTML=rows.map(function(b){return '<div class="bcard" data-detail-job="'+b.id+'"><div class="bcard-head"><div><div class="name">'+jobTitle(b)+'</div><div class="meta">'+fmtDate(b.start_date)+' · '+(b.hours||2)+' hrs · '+(b.hirer_name||"Hirer")+'</div></div><div class="num">'+fmtMoney(b.total_amount)+'</div></div><span class="status-pill">'+(STATUS_LABELS_BY_LANG[state.lang]&&STATUS_LABELS_BY_LANG[state.lang][b.status]||b.status)+'</span><button class="btn btn-outline btn-block" data-detail-open="'+b.id+'">View Job Details</button></div>';}).join("");
+    wrap.querySelectorAll("[data-detail-open]").forEach(function(btn){btn.addEventListener("click",function(){openJobDetail(Number(btn.dataset.detailOpen));});});
+  }
+  document.querySelectorAll("[data-job-filter]").forEach(function(btn){btn.addEventListener("click",function(){jobFilter=btn.dataset.jobFilter;document.querySelectorAll("[data-job-filter]").forEach(function(x){x.classList.toggle("active",x===btn);});renderJobsScreen();});});
+
+  function findBooking(id){return state.bookings.find(function(b){return Number(b.id)===Number(id);});}
+  function openJobDetail(id){
+    var b=findBooking(id); if(!b)return;
+    var canAccept=b.status==="requested";
+    var canNavigate=["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;
+    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.hours||2)+' hrs</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button></div></div>';
+    showWorkerPanel("job-detail");
+    var a=document.querySelector("[data-detail-accept]");if(a)a.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"accept"})}).then(function(r){if(r.ok){loadBookings();showWorkerPanel("jobs");}else alert(r.data.error||"Accept failed");});});
+    var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"reject",reason:""})}).then(function(x){if(x.ok){loadBookings();showWorkerPanel("jobs");}else alert(x.data.error||"Reject failed");});});
+    var n=document.querySelector("[data-nav-job]");if(n)n.addEventListener("click",function(){openNavigation(b.id);});
+    var c=document.querySelector("[data-detail-chat]");if(c)c.addEventListener("click",function(){openChat(b.id,b.hirer_name||"Hirer");});
+  }
+
+  function openNavigation(id){
+    var b=findBooking(id); if(!b)return;
+    document.getElementById("navigationContent").innerHTML='<div class="map-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><strong>'+(b.address||b.city||"Job Location")+'</strong><div style="color:var(--app-muted);font-size:12px">Use device location for check-in</div></div><button class="btn btn-primary" data-external-nav>Navigate</button></div><div class="map-placeholder"><div class="map-route"></div></div><div style="text-align:center;font-weight:800;font-size:18px">Have you arrived at location?</div><div style="text-align:center;color:var(--app-muted);font-size:12px;margin:5px 0 12px">Your real-time location will be recorded for this job.</div><button class="btn btn-safety btn-block" data-real-checkin="'+b.id+'">Check In / Update Status</button><div class="gps-note" id="gps-nav-'+b.id+'"></div></div>';
+    showWorkerPanel("navigation");
+    document.querySelector("[data-real-checkin]").addEventListener("click",function(){doCheckIn(b.id,"gps-nav-"+b.id);});
+    document.querySelector("[data-external-nav]").addEventListener("click",function(){if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(p){window.open("https://www.google.com/maps/dir/?api=1&origin="+p.coords.latitude+","+p.coords.longitude+"&destination="+encodeURIComponent(b.address||b.city||""),"_blank");},function(){alert("Location permission is required for navigation.");});}});
+  }
+
+  function renderEarningsScreen(){
+    var completed=state.bookings.filter(function(b){return b.status==="completed";});
+    var total=completed.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
+    document.getElementById("earningsTotal").textContent=fmtMoney(total);
+    var box=document.getElementById("earningsBreakdown");
+    box.innerHTML=completed.length?completed.slice().reverse().map(function(b){return '<div class="earn-break"><span>'+jobTitle(b)+'<small style="display:block;color:var(--app-muted)">'+fmtDate(b.start_date)+'</small></span><strong>'+fmtMoney(b.total_amount)+'</strong></div>';}).join(""):'<div class="empty-soft">Completed jobs will appear here.</div>';
+  }
+
+  function renderMessagesScreen(){
+    var wrap=document.getElementById("messagesScreenList");if(!wrap)return;
+    var jobs=state.bookings.filter(function(b){return b.hirer_name;});
+    var seen={};jobs=jobs.filter(function(b){var k=b.hirer_name;if(seen[k])return false;seen[k]=1;return true;});
+    wrap.innerHTML=jobs.length?jobs.map(function(b){return '<button class="message-row" style="width:100%;text-align:left" data-message-booking="'+b.id+'" data-message-name="'+b.hirer_name+'"><div class="msg-avatar">'+initials(b.hirer_name)+'</div><div class="msg-body"><div class="msg-name">'+b.hirer_name+'</div><div class="msg-preview">'+jobTitle(b)+' · Tap to open conversation</div></div><span>›</span></button>';}).join(""):'<div class="empty-soft">No job conversations yet.</div>';
+    wrap.querySelectorAll("[data-message-booking]").forEach(function(btn){btn.addEventListener("click",function(){openChat(Number(btn.dataset.messageBooking),btn.dataset.messageName);});});
+  }
+
+    function doCheckIn(bookingId, noteId) {
+    var note = document.getElementById(noteId || ("gps-" + bookingId));
     if (!navigator.geolocation) {
       note.innerHTML = '<span class="pin" style="background:var(--rust);"></span> Is browser mein location support nahi hai.';
       return;
