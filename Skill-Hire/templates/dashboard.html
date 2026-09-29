@@ -428,34 +428,133 @@
   .pay-choice small { display:block; color:var(--ink-soft); font-weight:500; margin-top:3px; line-height:1.35; }
   .accept-note { margin-top:10px; font-size:11.5px; color:var(--ink-soft); }
 
+
+  /* ============ HIRER SPLASH + AUTH ============ */
+  #splashScreen {
+    position:fixed; inset:0; z-index:9999; background:#071B3A; color:#fff;
+    display:flex; flex-direction:column; align-items:center; justify-content:space-between;
+    padding:clamp(34px,7vh,72px) 24px 24px; overflow:hidden;
+  }
+  .splash-brand { margin-top:clamp(28px,8vh,86px); text-align:center; position:relative; z-index:2; }
+  .brand-logo-lockup { display:flex; flex-direction:column; align-items:center; gap:13px; }
+  .brand-logo-mark { width:104px; height:104px; filter:drop-shadow(0 12px 30px rgba(0,0,0,.22)); }
+  .brand-wordmark { font-family:'Archivo',sans-serif; font-size:42px; font-weight:900; line-height:1; letter-spacing:-1.6px; }
+  .brand-wordmark .hire { color:#fff; } .brand-wordmark .now { color:#F5A623; }
+  .brand-tagline { margin-top:10px; font-size:13px; color:rgba(255,255,255,.82); font-weight:600; letter-spacing:.01em; }
+  .splash-art { width:min(520px,110vw); height:44vh; min-height:250px; position:relative; align-self:center; margin-bottom:-24px; }
+  .splash-skyline { position:absolute; inset:auto 0 0; height:58%; background:#F5A623;
+    clip-path:polygon(0 74%,5% 64%,7% 100%,11% 100%,11% 57%,15% 57%,15% 100%,19% 100%,19% 70%,22% 70%,22% 100%,28% 100%,28% 62%,33% 62%,33% 100%,41% 100%,41% 72%,47% 72%,47% 100%,54% 100%,54% 66%,59% 66%,59% 100%,67% 100%,67% 76%,72% 76%,72% 100%,78% 100%,78% 55%,82% 55%,82% 100%,88% 100%,88% 69%,94% 69%,94% 100%,100% 100%,100% 100%,0 100%); }
+  .splash-worker { position:absolute; left:50%; bottom:3%; width:170px; height:245px; transform:translateX(-50%); }
+  .sw-head { position:absolute; width:58px; height:58px; border-radius:50%; background:#071B3A; left:57px; top:15px; }
+  .sw-helmet { position:absolute; width:78px; height:24px; border:4px solid #F5A623; border-bottom:none; border-radius:42px 42px 0 0; left:47px; top:5px; }
+  .sw-body { position:absolute; width:105px; height:130px; background:#071B3A; border-radius:48px 48px 18px 18px; left:33px; top:70px; }
+  .sw-arm { position:absolute; height:96px; width:22px; border-radius:14px; background:#071B3A; top:84px; transform-origin:top center; }
+  .sw-arm.left { left:27px; transform:rotate(25deg); } .sw-arm.right { right:25px; transform:rotate(-34deg); }
+  .sw-leg { position:absolute; height:75px; width:28px; background:#071B3A; bottom:0; border-radius:10px 10px 2px 2px; }
+  .sw-leg.left { left:50px; transform:rotate(6deg); } .sw-leg.right { right:45px; transform:rotate(-6deg); }
+  .sw-wrench { position:absolute; right:3px; top:48px; width:26px; height:88px; border-radius:12px; background:#071B3A; transform:rotate(18deg); }
+  .splash-fade-out { animation:splashOut .35s ease forwards; }
+  @keyframes splashOut { to { opacity:0; visibility:hidden; } }
+
+  .auth-page { min-height:100vh; background:linear-gradient(180deg,#071B3A 0 30%,#F4F7FB 30% 100%); padding:38px 16px 28px; }
+  .auth-wrap { max-width:420px; margin:0 auto; padding:0; border:none; background:transparent; }
+  .auth-brand { text-align:center; color:#fff; padding:8px 0 22px; }
+  .auth-brand .mini-lockup { display:inline-flex; align-items:center; gap:10px; }
+  .auth-brand .mini-mark { width:52px; height:52px; }
+  .auth-brand .mini-name { font-family:'Archivo',sans-serif; font-weight:900; font-size:28px; letter-spacing:-.8px; }
+  .auth-brand .mini-name span:last-child { color:#F5A623; }
+  .auth-card { background:#fff; border-radius:22px; padding:24px 20px 20px; box-shadow:0 18px 46px rgba(7,27,58,.14); border:1px solid #E7ECF3; }
+  .auth-card h2 { font-size:24px; text-align:left; }
+  .auth-card .auth-sub { text-align:left; margin:6px 0 18px; color:var(--ink-soft); font-size:13px; }
+  .auth-mode-tabs { display:grid; grid-template-columns:1fr 1fr; gap:6px; background:#F2F5F9; border-radius:11px; padding:4px; margin-bottom:18px; }
+  .auth-mode-tabs button { padding:9px; border-radius:8px; background:transparent; color:var(--ink-soft); font-weight:700; }
+  .auth-mode-tabs button.active { background:#fff; color:var(--navy); box-shadow:0 2px 8px rgba(16,27,51,.08); }
+  .input-shell { position:relative; }
+  .input-shell input { padding-right:46px; height:48px; }
+  .pass-toggle { position:absolute; right:6px; top:50%; transform:translateY(-50%); width:38px; height:36px; border-radius:8px; background:transparent; color:var(--ink-soft); font-size:16px; }
+  .phone-shell { display:flex; align-items:center; border:1px solid var(--line); border-radius:10px; background:#fff; overflow:hidden; }
+  .phone-prefix { padding:0 10px 0 12px; color:var(--ink-soft); font-weight:700; border-right:1px solid var(--line); height:46px; display:flex; align-items:center; }
+  .phone-shell input { border:0; box-shadow:none; border-radius:0; }
+  .auth-help { display:flex; justify-content:space-between; gap:10px; align-items:center; margin-top:8px; color:var(--ink-soft); font-size:11px; }
+  .auth-tip { background:#F7F9FC; border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:12px 0; font-size:11.5px; color:var(--ink-soft); }
+  .auth-submit { height:48px; border-radius:11px; font-size:15px; }
+  .auth-legal { font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:14px; line-height:1.45; }
+  .auth-switch { margin-top:14px; }
+  #authError { margin:0 0 12px; }
+  @media (max-width:380px) {
+    .brand-wordmark { font-size:36px; }
+    .brand-logo-mark { width:92px; height:92px; }
+    .auth-card { padding:20px 16px; }
+  }
+
 </style>
 </head>
+
 <body>
 
-<!-- ============ AUTH SCREEN ============ -->
-<div id="authScreen" class="auth-wrap card" style="display:none;">
-  <div style="display:flex;justify-content:center;margin-bottom:16px;">
-    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="10" y="3" width="6" height="12" rx="2" fill="#EAF2F7"/><path d="M34 1.5 L38 7.5 L30 7.5 Z" fill="#F5A623"/><rect x="31" y="7.5" width="6" height="7.5" rx="2" fill="#F5A623"/><clipPath id="hs-auth"><rect x="6" y="23" width="36" height="14" rx="6"/></clipPath><g clip-path="url(#hs-auth)"><polygon points="6,23 24,23 19,26.5 29,30 19,33.5 24,37 6,37" fill="#EAF2F7"/><polygon points="42,23 24,23 19,26.5 29,30 19,33.5 24,37 42,37" fill="#F5A623"/></g><circle cx="14" cy="21.5" r="3.2" fill="#EAF2F7"/><circle cx="34" cy="21.5" r="3.2" fill="#F5A623"/></svg>
+<div id="splashScreen" aria-label="HireNow splash screen">
+  <div class="splash-brand">
+    <div class="brand-logo-lockup">
+      <svg class="brand-logo-mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow logo"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hire-now-lockup"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hire-now-lockup)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg>
+      <div class="brand-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div>
+    </div>
+    <div class="brand-tagline">Skilled People. Real Work. Faster.</div>
   </div>
-  <h2 id="authTitle" data-i18n="login_title">Login karein</h2>
-  <p data-i18n="login_sub">Apna account se hire karna shuru karein</p>
-  <p class="tagline">Skilled People. Real Work. Faster.</p>
-  <div id="authError"></div>
-
-  <div id="loginForm">
-    <div class="row"><label data-i18n="phone_label">Phone number</label><input type="tel" id="loginPhone" placeholder="9876543210"></div>
-    <div class="row"><label data-i18n="password_label">Password</label><input type="password" id="loginPassword"></div>
-    <button class="btn btn-safety btn-block" id="loginBtn" data-i18n="login_btn">Login</button>
-    <div class="auth-switch"><span data-i18n="new_account">Naya account?</span> <a id="showRegister" data-i18n="register_link">Register karein</a></div>
+  <div class="splash-art" aria-hidden="true">
+    <div class="splash-skyline"></div>
+    <div class="splash-worker">
+      <div class="sw-helmet"></div><div class="sw-head"></div><div class="sw-body"></div>
+      <div class="sw-arm left"></div><div class="sw-arm right"></div>
+      <div class="sw-leg left"></div><div class="sw-leg right"></div><div class="sw-wrench"></div>
+    </div>
   </div>
+</div>
 
-  <div id="registerForm" style="display:none;">
-    <h2 style="font-size:18px;" data-i18n="register_title">Account banayein</h2>
-    <div class="row"><label data-i18n="name_label">Naam</label><input type="text" id="regName"></div>
-    <div class="row"><label data-i18n="phone_label">Phone number</label><input type="tel" id="regPhone" placeholder="9876543210"></div>
-    <div class="row"><label data-i18n="password_label">Password</label><input type="password" id="regPassword"></div>
-    <button class="btn btn-safety btn-block" id="registerBtn" data-i18n="register_btn">Account banayein</button>
-    <div class="auth-switch"><span data-i18n="have_account">Pehle se account hai?</span> <a id="showLogin" data-i18n="login_link">Login karein</a></div>
+<div id="authPage" class="auth-page" style="display:none;">
+  <div id="authScreen" class="auth-wrap">
+    <div class="auth-brand">
+      <div class="mini-lockup"><svg class="mini-mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow logo"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hire-now-mini"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hire-now-mini)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg><div class="mini-name"><span>Hire</span><span>Now</span></div></div>
+      <div style="font-size:11.5px;color:rgba(255,255,255,.76);margin-top:5px;">Find trusted skilled workers near you</div>
+    </div>
+    <div class="auth-card">
+      <div class="auth-mode-tabs">
+        <button id="loginTabBtn" class="active" type="button">Login</button>
+        <button id="registerTabBtn" type="button">Register</button>
+      </div>
+      <h2 id="authTitle">Welcome back</h2>
+      <p class="auth-sub" id="authSubtitle">Login to manage your bookings and hire workers.</p>
+      <div id="authError"></div>
+
+      <div id="loginForm">
+        <div class="row">
+          <label>Phone number</label>
+          <div class="phone-shell"><span class="phone-prefix">+91</span><input type="tel" inputmode="numeric" maxlength="10" id="loginPhone" placeholder="9876543210" autocomplete="tel"></div>
+        </div>
+        <div class="row">
+          <label>Password</label>
+          <div class="input-shell"><input type="password" id="loginPassword" autocomplete="current-password" placeholder="Enter your password"><button type="button" class="pass-toggle" data-toggle-password="loginPassword" aria-label="Show password">◉</button></div>
+        </div>
+        <div class="auth-help"><span>Use your registered mobile number</span><span>Secure login</span></div>
+        <button class="btn btn-safety btn-block auth-submit" id="loginBtn">Login</button>
+        <div class="auth-switch">New to HireNow? <a id="showRegister">Create account</a></div>
+      </div>
+
+      <div id="registerForm" style="display:none;">
+        <div class="row"><label>Full name</label><input type="text" id="regName" autocomplete="name" placeholder="Enter your full name"></div>
+        <div class="row">
+          <label>Phone number</label>
+          <div class="phone-shell"><span class="phone-prefix">+91</span><input type="tel" inputmode="numeric" maxlength="10" id="regPhone" placeholder="9876543210" autocomplete="tel"></div>
+        </div>
+        <div class="row">
+          <label>Create password</label>
+          <div class="input-shell"><input type="password" id="regPassword" autocomplete="new-password" placeholder="Minimum 6 characters"><button type="button" class="pass-toggle" data-toggle-password="regPassword" aria-label="Show password">◉</button></div>
+        </div>
+        <div class="auth-tip">Use a password you do not use on other apps. Phone number will be used for your HireNow account and booking updates.</div>
+        <button class="btn btn-safety btn-block auth-submit" id="registerBtn">Create Account</button>
+        <div class="auth-switch">Already have an account? <a id="showLogin">Login</a></div>
+      </div>
+      <div class="auth-legal">By continuing, you agree to HireNow's Terms and Privacy Policy.</div>
+    </div>
   </div>
 </div>
 
@@ -781,48 +880,102 @@
   }
 
   // ---------------- auth screen wiring ----------------
+  var authPage = document.getElementById("authPage");
   var authScreen = document.getElementById("authScreen");
   var appScreen = document.getElementById("appScreen");
   var authError = document.getElementById("authError");
-  function showAuthError(msg) { authError.textContent = msg; authError.style.display = "block"; }
-  function clearAuthError() { authError.style.display = "none"; }
+  var splashScreen = document.getElementById("splashScreen");
+  var splashStartedAt = Date.now();
 
-  document.getElementById("showRegister").addEventListener("click", function () {
-    document.getElementById("loginForm").style.display = "none";
-    document.getElementById("registerForm").style.display = "block";
-    document.getElementById("authTitle").style.display = "none";
+  function showAuthError(msg) { authError.textContent = msg; authError.style.display = "block"; }
+  function clearAuthError() { authError.textContent = ""; authError.style.display = "none"; }
+  function validIndianMobile(v) { return /^[6-9][0-9]{9}$/.test(v); }
+  function setAuthMode(mode) {
+    var login = mode === "login";
+    document.getElementById("loginForm").style.display = login ? "block" : "none";
+    document.getElementById("registerForm").style.display = login ? "none" : "block";
+    document.getElementById("loginTabBtn").classList.toggle("active", login);
+    document.getElementById("registerTabBtn").classList.toggle("active", !login);
+    document.getElementById("authTitle").textContent = login ? "Welcome back" : "Create your account";
+    document.getElementById("authSubtitle").textContent = login
+      ? "Login to manage your bookings and hire workers."
+      : "Create a hirer account and start booking skilled workers.";
     clearAuthError();
+  }
+  function showPostSplash(target) {
+    var wait = Math.max(0, 1200 - (Date.now() - splashStartedAt));
+    setTimeout(function () {
+      splashScreen.classList.add("splash-fade-out");
+      setTimeout(function () {
+        splashScreen.style.display = "none";
+        if (target === "auth") authPage.style.display = "block";
+      }, 320);
+    }, wait);
+  }
+
+  document.getElementById("showRegister").addEventListener("click", function () { setAuthMode("register"); });
+  document.getElementById("showLogin").addEventListener("click", function () { setAuthMode("login"); });
+  document.getElementById("loginTabBtn").addEventListener("click", function () { setAuthMode("login"); });
+  document.getElementById("registerTabBtn").addEventListener("click", function () { setAuthMode("register"); });
+
+  document.querySelectorAll("[data-toggle-password]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var input=document.getElementById(btn.dataset.togglePassword);
+      var showing=input.type === "text";
+      input.type=showing ? "password" : "text";
+      btn.textContent=showing ? "◉" : "◎";
+      btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
   });
-  document.getElementById("showLogin").addEventListener("click", function () {
-    document.getElementById("registerForm").style.display = "none";
-    document.getElementById("loginForm").style.display = "block";
-    document.getElementById("authTitle").style.display = "block";
-    clearAuthError();
+
+  ["loginPhone","regPhone"].forEach(function(id){
+    var el=document.getElementById(id);
+    el.addEventListener("input",function(){ this.value=this.value.replace(/\D/g,"").slice(0,10); });
   });
+
+  document.getElementById("loginPassword").addEventListener("keydown", function(e){ if(e.key==="Enter") document.getElementById("loginBtn").click(); });
+  document.getElementById("regPassword").addEventListener("keydown", function(e){ if(e.key==="Enter") document.getElementById("registerBtn").click(); });
+
   document.getElementById("loginBtn").addEventListener("click", function () {
     clearAuthError();
+    var phone=document.getElementById("loginPhone").value.trim();
+    var password=document.getElementById("loginPassword").value;
+    if(!validIndianMobile(phone)){ showAuthError("Valid 10-digit Indian mobile number enter karein."); return; }
+    if(!password){ showAuthError("Password enter karein."); return; }
+    var btn=this; btn.disabled=true; btn.textContent="Logging in...";
     api("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ phone: document.getElementById("loginPhone").value.trim(), password: document.getElementById("loginPassword").value })
+      body: JSON.stringify({ phone: phone, password: password })
     }).then(function (res) {
+      btn.disabled=false; btn.textContent="Login";
       if (!res.ok) { showAuthError(res.data.error || "Login fail hua"); return; }
       startApp(res.data);
+    }).catch(function(){
+      btn.disabled=false; btn.textContent="Login"; showAuthError("Network issue. Please try again.");
     });
   });
+
   document.getElementById("registerBtn").addEventListener("click", function () {
     clearAuthError();
+    var name=document.getElementById("regName").value.trim();
+    var phone=document.getElementById("regPhone").value.trim();
+    var password=document.getElementById("regPassword").value;
+    if(name.length<2){ showAuthError("Apna full name enter karein."); return; }
+    if(!validIndianMobile(phone)){ showAuthError("Valid 10-digit Indian mobile number enter karein."); return; }
+    if(password.length<6){ showAuthError("Password kam se kam 6 characters ka hona chahiye."); return; }
+    var btn=this; btn.disabled=true; btn.textContent="Creating account...";
     api("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({
-        name: document.getElementById("regName").value.trim(),
-        phone: document.getElementById("regPhone").value.trim(),
-        password: document.getElementById("regPassword").value
-      })
+      body: JSON.stringify({ name: name, phone: phone, password: password })
     }).then(function (res) {
+      btn.disabled=false; btn.textContent="Create Account";
       if (!res.ok) { showAuthError(res.data.error || "Registration fail hua"); return; }
       startApp(res.data);
+    }).catch(function(){
+      btn.disabled=false; btn.textContent="Create Account"; showAuthError("Network issue. Please try again.");
     });
   });
+
   document.getElementById("logoutBtn").addEventListener("click", function () {
     api("/api/auth/logout", { method: "POST" }).then(function () { window.location.reload(); });
   });
@@ -1098,6 +1251,7 @@
   // ---------------- boot ----------------
   function startApp(hirer) {
     state.hirer = hirer;
+    authPage.style.display = "none";
     authScreen.style.display = "none";
     appScreen.style.display = "block";
     document.getElementById("headerAvatar").textContent = initials(hirer.name);
@@ -1521,8 +1675,16 @@
   // ---------------- boot ----------------
   applyStaticI18n();
   api("/api/auth/me").then(function (res) {
-    if (res.data.logged_in) { startApp(res.data); }
-    else { authScreen.style.display = "block"; }
+    if (res.data.logged_in) {
+      startApp(res.data);
+      showPostSplash("app");
+    } else {
+      setAuthMode("login");
+      showPostSplash("auth");
+    }
+  }).catch(function () {
+    setAuthMode("login");
+    showPostSplash("auth");
   });
 })();
 </script>
