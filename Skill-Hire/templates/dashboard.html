@@ -516,40 +516,35 @@
     .auth-card { padding:20px 16px; }
   }
 
-.auth-canonical-logo{width:58px;height:58px;border-radius:14px;background:linear-gradient(145deg,#08254b,#020d20);border:1px solid rgba(129,173,238,.5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.22)}.auth-canonical-logo .canonical-mark{width:48px;height:48px}.auth-canonical-wordmark{font-family:'Archivo',sans-serif;font-size:31px;font-weight:900;letter-spacing:-1.5px;line-height:1}.auth-canonical-wordmark .hire{color:#fff}.auth-canonical-wordmark .now{color:#F5A623}.auth-brand-tagline{font-size:11.5px;color:rgba(255,255,255,.82);margin-top:8px;font-weight:600}</style>
+.auth-canonical-logo{width:58px;height:58px;border-radius:14px;background:linear-gradient(145deg,#08254b,#020d20);border:1px solid rgba(129,173,238,.5);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.22)}.auth-canonical-logo .canonical-mark{width:48px;height:48px}.auth-canonical-wordmark{font-family:'Archivo',sans-serif;font-size:31px;font-weight:900;letter-spacing:-1.5px;line-height:1}.auth-canonical-wordmark .hire{color:#fff}.auth-canonical-wordmark .now{color:#F5A623}.auth-brand-tagline{font-size:11.5px;color:rgba(255,255,255,.82);margin-top:8px;font-weight:600}
+  /* Exact approved HireNow artwork — no redraw/approximation */
+  #splashScreen { background:#031b3a !important; padding:0 !important; }
+  .exact-splash-image {
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:cover; object-position:center center; display:block;
+  }
+  .exact-auth-logo {
+    width:124px; height:124px; object-fit:contain; display:block; margin:0 auto;
+    border-radius:24px; box-shadow:0 12px 32px rgba(0,0,0,.22);
+  }
+  @media (max-width:380px) {
+    .exact-auth-logo { width:108px; height:108px; }
+  }
+</style>
 </head>
 
 <body>
 
 <div id="splashScreen" aria-label="HireNow splash screen">
-  <div class="splash-status"><span>9:41</span><span class="splash-status-icons">▮▮▮ ◉ ▰</span></div>
-  <div class="splash-brand">
-    <div class="canonical-logo-box"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow canonical logo">
-<defs><linearGradient id="hnOrange" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient><linearGradient id="hnWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EAF1FA"/></linearGradient></defs>
-<path d="M18 20 Q18 15 23 15 H34 Q39 15 39 20 V42 Q39 47 44 47 H49 L38 58 V78 Q38 84 32 84 H23 Q18 84 18 79Z" fill="url(#hnWhite)"/>
-<path d="M82 80 Q82 85 77 85 H67 Q62 85 62 80 V58 L51 47 H57 Q62 47 62 42 V28 H54 L72 10 L90 28 H82Z" fill="url(#hnOrange)"/>
-<path d="M37 53 L48 43 Q52 40 56 43 L65 51 Q68 54 65 57 L60 62 Q57 65 54 62 L50 58 L47 61 Q44 64 41 61 L36 57 Q34 55 37 53Z" fill="#071B3A"/>
-<path d="M43 48 L48 44 Q51 42 54 44 L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/>
-<path d="M44 57 L51 64 M49 53 L56 60 M54 50 L61 56" stroke="#F8FBFF" stroke-width="5" stroke-linecap="round"/>
-<path d="M38 56 L43 61 M35 59 L40 64 M40 53 L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/>
-</svg></div>
-    <div class="splash-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div>
-    <div class="splash-tagline">Skilled People. Real Work. Faster.</div>
-  </div>
-  <div class="splash-scene" aria-hidden="true">
-    <div class="scene-sunset"></div><div class="scene-city"></div><div class="scene-road"></div>
-    <div class="skill-float sf1"><b>ϟ</b> Electrician</div><div class="skill-float sf2"><b>◕</b> Plumber</div><div class="skill-float sf3"><b>⌁</b> Carpenter</div>
-    <div class="skill-float sf4"><b>▰</b> Painter</div><div class="skill-float sf5"><b>▣</b> Driver</div><div class="skill-float sf6"><b>❄</b> AC Technician</div>
-    <div class="scene-worker"><div class="helmet"></div><div class="head"></div><div class="torso"></div><div class="arm a"></div><div class="arm b"></div><div class="leg a"></div><div class="leg b"></div><div class="toolbox"></div></div>
-    <div class="scene-phone"><div class="phone-brand">Hire<span>Now</span></div><div class="phone-search">⌕ &nbsp; Search for a skill or service...</div><div class="phone-banner">Find Skilled Workers<br><small>For your home or business</small></div><div class="phone-grid"><div>ϟ<br>Electrician</div><div>◕<br>Plumber</div><div>⌁<br>Carpenter</div><div>▰<br>Painter</div><div>▣<br>Driver</div><div>❄<br>AC Technician</div></div></div>
-    <div class="splash-bottom-wave"></div>
-  </div>
-  <div class="splash-footer"><div class="splash-dots"><i></i><i></i><i></i></div><div class="splash-footer-text">The right person.<br>Right when you need them.</div></div>
+  <img class="exact-splash-image" src="/static/brand/hirenow-splash.webp" alt="HireNow splash screen">
 </div>
 
 <div id="authPage" class="auth-page" style="display:none;">
   <div id="authScreen" class="auth-wrap">
-    <div class="auth-brand"><div class="mini-lockup"><div class="auth-canonical-logo"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow logo"><defs><linearGradient id="authHnO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><path d="M18 20Q18 15 23 15H34Q39 15 39 20V42Q39 47 44 47H49L38 58V78Q38 84 32 84H23Q18 84 18 79Z" fill="#fff"/><path d="M82 80Q82 85 77 85H67Q62 85 62 80V58L51 47H57Q62 47 62 42V28H54L72 10L90 28H82Z" fill="url(#authHnO)"/><path d="M37 53L48 43Q52 40 56 43L65 51Q68 54 65 57L60 62Q57 65 54 62L50 58L47 61Q44 64 41 61L36 57Q34 55 37 53Z" fill="#071B3A"/><path d="M43 48L48 44Q51 42 54 44L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/><path d="M44 57L51 64M49 53L56 60M54 50L61 56" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M38 56L43 61M35 59L40 64M40 53L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/></svg></div><div class="auth-canonical-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div></div><div class="auth-brand-tagline">Skilled People. Real Work. Faster.</div></div><div class="auth-card">
+    <div class="auth-brand">
+      <img class="exact-auth-logo" src="/static/brand/hirenow-logo.webp" alt="HireNow">
+      <div style="font-size:11.5px;color:rgba(255,255,255,.76);margin-top:9px;">Find trusted skilled workers near you</div>
+    </div><div class="auth-card">
       <div class="auth-mode-tabs">
         <button id="loginTabBtn" class="active" type="button">Login</button>
         <button id="registerTabBtn" type="button">Register</button>
