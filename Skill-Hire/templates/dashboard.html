@@ -530,6 +530,27 @@
   @media (max-width:380px) {
     .exact-auth-logo { width:108px; height:108px; }
   }
+
+  /* Category icon motion + language settings polish */
+  .cat-circle,.cat-circle-sm{position:relative;overflow:hidden;box-shadow:0 5px 14px rgba(16,27,51,.08);transition:transform .24s cubic-bezier(.2,.8,.2,1),box-shadow .24s ease}
+  .cat-circle::after,.cat-circle-sm::after{content:"";position:absolute;inset:-45%;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.65) 50%,transparent 65%);transform:translateX(-75%) rotate(8deg);transition:transform .55s ease;pointer-events:none}
+  .cat-item:hover .cat-circle,.cat-item:focus-within .cat-circle,.cat-row:hover .cat-circle-sm{transform:translateY(-3px) scale(1.045);box-shadow:0 10px 22px rgba(16,27,51,.13)}
+  .cat-item:hover .cat-circle::after,.cat-row:hover .cat-circle-sm::after{transform:translateX(75%) rotate(8deg)}
+  .cat-circle svg,.cat-circle-sm svg{transition:transform .28s cubic-bezier(.2,.9,.25,1.25)}
+  .cat-item:hover svg,.cat-row:hover .cat-circle-sm svg{transform:scale(1.13) rotate(-3deg)}
+  .cat-item:active .cat-circle,.cat-row:active .cat-circle-sm{transform:scale(.92)}
+  @media (prefers-reduced-motion:reduce){.cat-circle,.cat-circle-sm,.cat-circle svg,.cat-circle-sm svg{transition:none!important}.cat-circle::after,.cat-circle-sm::after{display:none}}
+  .language-settings{padding:18px 14px}
+  .language-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .language-grid .choice-btn{width:100%;padding:10px 10px;border-radius:12px;background:#F7F9FC;justify-content:flex-start;position:relative;min-height:48px;transition:transform .16s ease,border-color .16s ease,background .16s ease}
+  .language-grid .choice-btn:active{transform:scale(.97)}
+  .language-grid .choice-btn.selected{background:var(--orange-tint);border-color:var(--orange);color:var(--ink)}
+  .lang-code{width:27px;height:27px;border-radius:8px;background:#fff;border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+  .choice-btn.selected .lang-code{background:var(--orange);border-color:var(--orange);color:var(--orange-ink)}
+  .lang-check{margin-left:auto;opacity:0;color:var(--ok);font-weight:900}.choice-btn.selected .lang-check{opacity:1}
+  html[dir="rtl"] body{text-align:right}html[dir="rtl"] .header-row,html[dir="rtl"] .section-row,html[dir="rtl"] .ref-profile-person{direction:rtl}
+  html[dir="rtl"] .bottom-nav,html[dir="rtl"] .category-grid{direction:rtl}
+  @media(max-width:360px){.language-grid{grid-template-columns:1fr}}
 </style>
 </head>
 
@@ -680,12 +701,22 @@
           <button data-profile-soon>? &nbsp; Help &amp; Support <span>›</span></button>
           <button data-profile-soon>⚙ &nbsp; Settings <span>›</span></button>
         </div>
-        <div class="settings-block card" style="margin-top:14px;">
-          <h3 data-i18n="settings_lang">Bhasha / Language</h3>
-          <div class="sub" data-i18n="settings_lang_sub">App ki bhasha chunein</div>
-          <div class="choice-row">
-            <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span data-i18n="settings_lang_hi">Hinglish</span></button>
-            <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span data-i18n="settings_lang_en">English</span></button>
+        <div class="settings-block card language-settings" style="margin-top:14px;">
+          <h3 data-i18n="settings_lang">Language</h3>
+          <div class="sub" data-i18n="settings_lang_sub">Choose the app language</div>
+          <div class="language-grid">
+            <button class="choice-btn" data-lang-choice="en"><span class="lang-code">EN</span><span>English</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="hi"><span class="lang-code">हि</span><span>हिन्दी</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="ar"><span class="lang-code">ع</span><span>العربية</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="bn"><span class="lang-code">বা</span><span>বাংলা</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="ta"><span class="lang-code">த</span><span>தமிழ்</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="te"><span class="lang-code">తె</span><span>తెలుగు</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="mr"><span class="lang-code">म</span><span>मराठी</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="gu"><span class="lang-code">ગુ</span><span>ગુજરાતી</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="kn"><span class="lang-code">ಕ</span><span>ಕನ್ನಡ</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="ml"><span class="lang-code">മ</span><span>മലയാളം</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="pa"><span class="lang-code">ਪੰ</span><span>ਪੰਜਾਬੀ</span><span class="lang-check">✓</span></button>
+            <button class="choice-btn" data-lang-choice="ur"><span class="lang-code">ا</span><span>اردو</span><span class="lang-check">✓</span></button>
           </div>
         </div>
         <button class="btn btn-outline btn-block" id="logoutBtn" data-i18n="logout" style="margin-top:14px;">Logout</button>
@@ -772,51 +803,21 @@
 
   // ---------------- i18n ----------------
   var LANG = {
-    hi: {
-      login_title: "Login karein", login_sub: "Apna account se hire karna shuru karein",
-      phone_label: "Phone number", password_label: "Password", login_btn: "Login",
-      new_account: "Naya account?", register_link: "Register karein",
-      register_title: "Account banayein", name_label: "Naam", register_btn: "Account banayein",
-      have_account: "Pehle se account hai?", login_link: "Login karein", logout: "Logout",
-      nav_home: "Home", nav_bookings: "Bookings", nav_messages: "Messages", nav_profile: "Profile",
-      popular_categories: "Popular Categories", featured_workers: "Featured Workers",
-      hire_heading: "All Workers", bookings_heading: "Meri bookings aur kaam ka status", bookings_sub: "Payment aur kaam ki progress yahan dikhegi",
-      categories_title: "Categories", chip_all: "All", chip_home: "Home Services", chip_labour: "Labour", chip_technical: "Technical",
-      messages_heading: "Messages", messages_sub: "Apne bookings ke workers se baat karein",
-      search_placeholder: "Search for a skill or service...", all_skills: "Sabhi skills", all_cities: "All India",
-      stat_active: "Active", stat_completed: "Poore hue", stat_spent: "Total paid",
-      hire_btn: "Hire karein", per_day: "/din", verified: "ID verified",
-      no_workers: "Koi kaamgar nahi mila.", no_bookings: "Abhi tak koi booking nahi hai.", no_messages: "Koi messages nahi hai abhi.",
-      pay_now: "Ab pay karein", manual_update: "Manual update:", message_worker: "Message",
-      profile_heading: "Mera Profile",
-      settings_lang: "Bhasha / Language", settings_lang_sub: "App ki bhasha chunein", settings_lang_hi: "Hinglish", settings_lang_en: "English",
-      chat_title: "Message", chat_placeholder: "Message likhein...", chat_send: "Bhejein",
-      you: "Aap", worker_word: "Worker", days_word: "din", years_exp: "saal anubhav", paid: "Paid", payment_pending: "Payment pending",
-      good_morning: "Good Morning,", good_afternoon: "Good Afternoon,", good_evening: "Good Evening,", greet_sub: "Chaliye aapka kaam poora karte hain!"
-    },
-    en: {
-      login_title: "Log in", login_sub: "Sign in to your account to start hiring",
-      phone_label: "Phone number", password_label: "Password", login_btn: "Log in",
-      new_account: "New here?", register_link: "Create account",
-      register_title: "Create account", name_label: "Name", register_btn: "Create account",
-      have_account: "Already have an account?", login_link: "Log in", logout: "Logout",
-      nav_home: "Home", nav_bookings: "Bookings", nav_messages: "Messages", nav_profile: "Profile",
-      popular_categories: "Popular Categories", featured_workers: "Featured Workers",
-      hire_heading: "All Workers", bookings_heading: "My bookings and job status", bookings_sub: "Payment and job progress shown here",
-      messages_heading: "Messages", messages_sub: "Chat with the workers on your bookings",
-      search_placeholder: "Search for a skill or service...", all_skills: "All skills", all_cities: "All India",
-      stat_active: "Active", stat_completed: "Completed", stat_spent: "Total paid",
-      hire_btn: "Hire", per_day: "/day", verified: "ID verified",
-      no_workers: "No workers found.", no_bookings: "No bookings yet.", no_messages: "No messages yet.",
-      pay_now: "Pay now", manual_update: "Manual update:", message_worker: "Message",
-      profile_heading: "My Profile",
-      settings_lang: "Language", settings_lang_sub: "Choose the app language", settings_lang_hi: "Hinglish", settings_lang_en: "English",
-      chat_title: "Message", chat_placeholder: "Type a message...", chat_send: "Send",
-      you: "You", worker_word: "Worker", days_word: "days", years_exp: "yrs experience", paid: "Paid", payment_pending: "Payment pending",
-      good_morning: "Good Morning,", good_afternoon: "Good Afternoon,", good_evening: "Good Evening,", greet_sub: "Let's get your work done today!"
-    }
+    en:{nav_home:"Home",nav_bookings:"Bookings",nav_messages:"Messages",nav_profile:"Profile",popular_categories:"Popular Categories",featured_workers:"Featured Workers",hire_heading:"All Workers",bookings_heading:"My Bookings",messages_heading:"Messages",messages_sub:"Chat with workers on your bookings",search_placeholder:"Search for a skill or service...",all_cities:"All India",no_workers:"No workers found.",no_bookings:"No bookings yet.",no_messages:"No messages yet.",per_day:"/day",verified:"ID verified",profile_heading:"My Profile",settings_lang:"Language",settings_lang_sub:"Choose the app language",chat_title:"Message",chat_placeholder:"Type a message...",chat_send:"Send",logout:"Logout",good_morning:"Good Morning,",good_afternoon:"Good Afternoon,",good_evening:"Good Evening,",greet_sub:"Let's get your work done today!"},
+    hi:{nav_home:"होम",nav_bookings:"बुकिंग",nav_messages:"संदेश",nav_profile:"प्रोफ़ाइल",popular_categories:"लोकप्रिय श्रेणियाँ",featured_workers:"चुनिंदा कामगार",hire_heading:"सभी कामगार",bookings_heading:"मेरी बुकिंग",messages_heading:"संदेश",messages_sub:"अपनी बुकिंग के कामगारों से बात करें",search_placeholder:"कौशल या सेवा खोजें...",all_cities:"पूरा भारत",no_workers:"कोई कामगार नहीं मिला।",no_bookings:"अभी कोई बुकिंग नहीं है।",no_messages:"अभी कोई संदेश नहीं है।",per_day:"/दिन",verified:"ID सत्यापित",profile_heading:"मेरी प्रोफ़ाइल",settings_lang:"भाषा",settings_lang_sub:"ऐप की भाषा चुनें",chat_title:"संदेश",chat_placeholder:"संदेश लिखें...",chat_send:"भेजें",logout:"लॉग आउट",good_morning:"सुप्रभात,",good_afternoon:"नमस्कार,",good_evening:"शुभ संध्या,",greet_sub:"आज आपका काम पूरा करवाते हैं!"},
+    ar:{nav_home:"الرئيسية",nav_bookings:"الحجوزات",nav_messages:"الرسائل",nav_profile:"الملف الشخصي",popular_categories:"الفئات الشائعة",featured_workers:"عمال مميزون",hire_heading:"جميع العمال",bookings_heading:"حجوزاتي",messages_heading:"الرسائل",messages_sub:"تواصل مع العامل في حجوزاتك",search_placeholder:"ابحث عن مهارة أو خدمة...",all_cities:"كل الهند",no_workers:"لم يتم العثور على عمال.",no_bookings:"لا توجد حجوزات بعد.",no_messages:"لا توجد رسائل بعد.",per_day:"/يوم",verified:"هوية موثقة",profile_heading:"ملفي الشخصي",settings_lang:"اللغة",settings_lang_sub:"اختر لغة التطبيق",chat_title:"رسالة",chat_placeholder:"اكتب رسالة...",chat_send:"إرسال",logout:"تسجيل الخروج",good_morning:"صباح الخير،",good_afternoon:"مساء الخير،",good_evening:"مساء الخير،",greet_sub:"لننجز عملك اليوم!"},
+    bn:{nav_home:"হোম",nav_bookings:"বুকিং",nav_messages:"বার্তা",nav_profile:"প্রোফাইল",popular_categories:"জনপ্রিয় বিভাগ",featured_workers:"নির্বাচিত কর্মী",search_placeholder:"দক্ষতা বা সেবা খুঁজুন...",settings_lang:"ভাষা",settings_lang_sub:"অ্যাপের ভাষা বেছে নিন",logout:"লগ আউট",good_morning:"সুপ্রভাত,",good_afternoon:"শুভ অপরাহ্ণ,",good_evening:"শুভ সন্ধ্যা,",greet_sub:"আজ আপনার কাজ সম্পন্ন করি!"},
+    ta:{nav_home:"முகப்பு",nav_bookings:"முன்பதிவுகள்",nav_messages:"செய்திகள்",nav_profile:"சுயவிவரம்",popular_categories:"பிரபல பிரிவுகள்",featured_workers:"சிறப்பு பணியாளர்கள்",search_placeholder:"திறன் அல்லது சேவையைத் தேடுங்கள்...",settings_lang:"மொழி",settings_lang_sub:"பயன்பாட்டு மொழியைத் தேர்ந்தெடுக்கவும்",logout:"வெளியேறு"},
+    te:{nav_home:"హోమ్",nav_bookings:"బుకింగ్‌లు",nav_messages:"సందేశాలు",nav_profile:"ప్రొఫైల్",popular_categories:"ప్రసిద్ధ వర్గాలు",featured_workers:"ఎంపిక చేసిన కార్మికులు",search_placeholder:"నైపుణ్యం లేదా సేవ కోసం వెతకండి...",settings_lang:"భాష",settings_lang_sub:"యాప్ భాషను ఎంచుకోండి",logout:"లాగ్ అవుట్"},
+    mr:{nav_home:"होम",nav_bookings:"बुकिंग",nav_messages:"संदेश",nav_profile:"प्रोफाइल",popular_categories:"लोकप्रिय श्रेणी",featured_workers:"निवडक कामगार",search_placeholder:"कौशल्य किंवा सेवा शोधा...",settings_lang:"भाषा",settings_lang_sub:"अॅपची भाषा निवडा",logout:"लॉग आउट"},
+    gu:{nav_home:"હોમ",nav_bookings:"બુકિંગ",nav_messages:"સંદેશા",nav_profile:"પ્રોફાઇલ",popular_categories:"લોકપ્રિય શ્રેણીઓ",featured_workers:"પસંદગીના કામદારો",search_placeholder:"કૌશલ્ય અથવા સેવા શોધો...",settings_lang:"ભાષા",settings_lang_sub:"એપની ભાષા પસંદ કરો",logout:"લૉગ આઉટ"},
+    kn:{nav_home:"ಮುಖಪುಟ",nav_bookings:"ಬುಕಿಂಗ್‌ಗಳು",nav_messages:"ಸಂದೇಶಗಳು",nav_profile:"ಪ್ರೊಫೈಲ್",popular_categories:"ಜನಪ್ರಿಯ ವರ್ಗಗಳು",featured_workers:"ಆಯ್ದ ಕೆಲಸಗಾರರು",search_placeholder:"ಕೌಶಲ್ಯ ಅಥವಾ ಸೇವೆ ಹುಡುಕಿ...",settings_lang:"ಭಾಷೆ",settings_lang_sub:"ಆ್ಯಪ್ ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ",logout:"ಲಾಗ್ ಔಟ್"},
+    ml:{nav_home:"ഹോം",nav_bookings:"ബുക്കിംഗുകൾ",nav_messages:"സന്ദേശങ്ങൾ",nav_profile:"പ്രൊഫൈൽ",popular_categories:"ജനപ്രിയ വിഭാഗങ്ങൾ",featured_workers:"തിരഞ്ഞെടുത്ത തൊഴിലാളികൾ",search_placeholder:"കഴിവോ സേവനമോ തിരയുക...",settings_lang:"ഭാഷ",settings_lang_sub:"ആപ്പ് ഭാഷ തിരഞ്ഞെടുക്കുക",logout:"ലോഗ് ഔട്ട്"},
+    pa:{nav_home:"ਹੋਮ",nav_bookings:"ਬੁਕਿੰਗਾਂ",nav_messages:"ਸੁਨੇਹੇ",nav_profile:"ਪ੍ਰੋਫਾਈਲ",popular_categories:"ਪ੍ਰਸਿੱਧ ਸ਼੍ਰੇਣੀਆਂ",featured_workers:"ਚੁਣੇ ਹੋਏ ਕਾਮੇ",search_placeholder:"ਹੁਨਰ ਜਾਂ ਸੇਵਾ ਲੱਭੋ...",settings_lang:"ਭਾਸ਼ਾ",settings_lang_sub:"ਐਪ ਦੀ ਭਾਸ਼ਾ ਚੁਣੋ",logout:"ਲਾਗ ਆਉਟ"},
+    ur:{nav_home:"ہوم",nav_bookings:"بکنگز",nav_messages:"پیغامات",nav_profile:"پروفائل",popular_categories:"مقبول زمرے",featured_workers:"منتخب کارکن",search_placeholder:"مہارت یا سروس تلاش کریں...",settings_lang:"زبان",settings_lang_sub:"ایپ کی زبان منتخب کریں",logout:"لاگ آؤٹ"}
   };
-  function t(key) { return (LANG[state.lang] && LANG[state.lang][key]) || key; }
+  var EN_FALLBACK = LANG.en;
+  function t(key) { return (LANG[state.lang] && LANG[state.lang][key]) || EN_FALLBACK[key] || key; }
   function applyStaticI18n() {
     document.querySelectorAll("[data-i18n]").forEach(function (el) { el.textContent = t(el.dataset.i18n); });
     document.querySelectorAll("[data-i18n-ph]").forEach(function (el) { el.setAttribute("placeholder", t(el.dataset.i18nPh)); });
@@ -824,6 +825,9 @@
       btn.classList.toggle("selected", btn.dataset.langChoice === state.lang);
     });
     updateGreeting();
+    var rtl = state.lang === "ar" || state.lang === "ur";
+    document.documentElement.dir = rtl ? "rtl" : "ltr";
+    document.documentElement.lang = state.lang;
   }
   function setLanguage(lang) {
     state.lang = lang;
@@ -832,8 +836,9 @@
     renderWorkers(); renderBookings(); renderMessages(); renderFeatured(); renderCategories();
   }
   (function initLang() {
-    var saved = "hi";
-    try { saved = localStorage.getItem("hirenow_lang") || "hi"; } catch (e) {}
+    var saved = "en";
+    try { saved = localStorage.getItem("hirenow_lang") || "en"; } catch (e) {}
+    if (!LANG[saved]) saved = "en";
     state.lang = saved;
   })();
   document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
@@ -873,17 +878,19 @@
 
   // ---- category / skill icons (also used on worker cards) ----
   var SKILL_ICONS = {
-    "electric": '<path d="M13 2 5 13h5l-1 9 8-12h-5z"/>',
-    "plumb": '<path d="M6 3v5a3 3 0 003 3h1v10M14 3v5a3 3 0 01-3 3"/><circle cx="7" cy="18" r="2"/>',
-    "paint": '<path d="M17 3h3v5l-8 8-4-4 8-8z"/><path d="M9 15l-5 5 2 2 5-5"/>',
-    "mason": '<rect x="3" y="10" width="8" height="5"/><rect x="13" y="10" width="8" height="5"/><rect x="8" y="5" width="8" height="5"/><rect x="3" y="15" width="8" height="5"/><rect x="13" y="15" width="8" height="5"/>',
-    "carpent": '<circle cx="7" cy="7" r="3"/><path d="M9.5 9.5 20 20M14 6l6 6-3 3-6-6"/>',
-    "weld": '<path d="M12 2v4M6 4l2 3M18 4l-2 3M4 12h4M16 12h4M6 20l2-3M18 20l-2-3M12 18v4"/><circle cx="12" cy="12" r="4"/>',
-    "helper": '<path d="M3 8h18v12H3z"/><path d="M3 8l9-5 9 5M9 12h6"/>',
-    "majdoor": '<path d="M3 8h18v12H3z"/><path d="M3 8l9-5 9 5M9 12h6"/>',
-    "tile": '<rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/>',
-    "ac ": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>',
-    "technician": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>'
+    "electric": '<path d="M13 2L5 13h6l-1 9 9-13h-6z" fill="currentColor" stroke="none"/>',
+    "plumb": '<path d="M7 3v5a4 4 0 004 4h2a4 4 0 004-4V3M12 12v9"/><path d="M5 3h4M15 3h4"/><circle cx="12" cy="21" r="1" fill="currentColor"/>',
+    "paint": '<rect x="4" y="4" width="13" height="6" rx="2"/><path d="M17 7h3v5h-8v9M9 21h6"/>',
+    "mason": '<path d="M3 7h8v5H3zM13 7h8v5h-8zM7 2h10v5H7zM3 12h8v5H3zM13 12h8v5h-8zM7 17h10v5H7z"/>',
+    "carpent": '<path d="M4 20L17 7M14 4l6 6-3 3-6-6zM3 17l4 4"/>',
+    "weld": '<path d="M8 5h8l3 5-3 8H8l-3-8z"/><path d="M12 2v3M3 5l3 2M21 5l-3 2M3 19l3-2M21 19l-3-2"/><circle cx="12" cy="11" r="2"/>',
+    "helper": '<path d="M4 8h16v12H4zM7 8V5h10v3M8 13h8"/>',
+    "majdoor": '<path d="M4 8h16v12H4zM7 8V5h10v3M8 13h8"/>',
+    "tile": '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+    "ac": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/><circle cx="12" cy="12" r="3"/>',
+    "technician": '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/><circle cx="12" cy="12" r="3"/>',
+    "clean": '<path d="M9 3h6l1 7H8zM7 10h10l2 11H5z"/><path d="M8 15h8"/>',
+    "driver": '<path d="M5 16l1-6 2-4h8l2 4 1 6z"/><circle cx="8" cy="17" r="2"/><circle cx="16" cy="17" r="2"/><path d="M7 11h10"/>'
   };
   var SKILL_ICON_DEFAULT = '<path d="M14.7 6.3a4 4 0 00-5.4 5.4L2 19v3h3l7.3-7.3a4 4 0 005.4-5.4l-2.8 2.8-2-2z"/>';
   function skillIcon(skill) {
@@ -897,9 +904,9 @@
   // category chip color pairs [bg, icon color]
   var CAT_COLORS = {
     "electric": ["#FFF2D6", "#E29A1F"], "plumb": ["#DCEEFB", "#2F8FD1"], "carpent": ["#FBE7D9", "#C97A3D"],
-    "paint": ["#FCE1E6", "#E15C7A"], "ac ": ["#DFF2FB", "#33A6C9"], "technician": ["#DFF2FB", "#33A6C9"],
+    "paint": ["#FCE1E6", "#E15C7A"], "ac": ["#DFF2FB", "#33A6C9"], "technician": ["#DFF2FB", "#33A6C9"],
     "helper": ["#E3F5E6", "#3FA85C"], "majdoor": ["#E3F5E6", "#3FA85C"], "mason": ["#F6E4D2", "#B5652C"],
-    "tile": ["#F6E4D2", "#B5652C"], "weld": ["#E3E8F5", "#46538F"]
+    "tile": ["#F6E4D2", "#B5652C"], "weld": ["#E3E8F5", "#46538F"], "clean": ["#E7F6EC","#2F8F5B"], "driver": ["#E6ECFA","#315A9B"]
   };
   function catColors(skill) {
     var s = (skill || "").toLowerCase();
@@ -1114,7 +1121,7 @@
       var c = catColors(s);
       var count = state.workers.filter(function (w) { return w.skill === s; }).length;
       return '<div class="cat-row" data-goto-skill="' + s + '">' +
-        '<div class="cat-circle-sm" style="background:' + c[0] + '"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="' + c[1] + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + skillIcon(s) + '</svg></div>' +
+        '<div class="cat-circle-sm" style="background:' + c[0] + ';color:' + c[1] + '"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' + skillIcon(s) + '</svg></div>' +
         '<div class="cat-row-body"><div class="cat-row-name">' + s + '</div><div class="cat-row-count">' + count + ' worker' + (count === 1 ? "" : "s") + '</div></div>' +
         '<div class="chev">›</div></div>';
     }).join("") || '<div class="empty">' + t("no_workers") + '</div>';
