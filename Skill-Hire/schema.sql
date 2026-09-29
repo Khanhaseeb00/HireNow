@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS workers (
     city                TEXT NOT NULL,
     daily_wage          INTEGER NOT NULL,   -- in rupees
     hourly_wage         INTEGER,            -- in rupees, optional — shown on worker list/profile cards
+    overtime_wage       INTEGER,            -- in rupees/hr, optional — shown on worker profile as "Overtime Rate"
+    background_checked  INTEGER DEFAULT 0,  -- 0/1 — separate from ID verification, shown as its own badge
+    about               TEXT,               -- short bio shown on worker profile "About" section
     distance_km         REAL,               -- distance from hirer, filled in once real geolocation matching exists
     availability        TEXT,               -- 'today' | 'tomorrow' | NULL (unknown) — worker-set availability status
     rating              REAL DEFAULT 0,
