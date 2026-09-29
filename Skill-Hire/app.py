@@ -29,6 +29,7 @@ from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
 import hmac
+import re
 import requests as _requests
 
 from db import get_db, init_db, row_to_dict, rows_to_list
@@ -144,9 +145,17 @@ def require_worker_login():
 @app.post("/api/auth/register")
 def register():
     data = request.get_json(force=True) or {}
-    name, phone, password = data.get("name"), data.get("phone"), data.get("password")
+    name = (data.get("name") or "").strip()
+    phone = (data.get("phone") or "").strip()
+    password = data.get("password") or ""
     if not (name and phone and password):
         return jsonify({"error": "name, phone and password are required"}), 400
+    if len(name) < 2:
+        return jsonify({"error": "Please enter your full name"}), 400
+    if not re.fullmatch(r"\+?[0-9]{10,15}", phone):
+        return jsonify({"error": "Enter a valid phone number"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "Password must be at least 6 characters"}), 400
 
     conn = get_db()
     existing = conn.execute("SELECT id FROM hirers WHERE phone = ?", (phone,)).fetchone()
@@ -169,7 +178,12 @@ def register():
 @app.post("/api/auth/login")
 def login():
     data = request.get_json(force=True) or {}
-    phone, password = data.get("phone"), data.get("password")
+    phone = (data.get("phone") or "").strip()
+    password = data.get("password") or ""
+    if not phone or not password:
+        return jsonify({"error": "Phone number and password are required"}), 400
+    if not re.fullmatch(r"\+?[0-9]{10,15}", phone):
+        return jsonify({"error": "Enter a valid phone number"}), 400
     conn = get_db()
     hirer = conn.execute("SELECT * FROM hirers WHERE phone = ?", (phone,)).fetchone()
     conn.close()
