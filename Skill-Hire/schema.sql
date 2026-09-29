@@ -33,19 +33,24 @@ CREATE TABLE IF NOT EXISTS hirers (
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    hirer_id        INTEGER NOT NULL,
-    worker_id       INTEGER NOT NULL,
-    start_date      TEXT NOT NULL,       -- ISO date
-    days            INTEGER NOT NULL,
-    total_amount    INTEGER NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'requested',
-    -- requested -> confirmed -> en_route -> checked_in -> in_progress -> completed
-    -- (or cancelled at any point before completed)
-    payment_status  TEXT NOT NULL DEFAULT 'pending', -- pending | paid | refunded
-    payment_id      TEXT,
-    razorpay_order_id TEXT,              -- Razorpay order_id, created before checkout opens
-    created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    hirer_id             INTEGER NOT NULL,
+    worker_id            INTEGER NOT NULL,
+    start_date           TEXT NOT NULL,
+    start_time           TEXT,
+    days                 INTEGER NOT NULL DEFAULT 1,
+    hours                INTEGER NOT NULL DEFAULT 2,
+    service_type         TEXT NOT NULL DEFAULT 'regular',
+    special_instructions TEXT,
+    address              TEXT,
+    total_amount         INTEGER NOT NULL,
+    status               TEXT NOT NULL DEFAULT 'requested',
+    payment_status       TEXT NOT NULL DEFAULT 'pending',
+    payment_id           TEXT,
+    razorpay_order_id    TEXT,
+    cancelled_at         TEXT,
+    cancellation_reason  TEXT,
+    created_at           TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (hirer_id) REFERENCES hirers(id),
     FOREIGN KEY (worker_id) REFERENCES workers(id)
 );
