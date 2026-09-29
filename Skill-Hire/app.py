@@ -45,6 +45,30 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
 
 
+def ensure_schema_extensions():
+    """Safely add upgraded-booking fields without deleting existing rows."""
+    init_db()
+    conn = get_db()
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(bookings)").fetchall()}
+    additions = {
+        "start_time": "TEXT",
+        "hours": "INTEGER NOT NULL DEFAULT 2",
+        "service_type": "TEXT NOT NULL DEFAULT 'regular'",
+        "special_instructions": "TEXT",
+        "address": "TEXT",
+        "cancelled_at": "TEXT",
+        "cancellation_reason": "TEXT",
+    }
+    for column, definition in additions.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
+    conn.commit()
+    conn.close()
+
+
+ensure_schema_extensions()
+
+
 def notify(phone, body):
     """
     Fire-and-forget SMS. Never let a notification failure break the actual
@@ -253,6 +277,8 @@ def list_workers():
     result = rows_to_list(workers)
     for w in result:
         w.pop("password_hash", None)
+        w.pop("phone", None)
+        w.pop("id_document_path", None)
     return jsonify(result)
 
 
@@ -265,6 +291,8 @@ def get_worker(worker_id):
         return jsonify({"error": "Worker not found"}), 404
     result = row_to_dict(worker)
     result.pop("password_hash", None)
+    result.pop("phone", None)
+    result.pop("id_document_path", None)
     return jsonify(result)
 
 
@@ -277,8 +305,26 @@ def create_booking():
 
     data = request.get_json(force=True) or {}
     worker_id = data.get("worker_id")
-    start_date = data.get("start_date")
-    days = int(data.get("days", 1))
+    start_date = (data.get("start_date") or "").strip()
+    start_time = (data.get("start_time") or "").strip() or None
+    service_type = (data.get("service_type") or "regular").strip().lower()
+    special_instructions = (data.get("special_instructions") or "").strip() or None
+    address = (data.get("address") or "").strip() or None
+
+    try:
+        hours = int(data.get("hours", 2))
+    except (TypeError, ValueError):
+        return jsonify({"error": "hours must be a number"}), 400
+    if hours < 1 or hours > 12:
+        return jsonify({"error": "hours must be between 1 and 12"}), 400
+    if service_type not in ("regular", "overtime"):
+        return jsonify({"error": "service_type must be regular or overtime"}), 400
+    if not worker_id or not start_date:
+        return jsonify({"error": "worker_id and start_date are required"}), 400
+    try:
+        datetime.strptime(start_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "start_date must be YYYY-MM-DD"}), 400
 
     conn = get_db()
     worker = conn.execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
@@ -286,20 +332,34 @@ def create_booking():
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
 
-    total = worker["daily_wage"] * days
+    regular_rate = worker["hourly_wage"] or max(1, int(worker["daily_wage"] / 8))
+    overtime_rate = worker["overtime_wage"] or regular_rate
+    rate = overtime_rate if service_type == "overtime" else regular_rate
+    total = int(rate) * hours
+
     cur = conn.execute(
-        """INSERT INTO bookings (hirer_id, worker_id, start_date, days, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, ?, 'requested', 'pending')""",
-        (current_hirer_id(), worker_id, start_date, days, total),
+        """INSERT INTO bookings
+           (hirer_id, worker_id, start_date, start_time, days, hours, service_type,
+            special_instructions, address, total_amount, status, payment_status)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+        (current_hirer_id(), worker_id, start_date, start_time, hours, service_type,
+         special_instructions, address, total),
     )
     booking_id = cur.lastrowid
     conn.execute(
-        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'requested', 'Booking request created')",
-        (booking_id,),
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'requested', ?)",
+        (booking_id, f"Booking request created for {hours} hour(s) at ₹{rate}/hr"),
     )
     conn.commit()
     conn.close()
-    return jsonify({"id": booking_id, "total_amount": total, "status": "requested"}), 201
+    return jsonify({
+        "id": booking_id,
+        "total_amount": total,
+        "hourly_rate": int(rate),
+        "hours": hours,
+        "status": "requested",
+        "payment_status": "pending",
+    }), 201
 
 
 @app.post("/api/bookings/<int:booking_id>/create-order")
@@ -465,13 +525,85 @@ def list_bookings():
 
     conn = get_db()
     rows = conn.execute(
-        """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city
+        """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
+                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage, w.distance_km
            FROM bookings b JOIN workers w ON w.id = b.worker_id
            WHERE b.hirer_id = ? ORDER BY b.created_at DESC""",
         (current_hirer_id(),),
     ).fetchall()
     conn.close()
     return jsonify(rows_to_list(rows))
+
+
+@app.get("/api/bookings/<int:booking_id>")
+def booking_detail(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    row = conn.execute(
+        """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
+                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage,
+                  w.verification_status, w.background_checked
+           FROM bookings b JOIN workers w ON w.id = b.worker_id
+           WHERE b.id = ? AND b.hirer_id = ?""",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Booking not found"}), 404
+    return jsonify(row_to_dict(row))
+
+
+@app.post("/api/bookings/<int:booking_id>/cancel")
+def cancel_booking(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "Cancelled by hirer").strip()
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    if booking["status"] in ("in_progress", "completed", "cancelled"):
+        conn.close()
+        return jsonify({"error": "This booking can no longer be cancelled"}), 400
+    payment_status = "refund_pending" if booking["payment_status"] == "paid" else booking["payment_status"]
+    conn.execute(
+        "UPDATE bookings SET status = 'cancelled', payment_status = ?, cancelled_at = ?, cancellation_reason = ? WHERE id = ?",
+        (payment_status, datetime.now().isoformat(), reason, booking_id),
+    )
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'cancelled', ?)",
+        (booking_id, reason),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "cancelled", "payment_status": payment_status})
+
+
+@app.get("/api/hirer/profile")
+def hirer_profile():
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    hirer = conn.execute("SELECT id, name, phone, created_at FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
+    counts = conn.execute(
+        "SELECT COUNT(*) AS bookings, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed FROM bookings WHERE hirer_id = ?",
+        (current_hirer_id(),),
+    ).fetchone()
+    conn.close()
+    if not hirer:
+        return jsonify({"error": "Hirer not found"}), 404
+    result = row_to_dict(hirer)
+    result.update({"bookings": counts["bookings"] or 0, "completed": counts["completed"] or 0})
+    return jsonify(result)
 
 
 @app.post("/api/bookings/<int:booking_id>/advance-status")
@@ -489,7 +621,7 @@ def advance_status(booking_id):
     lat, lng, note = data.get("latitude"), data.get("longitude"), data.get("note")
 
     conn = get_db()
-    booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+    booking = conn.execute("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?", (booking_id, current_hirer_id())).fetchone()
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
@@ -520,6 +652,13 @@ def booking_events(booking_id):
         return auth_error
 
     conn = get_db()
+    booking = conn.execute(
+        "SELECT id FROM bookings WHERE id = ? AND hirer_id = ?",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
     rows = conn.execute(
         "SELECT * FROM booking_events WHERE booking_id = ? ORDER BY created_at ASC", (booking_id,)
     ).fetchall()
