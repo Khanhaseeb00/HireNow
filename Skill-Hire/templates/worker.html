@@ -509,8 +509,8 @@
   // ---------------- bookings + real GPS check-in ----------------
   var STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"];
   var STATUS_LABELS_BY_LANG = {
-    hi: { requested: "Requested", confirmed: "Confirmed", en_route: "Aap ja rahe hain", checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua" },
-    en: { requested: "Requested", confirmed: "Confirmed", en_route: "En route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed" }
+    hi: { requested: "Nayi Request", confirmed: "Confirmed", en_route: "Aap ja rahe hain", checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua", rejected: "Rejected", cancelled: "Cancelled" },
+    en: { requested: "New Request", confirmed: "Confirmed", en_route: "En route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed", rejected: "Rejected", cancelled: "Cancelled" }
   };
   var NEXT_ACTION_BY_LANG = {
     hi: { confirmed: "Nikal raha hoon (check-in)", en_route: "Site pahunch gaya", checked_in: "Kaam shuru karta hoon", in_progress: "Kaam poora hua" },
@@ -530,29 +530,78 @@
     if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + wt("no_bookings") + '</div>'; return; }
     wrap.innerHTML = state.bookings.map(function (b) {
       var actionLabel = NEXT_ACTION_BY_LANG[state.lang][b.status];
-      var canAct = b.payment_status === "paid" && actionLabel;
+      var canWork = (b.payment_method === "cash" && b.payment_status === "cash_pending") || b.payment_status === "paid";
+      var canAct = canWork && actionLabel;
       var idx = STATUS_FLOW.indexOf(b.status);
-      var nodes = STATUS_FLOW.map(function (s, i) {
+      var nodes = idx >= 0 ? STATUS_FLOW.map(function (st, i) {
         var cls = i < idx ? "done" : (i === idx ? "now" : "");
         var inner = i < idx ? "✓" : (i + 1);
-        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + STATUS_LABELS_BY_LANG[state.lang][s] + '</div></div>';
-      }).join("");
+        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + (STATUS_LABELS_BY_LANG[state.lang][st] || st) + '</div></div>';
+      }).join("") : "";
+      var paymentText = b.payment_method === "cash"
+        ? (b.payment_status === "paid" ? "Cash verified" : "Cash after work")
+        : (b.payment_status === "paid" ? "Online paid" : "Online payment pending");
+
       return (
         '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + b.hirer_name + '">' +
           '<div class="bcard-head"><div><div class="name">' + b.hirer_name + '</div>' +
-          '<div class="meta">' + fmtDate(b.start_date) + ' · ' + b.days + ' din</div></div>' +
+          '<div class="meta">' + fmtDate(b.start_date) + ' · ' + (b.hours || 2) + ' hrs</div></div>' +
           '<div class="num">' + fmtMoney(b.total_amount) + '</div></div>' +
-          '<span class="status-pill">' + STATUS_LABELS_BY_LANG[state.lang][b.status] + (b.payment_status === "paid" ? "" : " · Payment pending") + '</span>' +
-          '<div class="timeline">' + nodes + '</div>' +
+          '<span class="status-pill">' + (STATUS_LABELS_BY_LANG[state.lang][b.status] || b.status) + ' · ' + paymentText + '</span>' +
+          (b.status === "requested" ?
+            '<div style="display:flex;gap:8px;margin:10px 0;">' +
+              '<button class="btn btn-safety" data-accept="' + b.id + '" style="flex:1;">Accept</button>' +
+              '<button class="btn btn-outline" data-reject="' + b.id + '" style="flex:1;">Reject</button>' +
+            '</div>' : '') +
+          (nodes ? '<div class="timeline">' + nodes + '</div>' : '') +
           (canAct ? '<button class="btn btn-safety" data-checkin="' + b.id + '">' + actionLabel + '</button>' : '') +
+          (b.status === "completed" && b.payment_method === "cash" && b.payment_status !== "paid" ?
+            '<div style="margin-top:10px;"><input type="text" maxlength="6" inputmode="numeric" id="cash-otp-' + b.id + '" placeholder="6-digit cash OTP">' +
+            '<button class="btn btn-safety btn-block" data-verify-cash="' + b.id + '" style="margin-top:8px;">Verify Cash OTP</button></div>' : '') +
           '<div class="gps-note" id="gps-' + b.id + '"></div>' +
           '<button class="btn btn-outline chat-btn" data-open-chat="' + b.id + '" style="margin-top:9px;">💬 ' + wt("chat_toggle") + '</button>' +
         '</div>'
       );
     }).join("");
 
+    wrap.querySelectorAll("[data-accept]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        api("/api/worker/bookings/" + btn.dataset.accept + "/respond", {
+          method:"POST", body:JSON.stringify({action:"accept"})
+        }).then(function(res){
+          if(!res.ok){ window.alert(res.data.error || "Accept nahi hua"); return; }
+          loadBookings();
+        });
+      });
+    });
+    wrap.querySelectorAll("[data-reject]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var reason = window.prompt("Reject karne ka reason (optional):", "") || "";
+        api("/api/worker/bookings/" + btn.dataset.reject + "/respond", {
+          method:"POST", body:JSON.stringify({action:"reject",reason:reason})
+        }).then(function(res){
+          if(!res.ok){ window.alert(res.data.error || "Reject nahi hua"); return; }
+          loadBookings();
+        });
+      });
+    });
     wrap.querySelectorAll("[data-checkin]").forEach(function (btn) {
       btn.addEventListener("click", function () { doCheckIn(Number(btn.dataset.checkin)); });
+    });
+    wrap.querySelectorAll("[data-verify-cash]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id=Number(btn.dataset.verifyCash);
+        var input=document.getElementById("cash-otp-"+id);
+        var otp=(input.value||"").trim();
+        if(otp.length!==6){ window.alert("6-digit OTP enter karein."); return; }
+        api("/api/worker/bookings/"+id+"/verify-cash-otp", {
+          method:"POST", body:JSON.stringify({otp:otp})
+        }).then(function(res){
+          if(!res.ok){ window.alert(res.data.error || "OTP verify nahi hua"); return; }
+          window.alert("Cash payment verified ✓");
+          loadBookings();
+        });
+      });
     });
     wrap.querySelectorAll("[data-open-chat]").forEach(function (btn) {
       btn.addEventListener("click", function () {
