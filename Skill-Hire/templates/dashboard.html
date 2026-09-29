@@ -431,31 +431,60 @@
 
   /* ============ HIRER SPLASH + AUTH ============ */
   #splashScreen {
-    position:fixed; inset:0; z-index:9999; background:#071B3A; color:#fff;
-    display:flex; flex-direction:column; align-items:center; justify-content:space-between;
-    padding:clamp(34px,7vh,72px) 24px 24px; overflow:hidden;
+    position:fixed; inset:0; z-index:9999; color:#fff; overflow:hidden;
+    display:flex; flex-direction:column; align-items:center;
+    background:
+      radial-gradient(circle at 50% 68%, rgba(245,166,35,.22), transparent 25%),
+      radial-gradient(circle at 82% 34%, rgba(28,86,155,.20), transparent 34%),
+      linear-gradient(180deg,#031b3a 0%,#061b37 54%,#021126 100%);
   }
-  .splash-brand { margin-top:clamp(28px,8vh,86px); text-align:center; position:relative; z-index:2; }
-  .brand-logo-lockup { display:flex; flex-direction:column; align-items:center; gap:13px; }
-  .brand-logo-mark { width:104px; height:104px; filter:drop-shadow(0 12px 30px rgba(0,0,0,.22)); }
-  .brand-wordmark { font-family:'Archivo',sans-serif; font-size:42px; font-weight:900; line-height:1; letter-spacing:-1.6px; }
-  .brand-wordmark .hire { color:#fff; } .brand-wordmark .now { color:#F5A623; }
-  .brand-tagline { margin-top:10px; font-size:13px; color:rgba(255,255,255,.82); font-weight:600; letter-spacing:.01em; }
-  .splash-art { width:min(520px,110vw); height:44vh; min-height:250px; position:relative; align-self:center; margin-bottom:-24px; }
-  .splash-skyline { position:absolute; inset:auto 0 0; height:58%; background:#F5A623;
-    clip-path:polygon(0 74%,5% 64%,7% 100%,11% 100%,11% 57%,15% 57%,15% 100%,19% 100%,19% 70%,22% 70%,22% 100%,28% 100%,28% 62%,33% 62%,33% 100%,41% 100%,41% 72%,47% 72%,47% 100%,54% 100%,54% 66%,59% 66%,59% 100%,67% 100%,67% 76%,72% 76%,72% 100%,78% 100%,78% 55%,82% 55%,82% 100%,88% 100%,88% 69%,94% 69%,94% 100%,100% 100%,100% 100%,0 100%); }
-  .splash-worker { position:absolute; left:50%; bottom:3%; width:170px; height:245px; transform:translateX(-50%); }
-  .sw-head { position:absolute; width:58px; height:58px; border-radius:50%; background:#071B3A; left:57px; top:15px; }
-  .sw-helmet { position:absolute; width:78px; height:24px; border:4px solid #F5A623; border-bottom:none; border-radius:42px 42px 0 0; left:47px; top:5px; }
-  .sw-body { position:absolute; width:105px; height:130px; background:#071B3A; border-radius:48px 48px 18px 18px; left:33px; top:70px; }
-  .sw-arm { position:absolute; height:96px; width:22px; border-radius:14px; background:#071B3A; top:84px; transform-origin:top center; }
-  .sw-arm.left { left:27px; transform:rotate(25deg); } .sw-arm.right { right:25px; transform:rotate(-34deg); }
-  .sw-leg { position:absolute; height:75px; width:28px; background:#071B3A; bottom:0; border-radius:10px 10px 2px 2px; }
-  .sw-leg.left { left:50px; transform:rotate(6deg); } .sw-leg.right { right:45px; transform:rotate(-6deg); }
-  .sw-wrench { position:absolute; right:3px; top:48px; width:26px; height:88px; border-radius:12px; background:#071B3A; transform:rotate(18deg); }
+  .splash-status { width:100%; max-width:480px; display:flex; justify-content:space-between; align-items:center; padding:18px 24px 0; font-weight:800; font-size:15px; position:relative; z-index:5; }
+  .splash-status-icons { display:flex; gap:7px; align-items:center; font-size:13px; }
+  .splash-brand { text-align:center; position:relative; z-index:4; margin-top:clamp(46px,8vh,78px); }
+  .canonical-logo-box { width:104px; height:104px; border-radius:24px; margin:0 auto 14px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(145deg,#08254b,#020d20); border:1px solid rgba(129,173,238,.55); box-shadow:0 15px 40px rgba(0,0,0,.28), inset 0 0 30px rgba(33,86,157,.16); }
+  .canonical-logo-box .canonical-mark { width:76px; height:76px; }
+  .splash-wordmark { font-family:'Archivo',sans-serif; font-size:clamp(42px,11vw,58px); font-weight:900; line-height:.95; letter-spacing:-2.4px; }
+  .splash-wordmark .hire { color:#fff; } .splash-wordmark .now { color:#FFA300; }
+  .splash-tagline { margin-top:10px; font-size:clamp(13px,3.8vw,17px); color:#fff; font-weight:700; }
+  .splash-scene { position:absolute; left:0; right:0; bottom:0; height:62%; overflow:hidden; }
+  .scene-sunset { position:absolute; left:-8%; right:-8%; bottom:20%; height:50%; background:radial-gradient(ellipse at 55% 75%,rgba(255,166,36,.98) 0%,rgba(235,112,22,.52) 25%,rgba(8,42,79,.06) 63%,transparent 70%); }
+  .scene-city { position:absolute; left:0; right:0; bottom:20%; height:31%; opacity:.95; background:#061a35;
+    clip-path:polygon(0 65%,4% 65%,4% 47%,7% 47%,7% 73%,11% 73%,11% 42%,15% 42%,15% 68%,19% 68%,19% 31%,23% 31%,23% 70%,27% 70%,27% 51%,31% 51%,31% 74%,35% 74%,35% 38%,39% 38%,39% 67%,43% 67%,43% 48%,47% 48%,47% 72%,52% 72%,52% 29%,56% 29%,56% 69%,60% 69%,60% 45%,64% 45%,64% 72%,68% 72%,68% 22%,72% 22%,72% 64%,76% 64%,76% 39%,80% 39%,80% 70%,84% 70%,84% 48%,88% 48%,88% 73%,92% 73%,92% 34%,96% 34%,96% 65%,100% 65%,100% 100%,0 100%); }
+  .scene-road { position:absolute; left:-15%; right:-15%; bottom:0; height:30%; background:linear-gradient(180deg,#071b34,#020d1e); transform:perspective(300px) rotateX(8deg); }
+  .scene-worker { position:absolute; left:21%; bottom:13%; width:132px; height:300px; z-index:3; filter:drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
+  .scene-worker .head { position:absolute; left:47px; top:22px; width:47px; height:48px; border-radius:48% 48% 44% 44%; background:#07172d; }
+  .scene-worker .helmet { position:absolute; left:37px; top:9px; width:68px; height:31px; border-radius:38px 38px 8px 8px; background:linear-gradient(#ffbd22,#e88600); border:2px solid #ffc54a; }
+  .scene-worker .torso { position:absolute; left:25px; top:67px; width:93px; height:139px; border-radius:35px 35px 17px 17px; background:linear-gradient(90deg,#082345,#06172d); border-right:2px solid rgba(245,166,35,.5); }
+  .scene-worker .arm { position:absolute; top:83px; width:23px; height:132px; border-radius:15px; background:#07182f; transform-origin:top center; }
+  .scene-worker .arm.a { left:22px; transform:rotate(15deg); } .scene-worker .arm.b { right:18px; transform:rotate(-15deg); }
+  .scene-worker .leg { position:absolute; top:190px; width:31px; height:106px; background:#06162b; border-radius:10px; }
+  .scene-worker .leg.a { left:38px; transform:rotate(4deg); } .scene-worker .leg.b { right:31px; transform:rotate(-5deg); }
+  .scene-worker .toolbox { position:absolute; right:-28px; top:186px; width:72px; height:54px; background:#06172e; border:3px solid #f1a01c; border-radius:8px; transform:rotate(-3deg); }
+  .scene-phone { position:absolute; left:47%; bottom:17%; width:150px; height:285px; z-index:2; border:4px solid #e7c28b; border-radius:28px; background:#041a35; transform:rotate(3deg); box-shadow:0 18px 45px rgba(0,0,0,.42); padding:22px 10px 10px; }
+  .scene-phone:before { content:""; position:absolute; top:7px; left:43px; width:62px; height:9px; border-radius:10px; background:#020b18; }
+  .phone-brand { font-family:'Archivo',sans-serif; font-size:18px; font-weight:900; text-align:center; margin-bottom:12px; }
+  .phone-brand span { color:#F5A623; }
+  .phone-search { height:25px; border-radius:7px; background:#0d3567; font-size:7px; padding:8px; color:#d9e4f2; }
+  .phone-banner { margin-top:9px; background:#fff; color:#071b3a; border-radius:9px; padding:8px; font-size:8px; font-weight:800; }
+  .phone-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px; }
+  .phone-grid div { background:#0b3262; border-radius:7px; padding:10px 3px; text-align:center; font-size:7px; color:#fff; }
+  .skill-float { position:absolute; z-index:4; width:125px; height:47px; border:1px solid rgba(132,179,239,.48); background:linear-gradient(135deg,rgba(11,46,89,.88),rgba(8,31,65,.72)); border-radius:10px; display:flex; align-items:center; gap:9px; padding:9px 12px; font-size:10px; font-weight:700; box-shadow:0 8px 20px rgba(0,0,0,.18); }
+  .skill-float b { color:#F5A623; font-size:17px; width:18px; text-align:center; }
+  .sf1{left:7%;top:12%;transform:rotate(4deg)} .sf2{left:4%;top:26%;transform:rotate(2deg)} .sf3{left:6%;top:40%;transform:rotate(1deg)}
+  .sf4{right:6%;top:12%;transform:rotate(-5deg)} .sf5{right:3%;top:27%;transform:rotate(-3deg)} .sf6{right:5%;top:42%;transform:rotate(-2deg)}
+  .splash-bottom-wave { position:absolute; left:-10%; right:-10%; bottom:-7%; height:23%; background:#041832; border-radius:50% 50% 0 0 / 28% 28% 0 0; z-index:5; border-top:7px solid #F5A623; }
+  .splash-footer { position:absolute; bottom:23px; z-index:6; text-align:center; left:20px; right:20px; }
+  .splash-dots { display:flex; justify-content:center; gap:8px; margin-bottom:12px; }
+  .splash-dots i { width:8px; height:8px; border-radius:50%; background:#31517a; } .splash-dots i:first-child { background:#F5A623; }
+  .splash-footer-text { font-size:12px; letter-spacing:2px; line-height:1.55; color:#fff; }
   .splash-fade-out { animation:splashOut .35s ease forwards; }
   @keyframes splashOut { to { opacity:0; visibility:hidden; } }
-
+  @media (max-width:380px) {
+    .splash-brand{margin-top:44px}.canonical-logo-box{width:88px;height:88px}.canonical-logo-box .canonical-mark{width:66px;height:66px}
+    .splash-scene{height:59%}.scene-worker{left:16%;transform:scale(.88);transform-origin:bottom}.scene-phone{left:46%;transform:rotate(3deg) scale(.9);transform-origin:bottom}
+    .skill-float{width:112px;height:43px;font-size:9px}.sf1,.sf2,.sf3{left:2%}.sf4,.sf5,.sf6{right:1%}
+  }
   .auth-page { min-height:100vh; background:linear-gradient(180deg,#071B3A 0 30%,#F4F7FB 30% 100%); padding:38px 16px 28px; }
   .auth-wrap { max-width:420px; margin:0 auto; padding:0; border:none; background:transparent; }
   .auth-brand { text-align:center; color:#fff; padding:8px 0 22px; }
@@ -493,29 +522,44 @@
 <body>
 
 <div id="splashScreen" aria-label="HireNow splash screen">
+  <div class="splash-status"><span>9:41</span><span class="splash-status-icons">▮▮▮ ◉ ▰</span></div>
   <div class="splash-brand">
-    <div class="brand-logo-lockup">
-      <svg class="brand-logo-mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow logo"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hire-now-lockup"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hire-now-lockup)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg>
-      <div class="brand-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div>
-    </div>
-    <div class="brand-tagline">Skilled People. Real Work. Faster.</div>
+    <div class="canonical-logo-box"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow canonical logo">
+<defs><linearGradient id="hnOrange" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient><linearGradient id="hnWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EAF1FA"/></linearGradient></defs>
+<path d="M18 20 Q18 15 23 15 H34 Q39 15 39 20 V42 Q39 47 44 47 H49 L38 58 V78 Q38 84 32 84 H23 Q18 84 18 79Z" fill="url(#hnWhite)"/>
+<path d="M82 80 Q82 85 77 85 H67 Q62 85 62 80 V58 L51 47 H57 Q62 47 62 42 V28 H54 L72 10 L90 28 H82Z" fill="url(#hnOrange)"/>
+<path d="M37 53 L48 43 Q52 40 56 43 L65 51 Q68 54 65 57 L60 62 Q57 65 54 62 L50 58 L47 61 Q44 64 41 61 L36 57 Q34 55 37 53Z" fill="#071B3A"/>
+<path d="M43 48 L48 44 Q51 42 54 44 L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/>
+<path d="M44 57 L51 64 M49 53 L56 60 M54 50 L61 56" stroke="#F8FBFF" stroke-width="5" stroke-linecap="round"/>
+<path d="M38 56 L43 61 M35 59 L40 64 M40 53 L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/>
+</svg></div>
+    <div class="splash-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div>
+    <div class="splash-tagline">Skilled People. Real Work. Faster.</div>
   </div>
-  <div class="splash-art" aria-hidden="true">
-    <div class="splash-skyline"></div>
-    <div class="splash-worker">
-      <div class="sw-helmet"></div><div class="sw-head"></div><div class="sw-body"></div>
-      <div class="sw-arm left"></div><div class="sw-arm right"></div>
-      <div class="sw-leg left"></div><div class="sw-leg right"></div><div class="sw-wrench"></div>
-    </div>
+  <div class="splash-scene" aria-hidden="true">
+    <div class="scene-sunset"></div><div class="scene-city"></div><div class="scene-road"></div>
+    <div class="skill-float sf1"><b>ϟ</b> Electrician</div><div class="skill-float sf2"><b>◕</b> Plumber</div><div class="skill-float sf3"><b>⌁</b> Carpenter</div>
+    <div class="skill-float sf4"><b>▰</b> Painter</div><div class="skill-float sf5"><b>▣</b> Driver</div><div class="skill-float sf6"><b>❄</b> AC Technician</div>
+    <div class="scene-worker"><div class="helmet"></div><div class="head"></div><div class="torso"></div><div class="arm a"></div><div class="arm b"></div><div class="leg a"></div><div class="leg b"></div><div class="toolbox"></div></div>
+    <div class="scene-phone"><div class="phone-brand">Hire<span>Now</span></div><div class="phone-search">⌕ &nbsp; Search for a skill or service...</div><div class="phone-banner">Find Skilled Workers<br><small>For your home or business</small></div><div class="phone-grid"><div>ϟ<br>Electrician</div><div>◕<br>Plumber</div><div>⌁<br>Carpenter</div><div>▰<br>Painter</div><div>▣<br>Driver</div><div>❄<br>AC Technician</div></div></div>
+    <div class="splash-bottom-wave"></div>
   </div>
+  <div class="splash-footer"><div class="splash-dots"><i></i><i></i><i></i></div><div class="splash-footer-text">The right person.<br>Right when you need them.</div></div>
 </div>
 
 <div id="authPage" class="auth-page" style="display:none;">
   <div id="authScreen" class="auth-wrap">
     <div class="auth-brand">
-      <div class="mini-lockup"><svg class="mini-mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow logo"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hire-now-mini"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hire-now-mini)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg><div class="mini-name"><span>Hire</span><span>Now</span></div></div>
-      <div style="font-size:11.5px;color:rgba(255,255,255,.76);margin-top:5px;">Find trusted skilled workers near you</div>
-    </div>
+      <div class="mini-lockup"><div style="width:52px;height:52px;border-radius:12px;background:#071B3A;display:flex;align-items:center;justify-content:center;"><svg class="canonical-mark" style="width:44px;height:44px;" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-label="HireNow canonical logo">
+<defs><linearGradient id="hnOrange" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient><linearGradient id="hnWhite" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#EAF1FA"/></linearGradient></defs>
+<path d="M18 20 Q18 15 23 15 H34 Q39 15 39 20 V42 Q39 47 44 47 H49 L38 58 V78 Q38 84 32 84 H23 Q18 84 18 79Z" fill="url(#hnWhite)"/>
+<path d="M82 80 Q82 85 77 85 H67 Q62 85 62 80 V58 L51 47 H57 Q62 47 62 42 V28 H54 L72 10 L90 28 H82Z" fill="url(#hnOrange)"/>
+<path d="M37 53 L48 43 Q52 40 56 43 L65 51 Q68 54 65 57 L60 62 Q57 65 54 62 L50 58 L47 61 Q44 64 41 61 L36 57 Q34 55 37 53Z" fill="#071B3A"/>
+<path d="M43 48 L48 44 Q51 42 54 44 L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/>
+<path d="M44 57 L51 64 M49 53 L56 60 M54 50 L61 56" stroke="#F8FBFF" stroke-width="5" stroke-linecap="round"/>
+<path d="M38 56 L43 61 M35 59 L40 64 M40 53 L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/>
+</svg></div><div class="mini-name"><span>Hire</span><span>Now</span></div></div>
+      <div style="font-size:11.5px;color:rgba(255,255,255,.76);margin-top:5px;">Find trusted skilled workers near you</div></div>
     <div class="auth-card">
       <div class="auth-mode-tabs">
         <button id="loginTabBtn" class="active" type="button">Login</button>
