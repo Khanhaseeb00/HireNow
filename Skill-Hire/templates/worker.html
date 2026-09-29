@@ -186,14 +186,52 @@
   @keyframes stampIn { to { transform: scale(1) rotate(-6deg); opacity: 1; } }
 
   .chat-toggle { display: none; }
+
+  /* 2026 worker reference redesign: mobile app visual system */
+  :root{--app-navy:#062746;--app-navy2:#031c35;--app-orange:#FFA31A;--app-blue:#1677F2;--app-bg:#F4F7FB;--app-card:#fff;--app-text:#10233F;--app-muted:#71839A;--app-border:#E3EAF2;--app-green:#20B978}
+  body{background:var(--app-bg);background-image:none;color:var(--app-text)}
+  #appScreen{min-height:100vh;background:var(--app-bg);padding-bottom:78px}
+  header.topbar{max-width:520px;margin:0 auto;background:linear-gradient(145deg,var(--app-navy),var(--app-navy2));border:0;padding:18px 18px 15px;color:#fff;position:sticky;top:0;z-index:20;box-shadow:0 4px 16px rgba(5,37,67,.12)}
+  .brand h1{font-size:21px;color:#fff}.brand h1 .now{color:var(--app-orange)}
+  .brand .mark{width:38px;height:38px;border-radius:10px;background:#061b35;border:1px solid rgba(255,255,255,.18)}
+  .brand .mark svg{width:34px;height:34px}
+  header.topbar>.who{display:none}
+  nav.tabs{position:fixed;z-index:50;left:50%;transform:translateX(-50%);bottom:0;width:min(520px,100%);height:70px;background:#fff;border-top:1px solid var(--app-border);box-shadow:0 -7px 24px rgba(20,40,70,.08);display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:7px 8px max(7px,env(safe-area-inset-bottom))}
+  nav.tabs button{border-radius:12px;color:#8495A9;background:none;font-size:11px;font-weight:700;padding:27px 4px 4px;position:relative}
+  nav.tabs button:before{position:absolute;top:5px;left:50%;transform:translateX(-50%);font-size:19px;font-weight:400}
+  #navWork:before{content:"▣"}#navProfile:before{content:"♙"}#navSettings:before{content:"⚙"}
+  nav.tabs button.active{background:#FFF4E2;color:var(--app-orange)}
+  main{max-width:520px;padding:18px 14px 30px}
+  section.panel.active{animation:workerPanel .28s ease}@keyframes workerPanel{from{opacity:.2;transform:translateY(6px)}to{opacity:1;transform:none}}
+  #workSubtitle{display:none}
+  .flatcard,.tick,.bcard{background:#fff;border:1px solid var(--app-border);border-radius:18px;box-shadow:0 5px 18px rgba(20,48,78,.055)}
+  .tick:before,.tick:after{display:none}
+  .verify-box{padding:16px;border-radius:16px;margin:0 0 18px}
+  .verify-box .title{color:var(--app-text);font-size:15px}.verify-box .sub{color:var(--app-muted)}
+  h2.section-title{font-size:22px;color:var(--app-text);margin:4px 0 13px}
+  .bcard{padding:16px;margin-bottom:12px}.bcard-head .name{color:var(--app-text);font-size:17px}.bcard-head .meta{color:var(--app-muted)}.bcard-head .num{color:var(--app-text);font-size:21px}
+  .status-pill{border-radius:10px;background:#E8F3FF;color:#1677F2;padding:5px 10px}
+  .btn{border-radius:12px;min-height:43px}.btn-safety{background:var(--app-orange);color:#172234}.btn-primary{background:var(--app-navy);color:#fff;border:0}.btn-outline{border-color:#CFDBE8;color:var(--app-navy);background:#fff}
+  .timeline{overflow-x:auto;padding:5px 0}.tl-node{background:#fff;border-color:#D6E0EA;color:#72849A}.tl-step.done .tl-node{background:var(--app-green);border-color:var(--app-green)}.tl-step.now .tl-node{background:var(--app-orange);border-color:var(--app-orange)}
+  .profile-hero{border-radius:18px;padding:20px}.profile-avatar{width:84px;height:84px;background:#EAF0F6;color:var(--app-navy);font-size:27px}.profile-grid{grid-template-columns:repeat(3,1fr);gap:8px}.profile-field{padding:14px 8px;text-align:center;border-radius:14px}.profile-field .label{font-size:10px;color:var(--app-muted)}.profile-field .value{font-size:16px;color:var(--app-text)}
+  .settings-block{border-radius:18px;padding:18px}.settings-block h3{color:var(--app-text)}.settings-block .sub{color:var(--app-muted)}
+  .choice-btn{border-radius:12px;background:#F5F8FC;border-color:#DDE6EF;color:#657A91}.choice-btn.selected{background:#FFF2DD;border-color:var(--app-orange);color:var(--app-text)}
+  .chat-fab-panel{border-radius:20px;background:#fff;border:1px solid var(--app-border);color:var(--app-text)}.chat-fab-head{background:var(--app-navy);border-radius:20px 20px 0 0}.chat-fab-head .who .name{color:#fff}.chat-fab-send input{background:#F2F6FA;color:var(--app-text);border-color:#E0E8F0;border-radius:20px}
+  /* login reference */
+  .auth-wrap{max-width:430px;margin:28px auto;background:#fff!important;border:1px solid var(--app-border)!important;border-radius:24px!important;padding:30px 24px;box-shadow:0 14px 36px rgba(12,40,70,.10);color:var(--app-text)}
+  .auth-wrap h2{font-size:27px;color:var(--app-text)}.auth-wrap p{color:var(--app-muted);font-size:14px;margin:6px 0 22px}
+  .auth-wrap label{color:#687C92;font-weight:600}.auth-wrap input{height:52px;border-radius:13px;background:#fff;color:var(--app-text);border:1px solid #DCE5EE;padding:0 14px}.auth-switch{color:var(--app-muted)}.auth-switch a{color:var(--app-orange);font-weight:700}
+  .worker-logo-lockup{display:flex;flex-direction:column;align-items:center;margin-bottom:16px}.worker-logo-box{width:74px;height:74px;border-radius:18px;background:linear-gradient(145deg,#08254b,#020d20);border:1px solid #5476a0;display:flex;align-items:center;justify-content:center}.worker-logo-box svg{width:62px;height:62px}.worker-wordmark{font-family:'Archivo';font-weight:900;font-size:35px;margin-top:8px}.worker-wordmark .hire{color:var(--app-navy)}.worker-wordmark .now{color:var(--app-orange)}
+  .worker-home-head{background:linear-gradient(145deg,var(--app-navy),var(--app-navy2));color:#fff;border-radius:0 0 24px 24px;margin:-18px -14px 18px;padding:20px 18px 25px}.worker-greet{font-size:13px;opacity:.78}.worker-name{font-family:'Archivo';font-size:23px;font-weight:800}.worker-online{display:inline-flex;align-items:center;gap:6px;background:#19B970;color:#fff;border-radius:18px;padding:6px 11px;font-size:12px;font-weight:700;margin-top:8px}.worker-online:before{content:"";width:7px;height:7px;background:#fff;border-radius:50%}
+  .worker-stats{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;color:var(--app-text);border:1px solid var(--app-border);border-radius:18px;margin:-15px 0 17px;box-shadow:0 6px 18px rgba(20,48,78,.06)}.worker-stat{text-align:center;padding:14px 5px;border-right:1px solid #E7EDF4}.worker-stat:last-child{border:0}.worker-stat strong{display:block;font-family:'Archivo';font-size:20px}.worker-stat span{font-size:10.5px;color:var(--app-muted)}
+  .new-jobs-banner{background:linear-gradient(145deg,#073153,#031D37);color:#fff;border-radius:17px;padding:17px;margin-bottom:18px}.new-jobs-banner strong{font-family:'Archivo';font-size:18px}.new-jobs-banner p{font-size:12px;opacity:.78;margin:3px 0 11px}.new-jobs-banner button{background:var(--app-orange);border-radius:10px;padding:9px 20px;font-weight:800}
+  @media(max-width:390px){.profile-grid{grid-template-columns:1fr 1fr}.worker-wordmark{font-size:31px}}
 </style>
 </head>
 <body>
 
 <div id="authScreen" class="auth-wrap tick" style="display:none;">
-  <div style="display:flex;justify-content:center;margin-bottom:18px;">
-    <svg viewBox="0 0 48 48" width="56" height="56" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hs-w1"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hs-w1)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg>
-  </div>
+  <div class="worker-logo-lockup"><div class="worker-logo-box"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="workerHnO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><path d="M18 20Q18 15 23 15H34Q39 15 39 20V42Q39 47 44 47H49L38 58V78Q38 84 32 84H23Q18 84 18 79Z" fill="#fff"/><path d="M82 80Q82 85 77 85H67Q62 85 62 80V58L51 47H57Q62 47 62 42V28H54L72 10L90 28H82Z" fill="url(#workerHnO)"/><path d="M37 53L48 43Q52 40 56 43L65 51Q68 54 65 57L60 62Q57 65 54 62L50 58L47 61Q44 64 41 61L36 57Q34 55 37 53Z" fill="#071B3A"/><path d="M43 48L48 44Q51 42 54 44L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/><path d="M44 57L51 64M49 53L56 60M54 50L61 56" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M38 56L43 61M35 59L40 64M40 53L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/></svg></div><div class="worker-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div></div>
   <h2 id="authTitle" style="text-align:center;">Worker Login</h2>
   <p style="text-align:center;">Apne kaam aur bookings dekhne ke liye login karein</p>
 
@@ -222,7 +260,7 @@
 <div id="appScreen" style="display:none;">
   <header class="topbar">
     <div class="brand">
-      <span class="mark"><svg viewBox="0 0 48 48" width="28" height="28" xmlns="http://www.w3.org/2000/svg"><rect width="48" height="48" rx="10" fill="#101B33"/><rect x="9" y="6" width="8" height="15" rx="3" fill="#EAF2F7"/><path d="M31 11 L40 11 L35.5 2.5 Z" fill="#F5A623"/><rect x="31" y="11" width="8" height="10" rx="3" fill="#F5A623"/><clipPath id="hs-w2"><rect x="8" y="20" width="33" height="13" rx="5"/></clipPath><g clip-path="url(#hs-w2)"><polygon points="8,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 8,33" fill="#EAF2F7"/><polygon points="41,20 22,20 25,23 19,25.5 25,28 19,30.5 22,33 41,33" fill="#F5A623"/></g></svg></span>
+      <span class="mark"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="workerHnO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><path d="M18 20Q18 15 23 15H34Q39 15 39 20V42Q39 47 44 47H49L38 58V78Q38 84 32 84H23Q18 84 18 79Z" fill="#fff"/><path d="M82 80Q82 85 77 85H67Q62 85 62 80V58L51 47H57Q62 47 62 42V28H54L72 10L90 28H82Z" fill="url(#workerHnO)"/><path d="M37 53L48 43Q52 40 56 43L65 51Q68 54 65 57L60 62Q57 65 54 62L50 58L47 61Q44 64 41 61L36 57Q34 55 37 53Z" fill="#071B3A"/><path d="M43 48L48 44Q51 42 54 44L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/><path d="M44 57L51 64M49 53L56 60M54 50L61 56" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M38 56L43 61M35 59L40 64M40 53L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/></svg></span>
       <h1>Hire<span class="now">Now</span></h1>
     </div>
     <nav class="tabs">
@@ -235,6 +273,21 @@
 
   <main>
     <section class="panel active" id="panel-work">
+      <div class="worker-home-head">
+        <div class="worker-greet">Good Morning,</div>
+        <div class="worker-name" id="workerHeroName">Worker</div>
+        <div class="worker-online">Online</div>
+      </div>
+      <div class="worker-stats">
+        <div class="worker-stat"><strong id="activeJobCount">0</strong><span>Active Job</span></div>
+        <div class="worker-stat"><strong id="todayEarning">₹0</strong><span>Today's Earning</span></div>
+        <div class="worker-stat"><strong id="heroRating">—</strong><span>Rating</span></div>
+      </div>
+      <div class="new-jobs-banner">
+        <strong>New Jobs Available</strong>
+        <p id="requestCountText">New job requests will appear here.</p>
+        <button type="button" id="viewJobsBtn">View Jobs</button>
+      </div>
       <p style="color:var(--ink-soft);font-size:13px;margin:-6px 0 18px;" id="workSubtitle">Mera Kaam — apne jobs aur bookings yahan dekhein</p>
 
       <div class="verify-box tick">
@@ -282,11 +335,20 @@
         </div>
       </div>
       <div class="settings-block flatcard">
-        <h3>Bhasha / Language</h3>
-        <div class="sub">App ki bhasha chunein</div>
+        <h3>Language</h3><div class="sub">Choose the app language</div>
         <div class="choice-row">
-          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span>Hinglish</span></button>
           <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span>English</span></button>
+          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span>हिन्दी</span></button>
+          <button class="choice-btn" data-lang-choice="ar"><span class="dot"></span><span>العربية</span></button>
+          <button class="choice-btn" data-lang-choice="bn"><span class="dot"></span><span>বাংলা</span></button>
+          <button class="choice-btn" data-lang-choice="ta"><span class="dot"></span><span>தமிழ்</span></button>
+          <button class="choice-btn" data-lang-choice="te"><span class="dot"></span><span>తెలుగు</span></button>
+          <button class="choice-btn" data-lang-choice="mr"><span class="dot"></span><span>मराठी</span></button>
+          <button class="choice-btn" data-lang-choice="gu"><span class="dot"></span><span>ગુજરાતી</span></button>
+          <button class="choice-btn" data-lang-choice="kn"><span class="dot"></span><span>ಕನ್ನಡ</span></button>
+          <button class="choice-btn" data-lang-choice="ml"><span class="dot"></span><span>മലയാളം</span></button>
+          <button class="choice-btn" data-lang-choice="pa"><span class="dot"></span><span>ਪੰਜਾਬੀ</span></button>
+          <button class="choice-btn" data-lang-choice="ur"><span class="dot"></span><span>اردو</span></button>
         </div>
       </div>
     </section>
@@ -315,7 +377,7 @@
     hi: { subtitle: "Mera Kaam — apne jobs aur bookings yahan dekhein", bookings_heading: "Meri bookings", no_bookings: "Abhi tak koi booking assign nahi hui.", chat_title: "Message", chat_send: "Bhejein", chat_ph: "Message likhein...", chat_toggle: "Message bhejein", nav_work: "Mera Kaam", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "Mera Profile", lbl_skill: "Skill", lbl_city: "Shahar", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs poore hue", lbl_verify: "ID Verification" },
     en: { subtitle: "My Work — see your jobs and bookings here", bookings_heading: "My bookings", no_bookings: "No bookings assigned yet.", chat_title: "Message", chat_send: "Send", chat_ph: "Type a message...", chat_toggle: "Message", nav_work: "My Work", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "My Profile", lbl_skill: "Skill", lbl_city: "City", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs completed", lbl_verify: "ID Verification" }
   };
-  function wt(key) { return (W_LANG[state.lang] && W_LANG[state.lang][key]) || key; }
+  function wt(key) { return (W_LANG[state.lang] && W_LANG[state.lang][key]) || (W_LANG.en && W_LANG.en[key]) || key; }
   function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
   function applyWorkerI18n() {
     document.getElementById("workSubtitle").textContent = wt("subtitle");
@@ -342,6 +404,8 @@
   function setWorkerLanguage(lang) {
     state.lang = lang;
     try { localStorage.setItem("hirenow_worker_lang", lang); } catch (e) {}
+    document.documentElement.lang=lang;
+    document.documentElement.dir=(lang==="ar"||lang==="ur")?"rtl":"ltr";
     applyWorkerI18n();
   }
   function setWorkerTheme(theme) {
@@ -353,9 +417,9 @@
     });
   }
   (function initWorkerPrefs() {
-    var savedTheme = "dark", savedLang = "hi";
-    try { savedTheme = localStorage.getItem("hirenow_worker_theme") || "dark"; } catch (e) {}
-    try { savedLang = localStorage.getItem("hirenow_worker_lang") || "hi"; } catch (e) {}
+    var savedTheme = "light", savedLang = "en";
+    try { savedTheme = localStorage.getItem("hirenow_worker_theme") || "light"; } catch (e) {}
+    try { savedLang = localStorage.getItem("hirenow_worker_lang") || "en"; } catch (e) {}
     state.theme = savedTheme; state.lang = savedLang;
     document.documentElement.setAttribute("data-theme", savedTheme);
   })();
@@ -374,7 +438,9 @@
     });
   });
 
-  function api(path, opts) {
+  var viewJobsBtn=document.getElementById("viewJobsBtn");
+  if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){document.getElementById("bookingsList").scrollIntoView({behavior:"smooth",block:"start"});});
+    function api(path, opts) {
     opts = opts || {};
     if (!(opts.body instanceof FormData)) {
       opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
@@ -448,6 +514,7 @@
     appScreen.style.display = "block";
     requestAnimationFrame(function () { appScreen.classList.add("enter"); });
     document.getElementById("whoName").textContent = worker.name;
+    var heroName=document.getElementById("workerHeroName"); if(heroName) heroName.textContent=worker.name || "Worker";
     applyWorkerI18n();
     document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
       btn.classList.toggle("selected", btn.dataset.themeChoice === state.theme);
@@ -470,6 +537,7 @@
     document.getElementById("profileCity").textContent = state.worker.city || "—";
     document.getElementById("profileWage").textContent = state.worker.daily_wage ? fmtMoney(state.worker.daily_wage) : "—";
     document.getElementById("profileRating").textContent = state.worker.rating != null ? ("★ " + state.worker.rating) : "—";
+    var hr=document.getElementById("heroRating"); if(hr)hr.textContent=state.worker.rating != null ? state.worker.rating : "—";
     document.getElementById("profileJobs").textContent = state.worker.jobs_completed != null ? state.worker.jobs_completed : (state.bookings.filter(function (b) { return b.status === "completed"; }).length);
     var status = state.worker.verification_status || "unverified";
     var vb = document.getElementById("profileVerifyBadge");
@@ -520,6 +588,13 @@
   function loadBookings() {
     api("/api/worker/bookings").then(function (res) {
       state.bookings = res.data || [];
+      var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
+      var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
+      var completedToday=state.bookings.filter(function(b){return b.status==="completed" && b.start_date===new Date().toISOString().slice(0,10);});
+      var earn=completedToday.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
+      var a=document.getElementById("activeJobCount"); if(a)a.textContent=active;
+      var e=document.getElementById("todayEarning"); if(e)e.textContent=fmtMoney(earn);
+      var rc=document.getElementById("requestCountText"); if(rc)rc.textContent=requested ? (requested+" new job request"+(requested===1?"":"s")+" in your queue") : "No new requests right now";
       renderBookings();
       renderProfile();
     });
