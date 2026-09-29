@@ -26,7 +26,7 @@ in an offline sandbox — see notifications.py):
 from flask import Flask, request, jsonify, session, render_template_string, render_template
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 import hmac
 import requests as _requests
@@ -56,6 +56,12 @@ def ensure_schema_extensions():
         "service_type": "TEXT NOT NULL DEFAULT 'regular'",
         "special_instructions": "TEXT",
         "address": "TEXT",
+        "payment_method": "TEXT NOT NULL DEFAULT 'online'",
+        "worker_response_at": "TEXT",
+        "worker_rejection_reason": "TEXT",
+        "cash_otp_hash": "TEXT",
+        "cash_otp_expires_at": "TEXT",
+        "cash_verified_at": "TEXT",
         "cancelled_at": "TEXT",
         "cancellation_reason": "TEXT",
     }
@@ -104,6 +110,14 @@ def next_status(current):
     if idx >= len(STATUS_FLOW) - 1:
         return None
     return STATUS_FLOW[idx + 1]
+
+
+def booking_allows_work(booking):
+    """Online jobs require paid status; cash jobs can run after worker acceptance."""
+    method = booking["payment_method"] if "payment_method" in booking.keys() else "online"
+    if method == "cash":
+        return booking["payment_status"] in ("cash_pending", "paid")
+    return booking["payment_status"] == "paid"
 
 
 def current_hirer_id():
@@ -308,6 +322,7 @@ def create_booking():
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
     service_type = (data.get("service_type") or "regular").strip().lower()
+    payment_method = (data.get("payment_method") or "cash").strip().lower()
     special_instructions = (data.get("special_instructions") or "").strip() or None
     address = (data.get("address") or "").strip() or None
 
@@ -319,6 +334,8 @@ def create_booking():
         return jsonify({"error": "hours must be between 1 and 12"}), 400
     if service_type not in ("regular", "overtime"):
         return jsonify({"error": "service_type must be regular or overtime"}), 400
+    if payment_method not in ("cash", "online"):
+        return jsonify({"error": "payment_method must be cash or online"}), 400
     if not worker_id or not start_date:
         return jsonify({"error": "worker_id and start_date are required"}), 400
     try:
@@ -340,23 +357,33 @@ def create_booking():
     cur = conn.execute(
         """INSERT INTO bookings
            (hirer_id, worker_id, start_date, start_time, days, hours, service_type,
-            special_instructions, address, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+            special_instructions, address, payment_method, total_amount, status, payment_status)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
         (current_hirer_id(), worker_id, start_date, start_time, hours, service_type,
-         special_instructions, address, total),
+         special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'requested', ?)",
-        (booking_id, f"Booking request created for {hours} hour(s) at ₹{rate}/hr"),
+        (booking_id, f"Booking request sent to worker. Payment method: {payment_method}."),
     )
+    hirer = conn.execute("SELECT name FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
     conn.commit()
     conn.close()
+
+    if worker["phone"]:
+        notify(
+            worker["phone"],
+            f"HireNow: Nayi booking request #{booking_id} — {hirer['name'] if hirer else 'Hirer'}, "
+            f"{start_date} {start_time or ''}, {hours} hr. Worker portal me Accept/Reject karein."
+        )
+
     return jsonify({
         "id": booking_id,
         "total_amount": total,
         "hourly_rate": int(rate),
         "hours": hours,
+        "payment_method": payment_method,
         "status": "requested",
         "payment_status": "pending",
     }), 201
@@ -364,11 +391,7 @@ def create_booking():
 
 @app.post("/api/bookings/<int:booking_id>/create-order")
 def create_razorpay_order(booking_id):
-    """
-    Step 1 of real payment: create a Razorpay order for this booking's
-    amount and hand the frontend what it needs to open Razorpay Checkout.
-    Nothing is marked as paid here — that only happens after verification.
-    """
+    """Create an online-payment order only after the worker accepts the request."""
     auth_error = require_login()
     if auth_error:
         return auth_error
@@ -380,6 +403,12 @@ def create_razorpay_order(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
+    if booking["payment_method"] != "online":
+        conn.close()
+        return jsonify({"error": "This booking is set to Cash after work"}), 400
+    if booking["status"] != "confirmed":
+        conn.close()
+        return jsonify({"error": "Worker must accept the booking before online payment"}), 400
     if booking["payment_status"] == "paid":
         conn.close()
         return jsonify({"error": "Booking already paid"}), 400
@@ -403,8 +432,6 @@ def create_razorpay_order(booking_id):
     conn.commit()
     conn.close()
 
-    # The frontend needs the key_id (public, safe to expose) plus the order
-    # details to open Razorpay Checkout — see checkout_example.html.
     return jsonify({
         "order_id": order["id"],
         "amount": order["amount"],
@@ -439,6 +466,12 @@ def verify_payment():
     if not booking:
         conn.close()
         return jsonify({"error": "No booking matches this order"}), 404
+    if booking["payment_method"] != "online":
+        conn.close()
+        return jsonify({"error": "This booking is not an online-payment booking"}), 400
+    if booking["status"] != "confirmed":
+        conn.close()
+        return jsonify({"error": "Worker must accept the booking before payment"}), 400
 
     try:
         valid = payments.verify_checkout_signature(order_id, payment_id, signature)
@@ -451,11 +484,11 @@ def verify_payment():
         return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
 
     conn.execute(
-        "UPDATE bookings SET payment_status = 'paid', payment_id = ?, status = 'confirmed' WHERE id = ?",
+        "UPDATE bookings SET payment_status = 'paid', payment_id = ? WHERE id = ?",
         (payment_id, booking["id"]),
     )
     conn.execute(
-        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Payment verified — booking confirmed')",
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment verified')",
         (booking["id"],),
     )
     worker = conn.execute("SELECT name, phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
@@ -499,13 +532,13 @@ def razorpay_webhook():
 
         conn = get_db()
         booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-        if booking and booking["payment_status"] != "paid":
+        if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
             conn.execute(
-                "UPDATE bookings SET payment_status = 'paid', payment_id = ?, status = 'confirmed' WHERE id = ?",
+                "UPDATE bookings SET payment_status = 'paid', payment_id = ? WHERE id = ?",
                 (payment_id, booking["id"]),
             )
             conn.execute(
-                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Payment confirmed via webhook')",
+                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
                 (booking["id"],),
             )
             worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
@@ -570,7 +603,7 @@ def cancel_booking(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
-    if booking["status"] in ("in_progress", "completed", "cancelled"):
+    if booking["status"] in ("in_progress", "completed", "cancelled", "rejected"):
         conn.close()
         return jsonify({"error": "This booking can no longer be cancelled"}), 400
     payment_status = "refund_pending" if booking["payment_status"] == "paid" else booking["payment_status"]
@@ -626,9 +659,9 @@ def advance_status(booking_id):
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
 
-    if booking["payment_status"] != "paid":
+    if not booking_allows_work(booking):
         conn.close()
-        return jsonify({"error": "Payment abhi baaki hai — status tabhi advance ho sakta hai jab payment ho jaye"}), 400
+        return jsonify({"error": "Online payment pending hai. Cash booking me worker acceptance ke baad kaam start ho sakta hai."}), 400
 
     nxt = next_status(booking["status"])
     if not nxt:
@@ -685,6 +718,70 @@ def worker_bookings():
     return jsonify(rows_to_list(rows))
 
 
+@app.post("/api/worker/bookings/<int:booking_id>/respond")
+def worker_respond_booking(booking_id):
+    """Worker explicitly accepts or rejects a new hire request."""
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+
+    data = request.get_json(force=True) or {}
+    action = (data.get("action") or "").strip().lower()
+    reason = (data.get("reason") or "").strip() or None
+    if action not in ("accept", "reject"):
+        return jsonify({"error": "action must be accept or reject"}), 400
+
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found or not assigned to you"}), 404
+    if booking["status"] != "requested":
+        conn.close()
+        return jsonify({"error": "This request has already been answered"}), 400
+
+    now = datetime.now().isoformat()
+    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name FROM workers WHERE id = ?", (current_worker_id(),)).fetchone()
+
+    if action == "reject":
+        conn.execute(
+            """UPDATE bookings SET status = 'rejected', worker_response_at = ?,
+               worker_rejection_reason = ? WHERE id = ?""",
+            (now, reason, booking_id),
+        )
+        conn.execute(
+            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'rejected', ?)",
+            (booking_id, reason or "Worker rejected the request"),
+        )
+        conn.commit()
+        conn.close()
+        if hirer and hirer["phone"]:
+            notify(hirer["phone"], f"HireNow: {worker['name'] if worker else 'Worker'} ne booking #{booking_id} reject kar di.")
+        return jsonify({"status": "rejected"})
+
+    payment_status = "cash_pending" if booking["payment_method"] == "cash" else "pending"
+    conn.execute(
+        """UPDATE bookings SET status = 'confirmed', payment_status = ?,
+           worker_response_at = ? WHERE id = ?""",
+        (payment_status, now, booking_id),
+    )
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Worker accepted the booking request')",
+        (booking_id,),
+    )
+    conn.commit()
+    conn.close()
+
+    if hirer and hirer["phone"]:
+        payment_msg = "Online payment ab complete karein." if booking["payment_method"] == "online" else "Cash ka payment kaam complete hone ke baad OTP se verify hoga."
+        notify(hirer["phone"], f"HireNow: {worker['name'] if worker else 'Worker'} ne booking #{booking_id} accept kar li. {payment_msg}")
+
+    return jsonify({"status": "confirmed", "payment_status": payment_status, "payment_method": booking["payment_method"]})
+
+
 @app.post("/api/worker/bookings/<int:booking_id>/check-in")
 def worker_check_in(booking_id):
     """
@@ -711,9 +808,12 @@ def worker_check_in(booking_id):
         conn.close()
         return jsonify({"error": "Booking not found or not assigned to you"}), 404
 
-    if booking["payment_status"] != "paid":
+    if booking["status"] in ("requested", "rejected", "cancelled"):
         conn.close()
-        return jsonify({"error": "Hirer ne abhi tak payment nahi kiya — payment hone ke baad hi check-in kar sakte hain"}), 400
+        return jsonify({"error": "Booking request pehle accept honi chahiye"}), 400
+    if not booking_allows_work(booking):
+        conn.close()
+        return jsonify({"error": "Online payment pending hai — hirer payment kare tab kaam start karein"}), 400
 
     nxt = next_status(booking["status"])
     if not nxt:
@@ -737,8 +837,109 @@ def worker_check_in(booking_id):
 
     if hirer and hirer["phone"]:
         notify(hirer["phone"], f"HireNow: Booking #{booking_id} status — {note_map.get(nxt, nxt)}")
+        if nxt == "completed" and booking["payment_method"] == "cash" and booking["payment_status"] != "paid":
+            notify(hirer["phone"], f"HireNow: Kaam complete ho gaya. Cash dene ke baad app me Cash Payment OTP generate karke worker ko dein.")
 
     return jsonify({"status": nxt, "latitude": lat, "longitude": lng})
+
+
+@app.post("/api/bookings/<int:booking_id>/cash-otp")
+def generate_cash_payment_otp(booking_id):
+    """Hirer generates a short-lived OTP only after a cash job is completed."""
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?", (booking_id, current_hirer_id())
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    if booking["payment_method"] != "cash":
+        conn.close()
+        return jsonify({"error": "This booking uses online payment"}), 400
+    if booking["status"] != "completed":
+        conn.close()
+        return jsonify({"error": "Cash OTP can be generated only after the job is completed"}), 400
+    if booking["payment_status"] == "paid":
+        conn.close()
+        return jsonify({"error": "Cash payment is already verified"}), 400
+
+    otp = f"{__import__('secrets').randbelow(1000000):06d}"
+    expires = datetime.now() + timedelta(minutes=10)
+    conn.execute(
+        """UPDATE bookings SET cash_otp_hash = ?, cash_otp_expires_at = ?,
+           payment_status = 'cash_pending' WHERE id = ?""",
+        (generate_password_hash(otp), expires.isoformat(), booking_id),
+    )
+    hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    conn.commit()
+    conn.close()
+
+    if hirer and hirer["phone"]:
+        notify(hirer["phone"], f"HireNow: Booking #{booking_id} cash payment OTP {otp}. Ye OTP worker ko cash dene ke baad hi batayein. 10 min valid.")
+
+    return jsonify({"otp": otp, "expires_in_minutes": 10, "payment_status": "cash_pending"})
+
+
+@app.post("/api/worker/bookings/<int:booking_id>/verify-cash-otp")
+def verify_cash_payment_otp(booking_id):
+    """Worker verifies the hirer's OTP after physically receiving cash."""
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(force=True) or {}
+    otp = (data.get("otp") or "").strip()
+    if not otp:
+        return jsonify({"error": "OTP required"}), 400
+
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found or not assigned to you"}), 404
+    if booking["payment_method"] != "cash" or booking["status"] != "completed":
+        conn.close()
+        return jsonify({"error": "Cash OTP is available only after a completed cash booking"}), 400
+    if booking["payment_status"] == "paid":
+        conn.close()
+        return jsonify({"error": "Payment already verified"}), 400
+    if not booking["cash_otp_hash"] or not booking["cash_otp_expires_at"]:
+        conn.close()
+        return jsonify({"error": "Hirer has not generated a cash OTP yet"}), 400
+    try:
+        expired = datetime.now() > datetime.fromisoformat(booking["cash_otp_expires_at"])
+    except ValueError:
+        expired = True
+    if expired:
+        conn.close()
+        return jsonify({"error": "OTP expired — ask hirer to generate a new OTP"}), 400
+    if not check_password_hash(booking["cash_otp_hash"], otp):
+        conn.close()
+        return jsonify({"error": "Invalid OTP"}), 400
+
+    verified_at = datetime.now().isoformat()
+    conn.execute(
+        """UPDATE bookings SET payment_status = 'paid', cash_verified_at = ?,
+           cash_otp_hash = NULL, cash_otp_expires_at = NULL WHERE id = ?""",
+        (verified_at, booking_id),
+    )
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', 'Cash payment verified by OTP')",
+        (booking_id,),
+    )
+    hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    conn.commit()
+    conn.close()
+
+    if hirer and hirer["phone"]:
+        notify(hirer["phone"], f"HireNow: Booking #{booking_id} cash payment OTP se verify ho gaya.")
+
+    return jsonify({"payment_status": "paid", "cash_verified": True})
 
 
 # ------------------------------------------------------------ messaging
