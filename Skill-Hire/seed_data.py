@@ -15,17 +15,17 @@ from db import get_db, init_db
 
 DEMO_PASSWORD = "kaamgar123"
 
-# name, phone, skill, skills_detail, city, daily_wage, rating, jobs, exp_years, verification_status, hourly_wage, distance_km, availability
+# name, phone, skill, skills_detail, city, daily_wage, rating, jobs, exp_years, verification_status, hourly_wage, distance_km, availability, overtime_wage, background_checked, about
 WORKERS = [
-    ("Ramesh Yadav", "9820011122", "Mistri / Mason", "Deewar chinai, Plaster, Tiling base", "Andheri, Mumbai", 800, 4.7, 132, 9, "verified", 100, 2.4, "today"),
-    ("Suresh Kumar", "9911022233", "Electrician", "Wiring, MCB fitting, Fan/light installation", "Dwarka, Delhi", 700, 4.5, 98, 6, "verified", 90, 4.1, "today"),
-    ("Anita Devi", "9845033344", "Painter", "Wall painting, Waterproofing, Texture work", "Whitefield, Bengaluru", 650, 4.8, 210, 11, "verified", 85, 1.8, "today"),
-    ("Mohan Lal", "9820044455", "Plumber", "Pipeline fitting, Leak repair, Bathroom fitting", "Andheri, Mumbai", 720, 4.3, 76, 5, "unverified", 95, 5.6, "tomorrow"),
-    ("Deepak Singh", "9903055566", "Carpenter", "Furniture banana, Door/window fitting, Modular work", "Salt Lake, Kolkata", 780, 4.6, 154, 8, "verified", 100, 3.2, "today"),
-    ("Iqbal Ansari", "9866066677", "Welder", "Gate/grill welding, Steel fabrication", "Banjara Hills, Hyderabad", 750, 4.4, 60, 7, "pending", 95, 6.7, "tomorrow"),
-    ("Geeta Sharma", "9822077788", "Helper / Majdoor", "Loading-unloading, Site cleaning, General madad", "Kothrud, Pune", 500, 4.2, 88, 3, "verified", 65, 2.9, "today"),
-    ("Vijay Prajapati", "9911088899", "Tile Worker", "Floor tiling, Wall tiling, Marble fitting", "Dwarka, Delhi", 680, 4.6, 140, 10, "verified", 90, 4.5, "today"),
-    ("Farhan Sheikh", "9845099900", "AC Technician", "AC installation, Gas filling, Servicing", "Whitefield, Bengaluru", 690, 4.5, 102, 6, "verified", 90, 3.8, "tomorrow"),
+    ("Ramesh Yadav", "9820011122", "Mistri / Mason", "Deewar chinai, Plaster, Tiling base", "Andheri, Mumbai", 800, 4.7, 132, 9, "verified", 100, 2.4, "today", 140, 1, "Skilled mason with 9+ years of experience in residential and commercial construction work."),
+    ("Suresh Kumar", "9911022233", "Electrician", "Wiring, MCB fitting, Fan/light installation", "Dwarka, Delhi", 700, 4.5, 98, 6, "verified", 90, 4.1, "today", 130, 1, "Skilled electrician with 6+ years of experience in residential and commercial projects."),
+    ("Anita Devi", "9845033344", "Painter", "Wall painting, Waterproofing, Texture work", "Whitefield, Bengaluru", 650, 4.8, 210, 11, "verified", 85, 1.8, "today", 120, 1, "Skilled painter with 11+ years of experience in interior and exterior painting work."),
+    ("Mohan Lal", "9820044455", "Plumber", "Pipeline fitting, Leak repair, Bathroom fitting", "Andheri, Mumbai", 720, 4.3, 76, 5, "unverified", 95, 5.6, "tomorrow", 135, 0, "Experienced plumber handling pipeline fitting, leak repair and bathroom installation work."),
+    ("Deepak Singh", "9903055566", "Carpenter", "Furniture banana, Door/window fitting, Modular work", "Salt Lake, Kolkata", 780, 4.6, 154, 8, "verified", 100, 3.2, "today", 145, 1, "Skilled carpenter with 8+ years of experience in furniture and modular work."),
+    ("Iqbal Ansari", "9866066677", "Welder", "Gate/grill welding, Steel fabrication", "Banjara Hills, Hyderabad", 750, 4.4, 60, 7, "pending", 95, 6.7, "tomorrow", 140, 0, "Experienced welder specializing in gate, grill and steel fabrication work."),
+    ("Geeta Sharma", "9822077788", "Helper / Majdoor", "Loading-unloading, Site cleaning, General madad", "Kothrud, Pune", 500, 4.2, 88, 3, "verified", 65, 2.9, "today", 95, 1, "Reliable helper for loading-unloading, site cleaning and general labour work."),
+    ("Vijay Prajapati", "9911088899", "Tile Worker", "Floor tiling, Wall tiling, Marble fitting", "Dwarka, Delhi", 680, 4.6, 140, 10, "verified", 90, 4.5, "today", 130, 1, "Skilled tile worker with 10+ years of experience in floor, wall and marble fitting."),
+    ("Farhan Sheikh", "9845099900", "AC Technician", "AC installation, Gas filling, Servicing", "Whitefield, Bengaluru", 690, 4.5, 102, 6, "verified", 90, 3.8, "tomorrow", 135, 1, "Skilled AC technician with 6+ years of experience in installation, gas filling and servicing."),
 ]
 
 
@@ -41,12 +41,12 @@ def seed():
         return
 
     pw_hash = generate_password_hash(DEMO_PASSWORD)
-    rows = [(w[0], w[1], pw_hash, w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10], w[11], w[12]) for w in WORKERS]
+    rows = [(w[0], w[1], pw_hash, w[2], w[3], w[4], w[5], w[6], w[7], w[8], w[9], w[10], w[11], w[12], w[13], w[14], w[15]) for w in WORKERS]
 
     cur.executemany(
         """INSERT INTO workers
-           (name, phone, password_hash, skill, skills_detail, city, daily_wage, rating, jobs_completed, experience_years, verification_status, hourly_wage, distance_km, availability)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+           (name, phone, password_hash, skill, skills_detail, city, daily_wage, rating, jobs_completed, experience_years, verification_status, hourly_wage, distance_km, availability, overtime_wage, background_checked, about)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         rows,
     )
     conn.commit()
