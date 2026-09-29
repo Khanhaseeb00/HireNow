@@ -290,6 +290,36 @@
   .cat-row .cat-row-count { font-size: 12px; color: var(--ink-soft); margin-top: 1px; }
   .cat-row .chev { color: var(--ink-soft); font-size: 18px; }
 
+  /* ---- Worker Profile screen ---- */
+  .wp-hero { position: relative; height: 220px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy-2) 100%); display: flex; align-items: center; justify-content: center; }
+  .wp-hero-icons { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between; z-index: 2; }
+  .wp-hero-icons .left-group, .wp-hero-icons .right-group { display: flex; gap: 8px; }
+  .wp-icon-btn { width: 34px; height: 34px; border-radius: 50%; background: rgba(16,27,51,0.45); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .wp-icon-btn.active { color: #E15C7A; }
+  .wp-hero-avatar { width: 84px; height: 84px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 30px; color: #fff; border: 3px solid rgba(255,255,255,0.25); }
+  .wp-card { background: var(--card); border-radius: 20px 20px 0 0; margin-top: -18px; position: relative; z-index: 1; padding: 18px 16px 4px; }
+  .wp-name { font-size: 20px; }
+  .wp-meta { display: flex; align-items: center; gap: 10px; color: var(--ink-soft); font-size: 12.5px; margin-top: 4px; }
+  .wp-meta .stars { color: var(--orange); font-weight: 700; }
+  .wp-badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0 4px; }
+  .wp-badge { font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 16px; display: inline-flex; align-items: center; gap: 4px; background: var(--ok-tint); color: var(--ok); }
+  .wp-badge.bg-check { background: #E3F2FC; color: #2F8FD1; }
+  .wp-badge.exp { background: var(--orange-tint); color: #B5762A; }
+  .wp-divider { border-top: 1px solid var(--line); margin: 16px 0; }
+  .wp-price-row { display: flex; }
+  .wp-price-box { flex: 1; }
+  .wp-price-box.right { text-align: right; }
+  .wp-price-box .amt { font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 19px; }
+  .wp-price-box .lbl { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+  .wp-section-title { font-size: 14.5px; font-weight: 700; margin-bottom: 10px; }
+  .wp-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+  .wp-tag { font-size: 12px; padding: 7px 12px; border-radius: 9px; background: var(--bg); color: var(--ink); }
+  .wp-about { font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+  .wp-action-bar { display: flex; gap: 10px; padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); position: sticky; bottom: 0; background: var(--card); border-top: 1px solid var(--line); margin-top: 20px; }
+  .wp-action-bar .btn-outline { flex: 0 0 auto; padding-left: 22px; padding-right: 22px; display: flex; align-items: center; gap: 7px; }
+  .wp-action-bar .btn-safety { flex: 1; }
+  .wp-chat-hint { font-size: 12px; color: var(--ink-soft); text-align: center; padding: 8px 16px 0; }
+
   /* ---- worker list rows (Worker List screen) ---- */
   .wl-row { display: flex; gap: 12px; background: var(--card); border-radius: 14px; padding: 13px 14px; margin-bottom: 11px; position: relative; }
   .wl-row .avatar { width: 50px; height: 50px; font-size: 14px; flex-shrink: 0; }
@@ -722,9 +752,17 @@
   var stackSearchInput = document.getElementById("stackSearchInput");
   var stackHistory = [];
 
+  var screenStack = [];
+  function nav(fn) { screenStack.push(fn); fn(); }
+  function goBack() {
+    screenStack.pop();
+    if (screenStack.length) { screenStack[screenStack.length - 1](); }
+    else { stackScreen.classList.remove("open"); document.querySelector(".bottom-nav").style.display = "flex"; }
+  }
+
   function openStack(name, title, renderFn, opts) {
     opts = opts || {};
-    stackHistory.push(name);
+    document.querySelector(".stack-header").style.display = "flex";
     stackTitle.textContent = title;
     if (opts.subtitle) { stackSubtitle.textContent = opts.subtitle; stackSubtitle.style.display = "block"; }
     else { stackSubtitle.style.display = "none"; }
@@ -740,20 +778,16 @@
     document.querySelector(".bottom-nav").style.display = "none";
     window.scrollTo(0, 0);
   }
-  function closeStack() {
-    stackHistory.pop();
-    stackScreen.classList.remove("open");
-    document.querySelector(".bottom-nav").style.display = "flex";
-  }
-  document.getElementById("stackBack").addEventListener("click", closeStack);
+  function closeStack() { goBack(); }
+  document.getElementById("stackBack").addEventListener("click", goBack);
 
   document.querySelectorAll("[data-open-screen]").forEach(function (el) {
     el.addEventListener("click", function () { openScreen(el.dataset.openScreen); });
   });
 
   function openScreen(name, arg) {
-    if (name === "categories") openCategoriesScreen();
-    if (name === "worker-list") openWorkerListScreen(arg);
+    if (name === "categories") nav(openCategoriesScreen);
+    if (name === "worker-list") nav(function () { openWorkerListScreen(arg); });
   }
 
   // ---- Categories screen ----
@@ -799,7 +833,7 @@
       chip.addEventListener("click", function () { onChipClick(chip.dataset.group); });
     });
     stackBody.querySelectorAll("[data-goto-skill]").forEach(function (row) {
-      row.addEventListener("click", function () { openWorkerListScreen(row.dataset.gotoSkill); });
+      row.addEventListener("click", function () { nav(function () { openWorkerListScreen(row.dataset.gotoSkill); }); });
     });
   }
 
@@ -877,7 +911,7 @@
         if (state.favorites[btn.dataset.heart]) btn.classList.add("active");
       });
       stackBody.querySelectorAll("[data-worker]").forEach(function (row) {
-        row.addEventListener("click", function () { openHireModal(Number(row.dataset.worker)); });
+        row.addEventListener("click", function () { nav(function () { openWorkerProfileScreen(Number(row.dataset.worker)); }); });
       });
       document.getElementById("filterSortBtn").addEventListener("click", openSortSheet);
     }
@@ -887,6 +921,68 @@
   document.getElementById("fSearch").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { var q = document.getElementById("fSearch").value; openWorkerListScreen(null, { title: "Search Results" }); document.getElementById("stackSearchToggle").click(); document.getElementById("stackSearchInput").value = q; document.getElementById("stackSearchInput").dispatchEvent(new Event("input")); }
   });
+
+  // ---- Worker Profile screen ----
+  function openWorkerProfileScreen(workerId) {
+    var w = state.workers.filter(function (x) { return x.id === workerId; })[0];
+    if (!w) return;
+    openStack("worker-profile", "", function () { renderWorkerProfile(); }, {});
+    document.querySelector(".stack-header").style.display = "none"; // hero replaces the standard header for this screen
+
+    function renderWorkerProfile() {
+      var isVerified = w.verification_status === "verified";
+      var isFav = !!state.favorites[w.id];
+      var overtimeRate = w.overtime_wage || Math.round((w.hourly_wage || 0) * 1.4);
+      var tags = (w.skills_detail || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+
+      stackBody.innerHTML =
+        '<div class="wp-hero" style="background:linear-gradient(135deg, ' + colorFor(w.id) + ' 0%, var(--navy) 130%);">' +
+          '<div class="wp-hero-icons">' +
+            '<div class="left-group"><button class="wp-icon-btn" id="wpBack">←</button></div>' +
+            '<div class="right-group"><button class="wp-icon-btn" id="wpShare">⤴</button><button class="wp-icon-btn ' + (isFav ? "active" : "") + '" id="wpHeart">♥</button></div>' +
+          '</div>' +
+          '<div class="wp-hero-avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
+        '</div>' +
+        '<div class="wp-card">' +
+          '<div class="wp-name" style="font-family:\'Archivo\',sans-serif;font-weight:800;">' + w.name + '</div>' +
+          '<div class="wp-meta"><span class="stars">★ ' + w.rating + '</span><span>(' + w.jobs_completed + ' reviews)</span>' +
+            (w.distance_km != null ? '<span>📍 ' + w.distance_km + ' km away</span>' : '<span>📍 ' + w.city + '</span>') + '</div>' +
+          '<div class="wp-badges">' +
+            (isVerified ? '<span class="wp-badge">✓ ' + t("verified") + '</span>' : '') +
+            (w.background_checked ? '<span class="wp-badge bg-check">🛡 Background Checked</span>' : '') +
+            '<span class="wp-badge exp">⏱ ' + w.experience_years + '+ yrs Exp</span>' +
+          '</div>' +
+          '<div class="wp-divider"></div>' +
+          '<div class="wp-price-row">' +
+            '<div class="wp-price-box"><div class="amt num">' + fmtMoney(w.hourly_wage || w.daily_wage) + '/hr</div><div class="lbl">(Regular Rate)</div></div>' +
+            '<div class="wp-price-box right"><div class="amt num">' + fmtMoney(overtimeRate) + '/hr</div><div class="lbl">(Overtime Rate)</div></div>' +
+          '</div>' +
+          '<div class="wp-divider"></div>' +
+          '<div class="wp-section-title">Skills &amp; Experience</div>' +
+          '<div class="wp-tags">' + tags.map(function (tg) { return '<span class="wp-tag">' + tg + '</span>'; }).join("") + '</div>' +
+          '<div class="wp-divider"></div>' +
+          '<div class="wp-section-title">About</div>' +
+          '<div class="wp-about">' + (w.about || "") + '</div>' +
+        '</div>' +
+        '<div class="wp-action-bar">' +
+          '<button class="btn btn-outline" id="wpChatBtn">💬 Chat</button>' +
+          '<button class="btn btn-safety" id="wpBookBtn">Book Now</button>' +
+        '</div>';
+
+      stackBody.querySelector("#wpBack").addEventListener("click", closeStack);
+      stackBody.querySelector("#wpHeart").addEventListener("click", function (e) {
+        state.favorites[w.id] = !state.favorites[w.id];
+        e.currentTarget.classList.toggle("active", !!state.favorites[w.id]);
+      });
+      stackBody.querySelector("#wpShare").addEventListener("click", function () {
+        if (navigator.share) { navigator.share({ title: w.name, text: w.name + " — " + w.skill + " on HireNow" }).catch(function () {}); }
+      });
+      stackBody.querySelector("#wpBookBtn").addEventListener("click", function () { openHireModal(w.id); });
+      stackBody.querySelector("#wpChatBtn").addEventListener("click", function () {
+        stackBody.querySelector("#wpChatBtn").outerHTML = '<div class="pay-note" style="margin:0;">Booking ke baad chat available hoga</div>';
+      });
+    }
+  }
 
   // ---------------- boot ----------------
   function startApp(hirer) {
@@ -941,7 +1037,7 @@
         '<div class="frating">★ ' + w.rating + '</div></div>';
     }).join("");
     wrap.querySelectorAll("[data-hire]").forEach(function (el) {
-      el.addEventListener("click", function () { openHireModal(Number(el.dataset.hire)); });
+      el.addEventListener("click", function () { nav(function () { openWorkerProfileScreen(Number(el.dataset.hire)); }); });
     });
   }
 
