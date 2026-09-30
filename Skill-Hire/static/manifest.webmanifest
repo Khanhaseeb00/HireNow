@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "Hire Now",
+  "short_name": "Hire Now",
+  "description": "Hire skilled workers instantly or schedule a service.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#101B33",
+  "theme_color": "#101B33",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/brand/hirenow-logo.webp",
+      "sizes": "256x256",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {"name": "Hire a Worker", "short_name": "Hire", "url": "/"},
+    {"name": "Worker Portal", "short_name": "Worker", "url": "/worker"}
+  ]
+}
