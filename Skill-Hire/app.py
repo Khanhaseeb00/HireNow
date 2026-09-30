@@ -121,6 +121,49 @@ def booking_allows_work(booking):
     return booking["payment_status"] == "paid"
 
 
+def parse_booking_start(start_date, start_time):
+    """Parse a booking start using the date/time formats accepted by the UI."""
+    if not start_time:
+        return None
+    raw = str(start_time).strip().upper()
+    for fmt in ("%I:%M %p", "%H:%M"):
+        try:
+            parsed_time = datetime.strptime(raw, fmt).time()
+            parsed_date = datetime.strptime(start_date, "%Y-%m-%d").date()
+            return datetime.combine(parsed_date, parsed_time)
+        except ValueError:
+            continue
+    raise ValueError("start_time must be HH:MM AM/PM or HH:MM")
+
+
+def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours, exclude_booking_id=None, include_requested=True):
+    """Return an overlapping active booking for this worker, if one exists."""
+    blocked = {"confirmed", "en_route", "checked_in", "in_progress"}
+    if include_requested:
+        blocked.add("requested")
+    rows = conn.execute(
+        "SELECT id, start_date, start_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
+        (worker_id, start_date),
+    ).fetchall()
+    new_start = parse_booking_start(start_date, start_time) if start_time else None
+    new_end = new_start + timedelta(hours=int(hours)) if new_start else None
+    for row in rows:
+        if exclude_booking_id is not None and int(row["id"]) == int(exclude_booking_id):
+            continue
+        if row["status"] not in blocked:
+            continue
+        if not new_start or not row["start_time"]:
+            return row
+        try:
+            old_start = parse_booking_start(row["start_date"], row["start_time"])
+        except ValueError:
+            return row
+        old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        if new_start < old_end and old_start < new_end:
+            return row
+    return None
+
+
 def current_hirer_id():
     return session.get("hirer_id")
 
@@ -353,15 +396,36 @@ def create_booking():
     if not worker_id or not start_date:
         return jsonify({"error": "worker_id and start_date are required"}), 400
     try:
-        datetime.strptime(start_date, "%Y-%m-%d")
+        booking_date = datetime.strptime(start_date, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "start_date must be YYYY-MM-DD"}), 400
+    if booking_date < datetime.now().date():
+        return jsonify({"error": "Past dates cannot be booked"}), 400
+    if start_time:
+        try:
+            booking_start = parse_booking_start(start_date, start_time)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        if booking_start <= datetime.now():
+            return jsonify({"error": "Please choose a future booking time"}), 400
 
     conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
     worker = conn.execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
     if not worker:
+        conn.rollback()
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
+
+    conflict = find_worker_schedule_conflict(
+        conn, worker_id, start_date, start_time, hours, include_requested=True
+    )
+    if conflict:
+        conn.rollback()
+        conn.close()
+        return jsonify({
+            "error": "This worker already has a booking that overlaps the selected date and time. Please choose another slot."
+        }), 409
 
     regular_rate = worker["hourly_wage"] or max(1, int(worker["daily_wage"] / 8))
     overtime_rate = worker["overtime_wage"] or regular_rate
@@ -715,6 +779,7 @@ def worker_respond_booking(booking_id):
         return jsonify({"error": "action must be accept or reject"}), 400
 
     conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
         "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
     ).fetchone()
@@ -744,6 +809,17 @@ def worker_respond_booking(booking_id):
         if hirer and hirer["phone"]:
             notify(hirer["phone"], f"HireNow: {worker['name'] if worker else 'Worker'} ne booking #{booking_id} reject kar di.")
         return jsonify({"status": "rejected"})
+
+    conflict = find_worker_schedule_conflict(
+        conn, current_worker_id(), booking["start_date"], booking["start_time"],
+        booking["hours"] or 2, exclude_booking_id=booking_id, include_requested=False
+    )
+    if conflict:
+        conn.rollback()
+        conn.close()
+        return jsonify({
+            "error": "You already have another accepted job that overlaps this booking time."
+        }), 409
 
     payment_status = "cash_pending" if booking["payment_method"] == "cash" else "pending"
     conn.execute(
