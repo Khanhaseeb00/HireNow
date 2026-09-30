@@ -28,7 +28,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
-import hmac
+import secrets
 import re
 import requests as _requests
 
@@ -38,10 +38,17 @@ import notifications
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("KAAMGAR_SECRET_KEY", "dev-secret-change-me")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("FLASK_ENV") != "development",
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
+)
 
 UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(os.path.dirname(__file__), "uploads"))
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
+ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
 
@@ -223,7 +230,7 @@ def worker_portal():
 
 @app.get("/admin")
 def admin_portal():
-    """HireNow operations dashboard. API access still requires ADMIN_KEY."""
+    """HireNow operations dashboard. Admin APIs require an authenticated admin session."""
     return render_template("admin.html")
 
 
@@ -1463,18 +1470,65 @@ def upload_verification_doc():
     return jsonify({"verification_status": "pending"})
 
 
-def _check_admin_key():
-    provided = request.args.get("admin_key", "") or request.headers.get("X-Admin-Key", "")
-    if not ADMIN_KEY:
-        return jsonify({"error": "ADMIN_KEY not set on the server — set it in .env to use admin routes"}), 500
-    if not hmac.compare_digest(provided, ADMIN_KEY):
-        return jsonify({"error": "Invalid admin key"}), 403
+def _check_admin_session():
+    if not session.get("admin_authenticated"):
+        return jsonify({"error": "Admin login required"}), 401
     return None
+
+
+def _check_admin_csrf():
+    expected = session.get("admin_csrf", "")
+    provided = request.headers.get("X-CSRF-Token", "")
+    if not expected or not provided or not secrets.compare_digest(expected, provided):
+        return jsonify({"error": "Invalid security token. Refresh the admin page and try again."}), 403
+    return None
+
+
+@app.post("/api/admin/auth/login")
+def admin_login():
+    if not ADMIN_USERNAME or not ADMIN_PASSWORD_HASH:
+        return jsonify({"error": "Admin credentials are not configured on the server"}), 503
+    data = request.get_json(silent=True) or {}
+    username = str(data.get("username") or "").strip()
+    password = str(data.get("password") or "")
+    if not secrets.compare_digest(username, ADMIN_USERNAME) or not check_password_hash(ADMIN_PASSWORD_HASH, password):
+        return jsonify({"error": "Invalid username or password"}), 401
+    session["admin_authenticated"] = True
+    session["admin_username"] = ADMIN_USERNAME
+    session["admin_csrf"] = secrets.token_urlsafe(32)
+    session.permanent = True
+    return jsonify({"ok": True, "username": ADMIN_USERNAME, "csrf_token": session["admin_csrf"]})
+
+
+@app.get("/api/admin/auth/me")
+def admin_me():
+    err = _check_admin_session()
+    if err:
+        return err
+    return jsonify({
+        "authenticated": True,
+        "username": session.get("admin_username"),
+        "csrf_token": session.get("admin_csrf"),
+    })
+
+
+@app.post("/api/admin/auth/logout")
+def admin_logout():
+    err = _check_admin_session()
+    if err:
+        return err
+    err = _check_admin_csrf()
+    if err:
+        return err
+    session.pop("admin_authenticated", None)
+    session.pop("admin_username", None)
+    session.pop("admin_csrf", None)
+    return jsonify({"ok": True})
 
 
 @app.get("/api/admin/overview")
 def admin_overview():
-    err = _check_admin_key()
+    err = _check_admin_session()
     if err:
         return err
     conn = get_db()
@@ -1492,7 +1546,7 @@ def admin_overview():
 
 @app.get("/api/admin/workers")
 def admin_workers():
-    err = _check_admin_key()
+    err = _check_admin_session()
     if err:
         return err
     conn = get_db()
@@ -1507,7 +1561,7 @@ def admin_workers():
 
 @app.get("/api/admin/bookings")
 def admin_bookings():
-    err = _check_admin_key()
+    err = _check_admin_session()
     if err:
         return err
     conn = get_db()
@@ -1526,7 +1580,7 @@ def admin_bookings():
 
 @app.get("/api/admin/workers/<int:worker_id>/document")
 def admin_worker_document(worker_id):
-    err = _check_admin_key()
+    err = _check_admin_session()
     if err:
         return err
     conn = get_db()
@@ -1540,7 +1594,7 @@ def admin_worker_document(worker_id):
 
 @app.get("/api/admin/workers/pending")
 def admin_pending_workers():
-    err = _check_admin_key()
+    err = _check_admin_session()
     if err:
         return err
     conn = get_db()
@@ -1553,7 +1607,10 @@ def admin_pending_workers():
 
 @app.post("/api/admin/workers/<int:worker_id>/verify")
 def admin_verify_worker(worker_id):
-    err = _check_admin_key()
+    err = _check_admin_session()
+    if err:
+        return err
+    err = _check_admin_csrf()
     if err:
         return err
     data = request.get_json(force=True) or {}
