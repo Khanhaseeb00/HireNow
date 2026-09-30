@@ -23,16 +23,15 @@ in an offline sandbox — see notifications.py):
   - SMS notifications via Twilio. Every notify() call is wrapped so a
     missing/failed SMS never breaks the booking/payment/status flow itself.
 """
-from flask import Flask, request, jsonify, session, render_template_string, render_template, send_from_directory
+from flask import Flask, request, jsonify, session, render_template_string, render_template, Response
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
 import os
 import secrets
 import re
 import requests as _requests
 
-from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql
+from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql
 import payments
 import notifications
 
@@ -45,8 +44,7 @@ app.config.update(
     PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
 )
 
-UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", os.path.join(os.path.dirname(__file__), "uploads"))
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
@@ -80,6 +78,16 @@ def ensure_schema_extensions():
     worker_columns = table_columns(conn, "workers")
     if "is_online" not in worker_columns:
         conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
+
+    kyc_columns = {
+        "id_document_data": binary_sql(),
+        "id_document_mime": "TEXT",
+        "id_document_name": "TEXT",
+        "id_document_uploaded_at": "TEXT",
+    }
+    for column, definition in kyc_columns.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
 
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_availability (
@@ -1461,17 +1469,34 @@ def upload_verification_doc():
         return jsonify({"error": "Empty filename"}), 400
 
     ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in (".jpg", ".jpeg", ".png", ".pdf"):
+    allowed_mimes = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".pdf": "application/pdf",
+    }
+    if ext not in allowed_mimes:
         return jsonify({"error": "Only jpg, png or pdf files are allowed"}), 400
 
-    filename = secure_filename(f"worker_{current_worker_id()}_{int(datetime.now().timestamp())}{ext}")
-    path = os.path.join(UPLOAD_FOLDER, filename)
-    file.save(path)
+    document = file.read(8 * 1024 * 1024 + 1)
+    if not document:
+        return jsonify({"error": "Uploaded document is empty"}), 400
+    if len(document) > 8 * 1024 * 1024:
+        return jsonify({"error": "Verification document must be 8 MB or smaller"}), 413
 
+    expected_mime = allowed_mimes[ext]
+    if file.mimetype and file.mimetype != expected_mime:
+        return jsonify({"error": "File type does not match the uploaded document"}), 400
+
+    stored_name = f"worker_{current_worker_id()}_{int(datetime.now().timestamp())}{ext}"
     conn = get_db()
     conn.execute(
-        "UPDATE workers SET id_document_path = ?, verification_status = 'pending' WHERE id = ?",
-        (filename, current_worker_id()),
+        """UPDATE workers
+           SET id_document_data = ?, id_document_mime = ?, id_document_name = ?,
+               id_document_uploaded_at = ?, id_document_path = NULL,
+               verification_status = 'pending'
+           WHERE id = ?""",
+        (document, expected_mime, stored_name, datetime.utcnow().isoformat(), current_worker_id()),
     )
     conn.commit()
     conn.close()
@@ -1691,12 +1716,18 @@ def admin_worker_document(worker_id):
     if err:
         return err
     conn = get_db()
-    worker = conn.execute("SELECT id_document_path FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    worker = conn.execute(
+        "SELECT id_document_data, id_document_mime, id_document_name FROM workers WHERE id = ?",
+        (worker_id,),
+    ).fetchone()
     conn.close()
-    if not worker or not worker["id_document_path"]:
+    if not worker or not worker["id_document_data"]:
         return jsonify({"error": "Verification document not found"}), 404
-    filename = os.path.basename(worker["id_document_path"])
-    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
+    response = Response(bytes(worker["id_document_data"]), mimetype=worker["id_document_mime"] or "application/octet-stream")
+    response.headers["Content-Disposition"] = f'inline; filename="{worker["id_document_name"] or "verification-document"}"'
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @app.get("/api/admin/workers/pending")
