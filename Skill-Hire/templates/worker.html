@@ -319,7 +319,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 #authScreen .auth-switch a{color:#1677f2;font-weight:800;cursor:pointer}
 #authScreen .field-2{gap:10px}
 @media(max-width:480px){ #authScreen.auth-wrap{margin:0;min-height:100vh;max-width:none;border:0;border-radius:0;box-shadow:none;padding:34px 20px 28px}#authScreen .field-2{grid-template-columns:1fr}}
-</style>
+#authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}</style>
 </head>
 <body>
 
@@ -340,7 +340,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     <div class="row"><label>Phone number</label><div class="phone-field"><span class="country-prefix">+91</span><input type="tel" id="regPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="9876543210"></div></div>
     <div class="row"><label>Password</label><div class="password-field"><input type="password" id="regPassword" autocomplete="new-password" minlength="6" placeholder="Minimum 6 characters"><button type="button" class="password-toggle" data-password-target="regPassword" aria-label="Show password">Show</button></div></div>
     <div class="row field-2">
-      <div><label>Primary skill</label><input type="text" id="regSkill" placeholder="e.g. Electrician"></div>
+      <div><label>Primary skill</label><select id="regSkill" required><option value="">Select skill</option><option>Painter</option><option>Mistri / Mason</option><option>Carpenter</option><option>Tile Worker</option><option>Electrician</option><option>AC Technician</option><option>Welder</option><option>Plumber</option><option>Helper / Majdoor</option><option>Cleaner</option><option>Driver</option></select></div>
       <div><label>Daily wage (₹)</label><input type="number" id="regWage" min="1" inputmode="numeric" placeholder="700"></div>
     </div>
     <div class="row"><label>City / service area</label><input type="text" id="regCity" placeholder="e.g. Andheri, Mumbai"></div>
