@@ -276,6 +276,16 @@
 #panel-navigation [data-external-nav]{background:var(--app-blue);border-radius:11px}
 #panel-navigation [data-real-checkin]{min-height:50px;font-size:15px;font-weight:800}
 #panel-navigation .gps-note{text-align:center;margin-top:10px}
+
+/* Earnings and messages reference pass */
+.earn-periods{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;background:#eaf0f6;border-radius:14px;padding:4px;margin-bottom:13px}
+.earn-periods span{text-align:center;padding:8px 4px;border-radius:11px;font-size:11px;font-weight:700;color:#6c8096}.earn-periods span.active{background:#fff;color:var(--app-navy);box-shadow:0 2px 7px rgba(20,48,78,.08)}
+.earnings-hero{background:linear-gradient(145deg,#082e50,#031d36);color:#fff;border:0!important;padding:20px!important}.earnings-hero .earn-label{font-size:12px;opacity:.75}.earnings-hero .earn-total{color:#fff;font-size:36px;margin:5px 0}.earnings-hero .earn-caption{font-size:11px;opacity:.65}
+.earn-card-title{font-family:'Archivo';font-weight:800;font-size:16px;margin-bottom:5px}.earn-break{align-items:center}.earn-break strong{color:var(--app-navy)}
+.message-search-shell{height:46px;display:flex;align-items:center;gap:9px;background:#fff;border:1px solid var(--app-border);border-radius:14px;padding:0 13px;margin-bottom:13px}.message-search-shell span{font-size:21px;color:#7d8fa2}.message-search-shell input{border:0!important;outline:0;background:transparent!important;box-shadow:none!important;width:100%;height:42px;color:var(--app-text)}
+.message-list-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;overflow:hidden;box-shadow:0 5px 18px rgba(20,48,78,.045)}
+.message-list-card .message-row{border:0!important;border-bottom:1px solid #edf1f5!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:14px 12px!important}.message-list-card .message-row:last-child{border-bottom:0!important}
+.message-list-card .msg-avatar{width:50px;height:50px}.message-list-card .msg-name{font-size:14px}.message-list-card .msg-preview{margin-top:3px}
 </style>
 </head>
 <body>
@@ -380,17 +390,23 @@
     </section>
 
     <section class="panel" id="panel-earnings">
-      <div class="screen-head"><h2>Earnings</h2></div>
-      <div class="earn-card">
-        <div style="color:var(--app-muted)">Total earnings from completed jobs</div>
+      <div class="screen-head"><div><h2>Earnings</h2><div class="screen-sub">Track income from your completed jobs</div></div></div>
+      <div class="earn-periods"><span class="active">This Week</span><span>This Month</span><span>All Time</span></div>
+      <div class="earn-card earnings-hero">
+        <div class="earn-label">Total Earnings</div>
         <div class="earn-total" id="earningsTotal">₹0</div>
+        <div class="earn-caption">Completed jobs</div>
+      </div>
+      <div class="earn-card">
+        <div class="earn-card-title">Earnings Breakdown</div>
         <div id="earningsBreakdown"></div>
       </div>
     </section>
 
     <section class="panel" id="panel-messages">
-      <div class="screen-head"><h2>Messages</h2></div>
-      <div id="messagesScreenList"></div>
+      <div class="screen-head"><div><h2>Messages</h2><div class="screen-sub">Chat with hirers about your jobs</div></div></div>
+      <div class="message-search-shell"><span>⌕</span><input id="workerMessageSearch" type="search" placeholder="Search conversations"></div>
+      <div class="message-list-card"><div id="messagesScreenList"></div></div>
     </section>
 
     <section class="panel" id="panel-profile">
