@@ -69,6 +69,32 @@ def ensure_schema_extensions():
     for column, definition in additions.items():
         if column not in existing:
             conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
+
+    worker_columns = {row["name"] for row in conn.execute("PRAGMA table_info(workers)").fetchall()}
+    if "is_online" not in worker_columns:
+        conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS worker_availability (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id INTEGER NOT NULL,
+            weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+            enabled INTEGER NOT NULL DEFAULT 1,
+            start_time TEXT NOT NULL DEFAULT '08:00',
+            end_time TEXT NOT NULL DEFAULT '20:00',
+            UNIQUE(worker_id, weekday),
+            FOREIGN KEY(worker_id) REFERENCES workers(id)
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS worker_unavailable_dates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            worker_id INTEGER NOT NULL,
+            unavailable_date TEXT NOT NULL,
+            UNIQUE(worker_id, unavailable_date),
+            FOREIGN KEY(worker_id) REFERENCES workers(id)
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -195,6 +221,54 @@ def normalize_worker_skill(value, strict=False):
     if strict:
         return None
     return raw.title() if raw else raw
+
+
+def default_worker_schedule():
+    return [
+        {"weekday": day, "enabled": 1, "start_time": "08:00", "end_time": "20:00"}
+        for day in range(7)
+    ]
+
+
+def get_worker_schedule(conn, worker_id):
+    rows = conn.execute(
+        "SELECT weekday, enabled, start_time, end_time FROM worker_availability WHERE worker_id = ? ORDER BY weekday",
+        (worker_id,),
+    ).fetchall()
+    if not rows:
+        return default_worker_schedule()
+    by_day = {int(row["weekday"]): row_to_dict(row) for row in rows}
+    return [by_day.get(day, {"weekday": day, "enabled": 0, "start_time": "08:00", "end_time": "20:00"}) for day in range(7)]
+
+
+def worker_available_for_slot(conn, worker_id, start_date, start_time, hours):
+    if not start_time:
+        return True, None
+    try:
+        start = parse_booking_start(start_date, start_time)
+    except ValueError:
+        return False, "Invalid booking time"
+    blocked = conn.execute(
+        "SELECT 1 FROM worker_unavailable_dates WHERE worker_id = ? AND unavailable_date = ?",
+        (worker_id, start_date),
+    ).fetchone()
+    if blocked:
+        return False, "Worker is unavailable on this date"
+    schedule = get_worker_schedule(conn, worker_id)
+    day = schedule[start.weekday()]
+    if not int(day["enabled"]):
+        return False, "Worker is not working on this day"
+    try:
+        open_time = datetime.strptime(day["start_time"], "%H:%M").time()
+        close_time = datetime.strptime(day["end_time"], "%H:%M").time()
+    except ValueError:
+        return False, "Worker availability schedule is invalid"
+    day_open = datetime.combine(start.date(), open_time)
+    day_close = datetime.combine(start.date(), close_time)
+    end = start + timedelta(hours=int(hours))
+    if start < day_open or end > day_close:
+        return False, "Selected time is outside the worker's working hours"
+    return True, None
 
 
 def current_hirer_id():
@@ -346,13 +420,130 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rating, jobs_completed FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/worker/availability")
+def worker_get_availability():
+    worker_id = current_worker_id()
+    if not worker_id:
+        return jsonify({"error": "Worker login required"}), 401
+    conn = get_db()
+    worker = conn.execute("SELECT is_online FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    days = get_worker_schedule(conn, worker_id)
+    dates = [row["unavailable_date"] for row in conn.execute(
+        "SELECT unavailable_date FROM worker_unavailable_dates WHERE worker_id = ? ORDER BY unavailable_date",
+        (worker_id,),
+    ).fetchall()]
+    conn.close()
+    return jsonify({"is_online": bool(worker["is_online"]), "days": days, "unavailable_dates": dates})
+
+
+@app.put("/api/worker/availability")
+def worker_update_availability():
+    worker_id = current_worker_id()
+    if not worker_id:
+        return jsonify({"error": "Worker login required"}), 401
+    data = request.get_json(force=True) or {}
+    days = data.get("days")
+    dates = data.get("unavailable_dates", [])
+    is_online = 1 if data.get("is_online", True) else 0
+    if not isinstance(days, list) or len(days) != 7:
+        return jsonify({"error": "days must contain all 7 weekdays"}), 400
+    normalized = []
+    seen = set()
+    for item in days:
+        try:
+            weekday = int(item.get("weekday"))
+            enabled = 1 if item.get("enabled") else 0
+            start_time = str(item.get("start_time") or "08:00")
+            end_time = str(item.get("end_time") or "20:00")
+            datetime.strptime(start_time, "%H:%M")
+            datetime.strptime(end_time, "%H:%M")
+        except (TypeError, ValueError):
+            return jsonify({"error": "Invalid availability day or time"}), 400
+        if weekday < 0 or weekday > 6 or weekday in seen:
+            return jsonify({"error": "Each weekday 0-6 must appear once"}), 400
+        if enabled and start_time >= end_time:
+            return jsonify({"error": "Working start time must be before end time"}), 400
+        seen.add(weekday)
+        normalized.append((weekday, enabled, start_time, end_time))
+    clean_dates = []
+    for value in dates:
+        try:
+            parsed = datetime.strptime(str(value), "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"error": "Unavailable dates must use YYYY-MM-DD"}), 400
+        if parsed >= datetime.now().date():
+            clean_dates.append(parsed.isoformat())
+    conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
+    conn.execute("UPDATE workers SET is_online = ? WHERE id = ?", (is_online, worker_id))
+    for weekday, enabled, start_time, end_time in normalized:
+        conn.execute(
+            """INSERT INTO worker_availability(worker_id, weekday, enabled, start_time, end_time)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(worker_id, weekday) DO UPDATE SET
+                 enabled=excluded.enabled, start_time=excluded.start_time, end_time=excluded.end_time""",
+            (worker_id, weekday, enabled, start_time, end_time),
+        )
+    conn.execute("DELETE FROM worker_unavailable_dates WHERE worker_id = ?", (worker_id,))
+    for value in sorted(set(clean_dates)):
+        conn.execute(
+            "INSERT OR IGNORE INTO worker_unavailable_dates(worker_id, unavailable_date) VALUES (?, ?)",
+            (worker_id, value),
+        )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/workers/<int:worker_id>/available-slots")
+def worker_available_slots(worker_id):
+    date_value = (request.args.get("date") or "").strip()
+    try:
+        hours = int(request.args.get("hours", 2))
+    except ValueError:
+        return jsonify({"error": "hours must be a number"}), 400
+    if hours < 1 or hours > 12:
+        return jsonify({"error": "hours must be between 1 and 12"}), 400
+    try:
+        target_date = datetime.strptime(date_value, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"error": "date must be YYYY-MM-DD"}), 400
+    if target_date < datetime.now().date():
+        return jsonify({"slots": []})
+    conn = get_db()
+    worker = conn.execute("SELECT id FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    if not worker:
+        conn.close()
+        return jsonify({"error": "Worker not found"}), 404
+    schedule = get_worker_schedule(conn, worker_id)
+    day = schedule[target_date.weekday()]
+    slots = []
+    if int(day["enabled"]):
+        blocked_date = conn.execute(
+            "SELECT 1 FROM worker_unavailable_dates WHERE worker_id = ? AND unavailable_date = ?",
+            (worker_id, date_value),
+        ).fetchone()
+        if not blocked_date:
+            cursor = datetime.combine(target_date, datetime.strptime(day["start_time"], "%H:%M").time())
+            close = datetime.combine(target_date, datetime.strptime(day["end_time"], "%H:%M").time())
+            while cursor + timedelta(hours=hours) <= close:
+                label = cursor.strftime("%I:%M %p")
+                if cursor > datetime.now():
+                    conflict = find_worker_schedule_conflict(conn, worker_id, date_value, label, hours, include_requested=True)
+                    if not conflict:
+                        slots.append(label)
+                cursor += timedelta(hours=1)
+    conn.close()
+    return jsonify({"slots": slots, "date": date_value, "hours": hours})
 
 
 # ------------------------------------------------------------ worker routes
@@ -451,6 +642,12 @@ def create_booking():
         conn.rollback()
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
+
+    available, unavailable_reason = worker_available_for_slot(conn, worker_id, start_date, start_time, hours)
+    if not available:
+        conn.rollback()
+        conn.close()
+        return jsonify({"error": unavailable_reason}), 409
 
     conflict = find_worker_schedule_conflict(
         conn, worker_id, start_date, start_time, hours, include_requested=True
