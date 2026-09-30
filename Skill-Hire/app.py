@@ -95,6 +95,20 @@ def ensure_schema_extensions():
             FOREIGN KEY(worker_id) REFERENCES workers(id)
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS in_app_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipient_type TEXT NOT NULL CHECK(recipient_type IN ('hirer','worker')),
+            recipient_id INTEGER NOT NULL,
+            booking_id INTEGER,
+            event_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            message TEXT NOT NULL,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON in_app_notifications(recipient_type, recipient_id, is_read, created_at)")
     conn.commit()
     conn.close()
 
@@ -112,6 +126,84 @@ def notify(phone, body):
         notifications.send_sms(phone, body)
     except Exception as e:
         app.logger.warning(f"SMS to {phone} not sent: {e}")
+
+
+def add_in_app_notification(conn, recipient_type, recipient_id, event_type, title, message, booking_id=None):
+    conn.execute(
+        """INSERT INTO in_app_notifications
+           (recipient_type, recipient_id, booking_id, event_type, title, message)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (recipient_type, recipient_id, booking_id, event_type, title, message),
+    )
+
+
+def notification_payload(conn, recipient_type, recipient_id):
+    rows = conn.execute(
+        """SELECT id, booking_id, event_type, title, message, is_read, created_at
+           FROM in_app_notifications
+           WHERE recipient_type = ? AND recipient_id = ?
+           ORDER BY id DESC LIMIT 100""",
+        (recipient_type, recipient_id),
+    ).fetchall()
+    items = rows_to_list(rows)
+    return {"items": items, "unread_count": sum(1 for item in items if not item["is_read"])}
+
+
+def mark_notification_read(conn, recipient_type, recipient_id, notification_id=None):
+    if notification_id is None:
+        conn.execute(
+            "UPDATE in_app_notifications SET is_read = 1 WHERE recipient_type = ? AND recipient_id = ?",
+            (recipient_type, recipient_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE in_app_notifications SET is_read = 1 WHERE id = ? AND recipient_type = ? AND recipient_id = ?",
+            (notification_id, recipient_type, recipient_id),
+        )
+
+
+@app.get("/api/notifications")
+def hirer_notifications():
+    if not current_hirer_id():
+        return jsonify({"error": "Hirer login required"}), 401
+    conn = get_db()
+    payload = notification_payload(conn, "hirer", current_hirer_id())
+    conn.close()
+    return jsonify(payload)
+
+
+@app.post("/api/notifications/read")
+def hirer_notifications_read():
+    if not current_hirer_id():
+        return jsonify({"error": "Hirer login required"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    mark_notification_read(conn, "hirer", current_hirer_id(), data.get("id"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/worker/notifications")
+def worker_notifications():
+    if not current_worker_id():
+        return jsonify({"error": "Worker login required"}), 401
+    conn = get_db()
+    payload = notification_payload(conn, "worker", current_worker_id())
+    conn.close()
+    return jsonify(payload)
+
+
+@app.post("/api/worker/notifications/read")
+def worker_notifications_read():
+    if not current_worker_id():
+        return jsonify({"error": "Worker login required"}), 401
+    data = request.get_json(silent=True) or {}
+    conn = get_db()
+    mark_notification_read(conn, "worker", current_worker_id(), data.get("id"))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
 
 
 @app.get("/")
