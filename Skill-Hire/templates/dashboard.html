@@ -551,7 +551,7 @@
   html[dir="rtl"] body{text-align:right}html[dir="rtl"] .header-row,html[dir="rtl"] .section-row,html[dir="rtl"] .ref-profile-person{direction:rtl}
   html[dir="rtl"] .bottom-nav,html[dir="rtl"] .category-grid{direction:rtl}
   @media(max-width:360px){.language-grid{grid-template-columns:1fr}}
-</style>
+.slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}</style>
 </head>
 
 <body>
@@ -1365,7 +1365,7 @@
     var now = new Date();
     var today = now.toISOString().slice(0,10);
     var tomorrowDate = new Date(now.getTime() + 86400000).toISOString().slice(0,10);
-    var selectedDate = today, selectedTime = "09:00 AM", selectedHours = 2, selectedService = "regular", selectedPayment = "cash";
+    var selectedDate = today, selectedTime = "", selectedHours = 2, selectedService = "regular", selectedPayment = "cash", availableSlots = [], slotsLoading = true, slotError = "";
 
     openStack("booking", "Book Worker", renderBooking, {});
 
@@ -1387,7 +1387,7 @@
           '</div>' +
           '<div class="ref-label" id="refDateLabel">' + new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short",year:"numeric"}) + '</div>' +
           '<div class="ref-time-grid">' +
-            ["09:00 AM","10:00 AM","11:00 AM","12:00 PM","02:00 PM","04:00 PM"].map(function(ti){return '<button class="ref-time-btn '+(selectedTime===ti?'active':'')+'" data-ref-time="'+ti+'">'+ti+'</button>';}).join("") +
+            (slotsLoading ? '<div class="slot-state">Checking available times...</div>' : (availableSlots.length ? availableSlots.map(function(ti){return '<button class="ref-time-btn '+(selectedTime===ti?'active':'')+'" data-ref-time="'+ti+'">'+ti+'</button>';}).join("") : '<div class="slot-state unavailable">'+(slotError || 'No available slots for this date and duration.')+'</div>')) +
           '</div>' +
           '<div class="ref-label">Duration</div>' +
           '<div class="ref-date-tabs">' + [1,2,3,4].map(function(h){return '<button class="ref-date-btn '+(selectedHours===h?'active':'')+'" data-ref-hours="'+h+'">'+h+' hr'+(h>1?'s':'')+'</button>';}).join("") + '</div>' +
@@ -1405,24 +1405,36 @@
           '<div class="accept-note">Booking request pehle worker ke paas jayegi. Accept hone ke baad hi next payment step active hoga.</div>' +
           '<div class="ref-label">Special Instructions (Optional)</div><textarea class="ref-notes" id="refNotes" placeholder="e.g. specific tools, location details..."></textarea>' +
           '<div class="ref-total"><span>Total: ' + fmtMoney(rate) + ' × ' + selectedHours + ' hrs</span><span class="amt">' + fmtMoney(rate*selectedHours) + '</span></div>' +
-          '<button class="btn btn-safety btn-block" id="refProceed">Send Booking Request</button>' +
+          '<button class="btn btn-safety btn-block" id="refProceed" '+((slotsLoading || !selectedTime)?'disabled':'')+'>Send Booking Request</button>' +
           '<div id="refBookingMsg"></div>' +
         '</div>';
 
-      stackBody.querySelectorAll("[data-ref-date]").forEach(function(btn){btn.addEventListener("click",function(){selectedDate=btn.dataset.refDate;renderBooking();});});
+      stackBody.querySelectorAll("[data-ref-date]").forEach(function(btn){btn.addEventListener("click",function(){selectedDate=btn.dataset.refDate;selectedTime="";loadAvailableSlots();});});
       stackBody.querySelectorAll("[data-ref-time]").forEach(function(btn){btn.addEventListener("click",function(){selectedTime=btn.dataset.refTime;renderBooking();});});
-      stackBody.querySelectorAll("[data-ref-hours]").forEach(function(btn){btn.addEventListener("click",function(){selectedHours=Number(btn.dataset.refHours);renderBooking();});});
+      stackBody.querySelectorAll("[data-ref-hours]").forEach(function(btn){btn.addEventListener("click",function(){selectedHours=Number(btn.dataset.refHours);selectedTime="";loadAvailableSlots();});});
       stackBody.querySelectorAll("[data-ref-service]").forEach(function(btn){btn.addEventListener("click",function(){selectedService=btn.dataset.refService;renderBooking();});});
       stackBody.querySelectorAll("[data-pay-choice]").forEach(function(btn){btn.addEventListener("click",function(){selectedPayment=btn.dataset.payChoice;renderBooking();});});
       stackBody.querySelector("#refCustomDateBtn").addEventListener("click",function(){var input=stackBody.querySelector("#refCustomDate");input.style.display="block";input.click();});
-      stackBody.querySelector("#refCustomDate").addEventListener("change",function(){if(this.value){selectedDate=this.value;renderBooking();}});
+      stackBody.querySelector("#refCustomDate").addEventListener("change",function(){if(this.value){selectedDate=this.value;selectedTime="";loadAvailableSlots();}});
       stackBody.querySelector("#refProceed").addEventListener("click",function(){
+        if(!selectedTime){stackBody.querySelector("#refBookingMsg").innerHTML='<div class="pay-note">Please select an available time.</div>';return;}
         var address=stackBody.querySelector("#refAddress").value.trim();
         var notes=stackBody.querySelector("#refNotes").value.trim();
         if(!address){ stackBody.querySelector("#refBookingMsg").innerHTML='<div class="pay-note">Work address enter karein.</div>'; return; }
         createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,hours:selectedHours,service_type:selectedService,payment_method:selectedPayment,address:address,special_instructions:notes});
       });
     }
+
+    function loadAvailableSlots(){
+      slotsLoading=true;slotError="";availableSlots=[];renderBooking();
+      api("/api/workers/"+w.id+"/available-slots?date="+encodeURIComponent(selectedDate)+"&hours="+selectedHours).then(function(res){
+        slotsLoading=false;
+        if(!res.ok){slotError=res.data.error||"Availability could not be loaded.";availableSlots=[];}
+        else{availableSlots=res.data.slots||[];if(selectedTime&&availableSlots.indexOf(selectedTime)<0)selectedTime="";}
+        renderBooking();
+      }).catch(function(){slotsLoading=false;slotError="Availability could not be loaded.";availableSlots=[];renderBooking();});
+    }
+    loadAvailableSlots();
   }
 
   function createReferenceBooking(worker, payload) {
