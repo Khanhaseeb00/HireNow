@@ -319,7 +319,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 #authScreen .auth-switch a{color:#1677f2;font-weight:800;cursor:pointer}
 #authScreen .field-2{gap:10px}
 @media(max-width:480px){ #authScreen.auth-wrap{margin:0;min-height:100vh;max-width:none;border:0;border-radius:0;box-shadow:none;padding:34px 20px 28px}#authScreen .field-2{grid-template-columns:1fr}}
-#authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}</style>
+#authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}.availability-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;padding:16px;margin-bottom:12px}.availability-title{font-weight:800;font-size:15px;margin-bottom:12px}.availability-online{display:flex;align-items:center;justify-content:space-between;gap:15px}.availability-online strong,.availability-online span{display:block}.availability-online span{font-size:10px;color:var(--app-muted);margin-top:3px}.availability-switch{position:relative;width:48px;height:27px}.availability-switch input{opacity:0}.availability-switch>span{position:absolute;inset:0;background:#ccd6df;border-radius:20px}.availability-switch>span:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}.availability-switch input:checked+span{background:#20b978}.availability-switch input:checked+span:before{transform:translateX(21px)}.availability-day{display:grid;grid-template-columns:84px 1fr 1fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f5}.availability-day input[type=time]{width:100%;height:38px;border:1px solid #dbe4ed;border-radius:10px}.availability-day.off input[type=time]{opacity:.38}.availability-date-add{display:grid;grid-template-columns:1fr auto;gap:8px}.availability-date-add input{height:42px;border:1px solid #dbe4ed;border-radius:11px;padding:0 10px}.availability-date-add button{border:0;border-radius:11px;padding:0 15px;background:var(--app-navy);color:#fff}.unavailable-chip{display:inline-flex;gap:6px;margin:9px 6px 0 0;padding:7px 9px;background:#fff1ee;color:#b14b37;border-radius:10px;font-size:10px}.unavailable-chip button{border:0;background:transparent;color:inherit}</style>
 </head>
 <body>
 
@@ -460,10 +460,10 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
         <div class="profile-field flatcard"><div class="label" id="profLabelJobs">Jobs poore hue</div><div class="value num" id="profileJobs">0</div></div>
         <div class="profile-field flatcard"><div class="label" id="profLabelVerify">ID Verification</div><div class="value"><span class="badge" id="profileVerifyBadge">—</span></div></div>
       </div>
-      <button class="btn btn-outline btn-block" id="openSettingsBtn" style="margin-top:14px;">⚙ Settings</button>
+      <button class="btn btn-outline btn-block" id="openAvailabilityBtn" style="margin-top:14px;">Availability &amp; Schedule</button><button class="btn btn-outline btn-block" id="openSettingsBtn" style="margin-top:9px;">⚙ Settings</button>
     </section>
 
-    <section class="panel" id="panel-settings">
+    <section class="panel" id="panel-availability"><div class="screen-head"><button class="screen-back" id="availabilityBackBtn">‹</button><div><h2>Availability</h2><div class="screen-sub">Choose when hirers can book you</div></div></div><div class="availability-card"><div class="availability-online"><div><strong>Accept new bookings</strong><span>Turn off when you do not want new requests</span></div><label class="availability-switch"><input type="checkbox" id="availabilityOnline" checked><span></span></label></div></div><div class="availability-card"><div class="availability-title">Weekly working hours</div><div id="availabilityDays"></div></div><div class="availability-card"><div class="availability-title">Unavailable dates</div><div class="availability-date-add"><input type="date" id="availabilityDate"><button type="button" id="addUnavailableDate">Add</button></div><div id="unavailableDateList"></div></div><button class="btn btn-safety btn-block availability-save" id="saveAvailabilityBtn">Save Availability</button><div id="availabilityMessage" class="gps-note"></div></section><section class="panel" id="panel-settings">
       <div class="screen-head"><button class="screen-back" id="settingsBackBtn">‹</button><div><h2 class="section-title">Settings</h2><div class="screen-sub">Personalize your HireNow experience</div></div></div>
       <div class="settings-block flatcard">
         <h3>Theme</h3>
@@ -579,6 +579,22 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
   document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.tab);});});
   document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.backTab);});});
+  var availabilityState={days:[],unavailable_dates:[],is_online:true};
+  var dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  function renderAvailability(){
+    var wrap=document.getElementById("availabilityDays");
+    wrap.innerHTML=availabilityState.days.map(function(day){return '<div class="availability-day '+(day.enabled?"":"off")+'" data-availability-day="'+day.weekday+'"><label><input type="checkbox" data-day-enabled '+(day.enabled?"checked":"")+'> '+dayNames[day.weekday]+'</label><input type="time" data-day-start value="'+day.start_time+'"><input type="time" data-day-end value="'+day.end_time+'"></div>';}).join("");
+    document.getElementById("availabilityOnline").checked=!!availabilityState.is_online;
+    var dates=document.getElementById("unavailableDateList");
+    dates.innerHTML=availabilityState.unavailable_dates.map(function(date){return '<span class="unavailable-chip">'+date+' <button type="button" data-remove-date="'+date+'">×</button></span>';}).join("");
+    wrap.querySelectorAll("[data-day-enabled]").forEach(function(box){box.addEventListener("change",function(){box.closest(".availability-day").classList.toggle("off",!box.checked);});});
+    dates.querySelectorAll("[data-remove-date]").forEach(function(btn){btn.addEventListener("click",function(){availabilityState.unavailable_dates=availabilityState.unavailable_dates.filter(function(x){return x!==btn.dataset.removeDate;});renderAvailability();});});
+  }
+  function loadAvailability(){return api("/api/worker/availability").then(function(res){availabilityState=res;renderAvailability();});}
+  document.getElementById("openAvailabilityBtn").addEventListener("click",function(){showWorkerPanel("availability");loadAvailability().catch(function(e){document.getElementById("availabilityMessage").textContent=e.message;});});
+  document.getElementById("availabilityBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("addUnavailableDate").addEventListener("click",function(){var input=document.getElementById("availabilityDate"),value=input.value;if(!value)return;if(availabilityState.unavailable_dates.indexOf(value)<0)availabilityState.unavailable_dates.push(value);input.value="";renderAvailability();});
+  document.getElementById("saveAvailabilityBtn").addEventListener("click",function(){var days=Array.from(document.querySelectorAll("[data-availability-day]")).map(function(row){return {weekday:Number(row.dataset.availabilityDay),enabled:row.querySelector("[data-day-enabled]").checked,start_time:row.querySelector("[data-day-start]").value,end_time:row.querySelector("[data-day-end]").value};});api("/api/worker/availability",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({is_online:document.getElementById("availabilityOnline").checked,days:days,unavailable_dates:availabilityState.unavailable_dates})}).then(function(){document.getElementById("availabilityMessage").textContent="Availability saved.";loadAvailability();}).catch(function(e){document.getElementById("availabilityMessage").textContent=e.message;});});
   document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
   document.getElementById("settingsBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
 
