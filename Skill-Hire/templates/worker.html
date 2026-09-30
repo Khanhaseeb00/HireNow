@@ -286,6 +286,19 @@
 .message-list-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;overflow:hidden;box-shadow:0 5px 18px rgba(20,48,78,.045)}
 .message-list-card .message-row{border:0!important;border-bottom:1px solid #edf1f5!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:14px 12px!important}.message-list-card .message-row:last-child{border-bottom:0!important}
 .message-list-card .msg-avatar{width:50px;height:50px}.message-list-card .msg-name{font-size:14px}.message-list-card .msg-preview{margin-top:3px}
+
+/* Profile settings and final consistency pass */
+#panel-profile .screen-head .section-title,#panel-settings .screen-head .section-title{margin:0}
+.reference-profile-hero{display:flex!important;align-items:center;gap:15px;background:linear-gradient(145deg,#082e50,#031d36)!important;border:0!important;color:#fff;padding:20px!important}
+.reference-profile-hero .profile-avatar{width:78px;height:78px;flex:0 0 78px;border:3px solid rgba(255,255,255,.3);background:#fff;color:var(--app-navy)}
+.profile-main{min-width:0;flex:1}.profile-name-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.profile-name-line #profileName{font-family:'Archivo';font-size:20px;font-weight:800}.profile-online-dot{background:#20b978;color:#fff;font-size:9px;font-weight:800;padding:4px 7px;border-radius:10px}.profile-phone-line{font-size:12px;opacity:.72;margin-top:3px}.profile-skill-chip{display:inline-block;margin-top:8px;padding:5px 9px;border-radius:10px;background:rgba(255,255,255,.12);font-size:11px;font-weight:700}
+#panel-profile .profile-grid{grid-template-columns:repeat(2,1fr);padding:0;overflow:hidden}#panel-profile .profile-field{padding:15px 8px;border-right:1px solid #edf1f5;border-bottom:1px solid #edf1f5}#panel-profile .profile-field:nth-child(even){border-right:0}#panel-profile .profile-field:nth-last-child(-n+2){border-bottom:0}
+#openSettingsBtn{height:50px;border-radius:14px;font-weight:800;background:#fff}
+#panel-settings .settings-block{padding:16px;margin-bottom:12px}#panel-settings .settings-block h3{font-size:16px;margin-bottom:2px}#panel-settings .choice-row{gap:8px;margin-top:12px}#panel-settings .choice-btn{min-height:42px}
+#panel-settings .settings-block:nth-of-type(2) .choice-row{display:grid;grid-template-columns:repeat(2,1fr)}
+#panel-settings .settings-block:nth-of-type(2) .choice-btn{justify-content:flex-start;text-align:left}
+nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:18px;height:3px;border-radius:3px;background:var(--app-orange)}
+@media(max-width:360px){#panel-profile .profile-grid{grid-template-columns:1fr}.reference-profile-hero{padding:16px!important}#panel-settings .settings-block:nth-of-type(2) .choice-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -410,12 +423,13 @@
     </section>
 
     <section class="panel" id="panel-profile">
-      <h2 class="section-title" id="profileHeading">Mera Profile</h2>
-      <div class="profile-hero flatcard">
+      <div class="screen-head"><div><h2 class="section-title" id="profileHeading">My Profile</h2><div class="screen-sub">Manage your worker account</div></div></div>
+      <div class="profile-hero flatcard reference-profile-hero">
         <div class="profile-avatar" id="profileAvatar">?</div>
-        <div>
-          <div style="font-size:20px;font-weight:800;" id="profileName">—</div>
-          <div style="color:var(--ink-soft);font-size:13.5px;" id="profilePhone">—</div>
+        <div class="profile-main">
+          <div class="profile-name-line"><div id="profileName">—</div><span class="profile-online-dot">Online</span></div>
+          <div class="profile-phone-line" id="profilePhone">—</div>
+          <div class="profile-skill-chip" id="profileHeroSkill">Worker</div>
         </div>
       </div>
       <div class="profile-grid">
@@ -430,7 +444,7 @@
     </section>
 
     <section class="panel" id="panel-settings">
-      <h2 class="section-title">Settings</h2>
+      <div class="screen-head"><button class="screen-back" id="settingsBackBtn">‹</button><div><h2 class="section-title">Settings</h2><div class="screen-sub">Personalize your HireNow experience</div></div></div>
       <div class="settings-block flatcard">
         <h3>Theme</h3>
         <div class="sub">Dark ya Light mode chunein</div>
@@ -546,6 +560,7 @@
   document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.tab);});});
   document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.backTab);});});
   document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
+  document.getElementById("settingsBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
 
   var viewJobsBtn=document.getElementById("viewJobsBtn");
   if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){showWorkerPanel("jobs");});
@@ -643,6 +658,7 @@
     document.getElementById("profileName").textContent = state.worker.name;
     document.getElementById("profilePhone").textContent = state.worker.phone;
     document.getElementById("profileSkill").textContent = state.worker.skill || "—";
+    var heroSkill=document.getElementById("profileHeroSkill"); if(heroSkill) heroSkill.textContent=state.worker.skill || "Worker";
     document.getElementById("profileCity").textContent = state.worker.city || "—";
     document.getElementById("profileWage").textContent = state.worker.daily_wage ? fmtMoney(state.worker.daily_wage) : "—";
     document.getElementById("profileRating").textContent = state.worker.rating != null ? ("★ " + state.worker.rating) : "—";
