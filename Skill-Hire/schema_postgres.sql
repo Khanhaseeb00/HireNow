@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS workers (
     verification_status TEXT DEFAULT 'unverified',
     id_document_path TEXT,
     is_online INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS hirers (
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS hirers (
     name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     razorpay_order_id TEXT,
     cancelled_at TEXT,
     cancellation_reason TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS booking_events (
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS booking_events (
     note TEXT,
     latitude REAL,
     longitude REAL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_role TEXT NOT NULL,
     sender_id BIGINT NOT NULL,
     body TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS worker_availability (
@@ -104,7 +104,7 @@ CREATE TABLE IF NOT EXISTS in_app_notifications (
     title TEXT NOT NULL,
     message TEXT NOT NULL,
     is_read INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_recipient
