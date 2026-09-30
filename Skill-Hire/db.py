@@ -121,6 +121,14 @@ def for_update(sql):
     return f"{sql} FOR UPDATE" if DATABASE_URL else sql
 
 
+def text_timestamp_default():
+    return "(CURRENT_TIMESTAMP::text)" if DATABASE_URL else "CURRENT_TIMESTAMP"
+
+
+def foreign_id_sql():
+    return "BIGINT" if DATABASE_URL else "INTEGER"
+
+
 def init_db():
     """Create tables if they do not exist. Safe to call at startup."""
     conn = get_db()
