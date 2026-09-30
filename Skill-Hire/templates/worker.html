@@ -258,7 +258,7 @@
 #panel-profile .profile-grid{background:#fff;border:1px solid var(--app-border);border-radius:17px;padding:5px}
 #panel-profile .profile-field{box-shadow:none}
 @media(max-width:430px){main{padding-left:12px;padding-right:12px}.worker-stats{margin-left:0;margin-right:0}}
-</style>
+.reference-section-head{display:flex;align-items:center;justify-content:space-between;margin:0 2px 9px}.reference-section-head .section-title{margin:0}.text-action{border:0;background:transparent;color:var(--app-blue);font-weight:800;padding:8px}.screen-sub{font-size:12px;color:var(--app-muted);margin-top:2px}.jobs-summary{display:grid;grid-template-columns:repeat(3,1fr);background:#fff;border:1px solid var(--app-border);border-radius:17px;margin-bottom:14px;overflow:hidden}.jobs-summary>div{text-align:center;padding:12px 3px;border-right:1px solid #edf1f5}.jobs-summary>div:last-child{border-right:0}.jobs-summary strong{display:block;font-size:12px;color:var(--app-text)}.jobs-summary span{font-size:9px;color:var(--app-muted)}#panel-jobs .job-filter{border:1px solid #dfe7ef;background:#fff;color:#657a91}#panel-jobs .job-filter.active{background:var(--app-orange);border-color:var(--app-orange);color:#fff}</style>
 </head>
 <body>
 
@@ -335,12 +335,12 @@
         <div id="verifyUploadArea" style="margin-top:10px;"></div>
       </div>
 
-      <h2 class="section-title">Meri bookings</h2>
+      <div class="reference-section-head"><h2 class="section-title">Today&#39;s Jobs</h2><button type="button" id="homeJobsShortcut" class="text-action">View All</button></div>
       <div id="bookingsList"><div class="empty">Loading...</div></div>
     </section>
 
     <section class="panel" id="panel-jobs">
-      <div class="screen-head"><h2>My Jobs</h2></div>
+      <div class="screen-head"><div><h2>My Jobs</h2><div class="screen-sub">Manage requests, upcoming work and completed jobs</div></div></div><div class="jobs-summary"><div><strong>Requests</strong><span>New jobs</span></div><div><strong>Active</strong><span>In progress</span></div><div><strong>Done</strong><span>Completed</span></div></div>
       <div class="job-filter-row">
         <button class="job-filter active" data-job-filter="all">All</button>
         <button class="job-filter" data-job-filter="ongoing">Ongoing</button>
