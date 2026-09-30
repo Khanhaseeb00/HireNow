@@ -32,7 +32,7 @@ import secrets
 import re
 import requests as _requests
 
-from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql
+from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update
 import payments
 import notifications
 
@@ -697,7 +697,7 @@ def list_workers():
 @app.get("/api/workers/<int:worker_id>")
 def get_worker(worker_id):
     conn = get_db()
-    worker = conn.execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ?"), (worker_id,)).fetchone()
     conn.close()
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
@@ -1136,7 +1136,7 @@ def worker_respond_booking(booking_id):
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
+        for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())
     ).fetchone()
     if not booking:
         conn.close()
