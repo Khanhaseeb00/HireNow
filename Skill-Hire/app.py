@@ -242,6 +242,9 @@ def get_worker_schedule(conn, worker_id):
 
 
 def worker_available_for_slot(conn, worker_id, start_date, start_time, hours):
+    worker = conn.execute("SELECT is_online FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    if not worker or not int(worker["is_online"]):
+        return False, "Worker is currently not accepting new bookings"
     if not start_time:
         return True, None
     try:
@@ -520,14 +523,14 @@ def worker_available_slots(worker_id):
     if target_date < datetime.now().date():
         return jsonify({"slots": []})
     conn = get_db()
-    worker = conn.execute("SELECT id FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    worker = conn.execute("SELECT id, is_online FROM workers WHERE id = ?", (worker_id,)).fetchone()
     if not worker:
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
     schedule = get_worker_schedule(conn, worker_id)
     day = schedule[target_date.weekday()]
     slots = []
-    if int(day["enabled"]):
+    if int(worker["is_online"]) and int(day["enabled"]):
         blocked_date = conn.execute(
             "SELECT 1 FROM worker_unavailable_dates WHERE worker_id = ? AND unavailable_date = ?",
             (worker_id, date_value),
