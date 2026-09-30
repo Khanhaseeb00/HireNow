@@ -762,14 +762,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var wrap = document.getElementById("bookingsList");
     if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + wt("no_bookings") + '</div>'; return; }
     wrap.innerHTML = state.bookings.map(function (b) {
-      var actionLabel = NEXT_ACTION_BY_LANG[state.lang][b.status];
+      var actionMap = NEXT_ACTION_BY_LANG[state.lang] || NEXT_ACTION_BY_LANG.en;\n      var statusMap = STATUS_LABELS_BY_LANG[state.lang] || STATUS_LABELS_BY_LANG.en;\n      var actionLabel = actionMap[b.status];
       var canWork = (b.payment_method === "cash" && b.payment_status === "cash_pending") || b.payment_status === "paid";
       var canAct = canWork && actionLabel;
       var idx = STATUS_FLOW.indexOf(b.status);
       var nodes = idx >= 0 ? STATUS_FLOW.map(function (st, i) {
         var cls = i < idx ? "done" : (i === idx ? "now" : "");
         var inner = i < idx ? "✓" : (i + 1);
-        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + (STATUS_LABELS_BY_LANG[state.lang][st] || st) + '</div></div>';
+        return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + (statusMap[st] || st) + '</div></div>';
       }).join("") : "";
       var paymentText = b.payment_method === "cash"
         ? (b.payment_status === "paid" ? "Cash verified" : "Cash after work")
@@ -780,7 +780,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
           '<div class="bcard-head"><div><div class="name">' + b.hirer_name + '</div>' +
           '<div class="meta">' + fmtDate(b.start_date) + ' · ' + (b.hours || 2) + ' hrs</div></div>' +
           '<div class="num">' + fmtMoney(b.total_amount) + '</div></div>' +
-          '<span class="status-pill">' + (STATUS_LABELS_BY_LANG[state.lang][b.status] || b.status) + ' · ' + paymentText + '</span>' +
+          '<span class="status-pill">' + (statusMap[b.status] || b.status) + ' · ' + paymentText + '</span>' +
           (b.status === "requested" ?
             '<div style="display:flex;gap:8px;margin:10px 0;">' +
               '<button class="btn btn-safety" data-accept="' + b.id + '" style="flex:1;">Accept</button>' +
@@ -887,7 +887,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
 
   function renderEarningsScreen(){
-    var completed=state.bookings.filter(function(b){return b.status==="completed";});
+    var completed=state.bookings.filter(function(b){return b.status==="completed" && b.payment_status==="paid";});
     var total=completed.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
     document.getElementById("earningsTotal").textContent=fmtMoney(total);
     var box=document.getElementById("earningsBreakdown");
