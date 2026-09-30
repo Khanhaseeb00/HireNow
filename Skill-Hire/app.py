@@ -164,6 +164,39 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
     return None
 
 
+WORKER_SKILLS = (
+    "Painter", "Mistri / Mason", "Carpenter", "Tile Worker", "Electrician",
+    "AC Technician", "Welder", "Plumber", "Helper / Majdoor", "Cleaner", "Driver",
+)
+
+
+def normalize_worker_skill(value, strict=False):
+    """Map common spelling/case variants to one marketplace category name."""
+    raw = re.sub(r"\s+", " ", str(value or "").strip())
+    key = re.sub(r"[^a-z0-9]+", " ", raw.lower()).strip()
+    aliases = {
+        "painter": "Painter", "painting": "Painter", "paint": "Painter",
+        "mistri": "Mistri / Mason", "mason": "Mistri / Mason", "mistri mason": "Mistri / Mason",
+        "carpenter": "Carpenter", "carpentry": "Carpenter",
+        "tile": "Tile Worker", "tiles": "Tile Worker", "tile worker": "Tile Worker",
+        "electric": "Electrician", "electrical": "Electrician", "electrician": "Electrician",
+        "ac": "AC Technician", "ac technician": "AC Technician", "ac repair": "AC Technician",
+        "air conditioner technician": "AC Technician", "air conditioning technician": "AC Technician",
+        "welder": "Welder", "welding": "Welder",
+        "plumber": "Plumber", "plumbing": "Plumber",
+        "helper": "Helper / Majdoor", "majdoor": "Helper / Majdoor", "mazdoor": "Helper / Majdoor",
+        "helper majdoor": "Helper / Majdoor", "helper mazdoor": "Helper / Majdoor",
+        "cleaner": "Cleaner", "cleaning": "Cleaner",
+        "driver": "Driver", "driving": "Driver",
+    }
+    canonical = aliases.get(key)
+    if canonical:
+        return canonical
+    if strict:
+        return None
+    return raw.title() if raw else raw
+
+
 def current_hirer_id():
     return session.get("hirer_id")
 
@@ -263,9 +296,9 @@ def me():
 def worker_register():
     data = request.get_json(force=True) or {}
     name, phone, password = data.get("name"), data.get("phone"), data.get("password")
-    skill, city, daily_wage = data.get("skill"), data.get("city"), data.get("daily_wage")
+    skill, city, daily_wage = normalize_worker_skill(data.get("skill"), strict=True), data.get("city"), data.get("daily_wage")
     if not (name and phone and password and skill and city and daily_wage):
-        return jsonify({"error": "name, phone, password, skill, city and daily_wage are required"}), 400
+        return jsonify({"error": "name, phone, password, a valid skill category, city and daily_wage are required"}), 400
 
     conn = get_db()
     existing = conn.execute("SELECT id FROM workers WHERE phone = ?", (phone,)).fetchone()
@@ -347,6 +380,7 @@ def list_workers():
     conn.close()
     result = rows_to_list(workers)
     for w in result:
+        w["skill"] = normalize_worker_skill(w.get("skill"))
         w.pop("password_hash", None)
         w.pop("phone", None)
         w.pop("id_document_path", None)
@@ -361,6 +395,7 @@ def get_worker(worker_id):
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
     result = row_to_dict(worker)
+    result["skill"] = normalize_worker_skill(result.get("skill"))
     result.pop("password_hash", None)
     result.pop("phone", None)
     result.pop("id_document_path", None)
