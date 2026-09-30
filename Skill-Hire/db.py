@@ -5,7 +5,6 @@ DATABASE_URL. Application code continues to use qmark placeholders so existing
 queries do not need a wholesale rewrite.
 """
 import os
-import re
 import sqlite3
 
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "kaamgar.db"))
@@ -50,6 +49,7 @@ class _PostgresCursor:
     def rowcount(self):
         return self._cursor.rowcount
 
+    @property
     @property
     def lastrowid(self):
         # All application inserts that read lastrowid target SERIAL/BIGSERIAL
