@@ -8,7 +8,7 @@ import os
 import sqlite3
 
 DB_PATH = os.environ.get("DATABASE_PATH", os.path.join(os.path.dirname(__file__), "kaamgar.db"))
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+DATABASE_URL = (os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_MIGRATION_URL") or "").strip()
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema.sql")
 POSTGRES_SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema_postgres.sql")
 
@@ -114,6 +114,11 @@ def table_columns(conn, table_name):
 
 def id_column_sql():
     return "BIGSERIAL PRIMARY KEY" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+
+def for_update(sql):
+    """Add a row lock on PostgreSQL while keeping SQLite syntax valid."""
+    return f"{sql} FOR UPDATE" if DATABASE_URL else sql
 
 
 def init_db():
