@@ -16,7 +16,7 @@ What's real:
     own phone/browser — see templates/worker.html), not a manual/faked ping
   - In-app messaging between hirer and worker, per booking
   - Manual ID-verification workflow: worker uploads a photo, an admin
-    approves/rejects it via /api/admin/workers/... (needs ADMIN_KEY in .env)
+    approves/rejects it via authenticated admin routes
 
 What's stubbed (needs YOUR OWN third-party account + keys, can't be tested
 in an offline sandbox — see notifications.py):
