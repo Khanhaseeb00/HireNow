@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS workers (
     experience_years INTEGER DEFAULT 0,
     verification_status TEXT DEFAULT 'unverified',
     id_document_path TEXT,
+    id_document_data BYTEA,
+    id_document_mime TEXT,
+    id_document_name TEXT,
+    id_document_uploaded_at TEXT,
     is_online INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
