@@ -773,6 +773,11 @@ def create_booking():
         (booking_id, f"Booking request sent to worker. Payment method: {payment_method}."),
     )
     hirer = conn.execute("SELECT name FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
+    add_in_app_notification(
+        conn, "worker", worker_id, "booking_request", "New booking request",
+        f"{hirer['name'] if hirer else 'A hirer'} requested {hours} hr on {start_date} {start_time or ''}.",
+        booking_id,
+    )
     conn.commit()
     conn.close()
 
@@ -898,6 +903,8 @@ def verify_payment():
     )
     worker = conn.execute("SELECT name, phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
     hirer = conn.execute("SELECT name, phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    add_in_app_notification(conn, "hirer", booking["hirer_id"], "payment_paid", "Payment successful", f"Online payment for booking #{booking['id']} was verified.", booking["id"])
+    add_in_app_notification(conn, "worker", booking["worker_id"], "payment_paid", "Booking paid", f"Online payment for booking #{booking['id']} is complete. You can proceed with the job.", booking["id"])
     conn.commit()
     conn.close()
 
@@ -1131,6 +1138,10 @@ def worker_respond_booking(booking_id):
             "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'rejected', ?)",
             (booking_id, reason or "Worker rejected the request"),
         )
+        add_in_app_notification(
+            conn, "hirer", booking["hirer_id"], "booking_rejected", "Booking declined",
+            f"{worker['name'] if worker else 'Worker'} declined booking #{booking_id}.", booking_id
+        )
         conn.commit()
         conn.close()
         if hirer and hirer["phone"]:
@@ -1157,6 +1168,10 @@ def worker_respond_booking(booking_id):
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Worker accepted the booking request')",
         (booking_id,),
+    )
+    add_in_app_notification(
+        conn, "hirer", booking["hirer_id"], "booking_accepted", "Booking accepted",
+        f"{worker['name'] if worker else 'Worker'} accepted booking #{booking_id}.", booking_id
     )
     conn.commit()
     conn.close()
@@ -1218,6 +1233,10 @@ def worker_check_in(booking_id):
         (booking_id, nxt, note_map.get(nxt, nxt), lat, lng),
     )
     hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    add_in_app_notification(
+        conn, "hirer", booking["hirer_id"], "booking_status", "Booking update",
+        f"Booking #{booking_id}: {note_map.get(nxt, nxt)}", booking_id
+    )
     conn.commit()
     conn.close()
 
@@ -1319,6 +1338,8 @@ def verify_cash_payment_otp(booking_id):
         (booking_id,),
     )
     hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+    add_in_app_notification(conn, "hirer", booking["hirer_id"], "cash_verified", "Cash payment verified", f"Cash payment for booking #{booking_id} was verified by OTP.", booking_id)
+    add_in_app_notification(conn, "worker", booking["worker_id"], "cash_verified", "Cash payment received", f"Cash payment for booking #{booking_id} is verified and added to earnings.", booking_id)
     conn.commit()
     conn.close()
 
@@ -1384,8 +1405,10 @@ def send_message(booking_id):
     # notify whichever side didn't send it
     if role == "hirer":
         other = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+        add_in_app_notification(conn, "worker", booking["worker_id"], "message", "New message", f"New message on booking #{booking_id}: {body[:80]}", booking_id)
     else:
         other = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
+        add_in_app_notification(conn, "hirer", booking["hirer_id"], "message", "New message", f"New message on booking #{booking_id}: {body[:80]}", booking_id)
     conn.commit()
     conn.close()
 
