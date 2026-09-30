@@ -1,0 +1,118 @@
+-- HireNow PostgreSQL schema
+
+CREATE TABLE IF NOT EXISTS workers (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT UNIQUE,
+    password_hash TEXT,
+    skill TEXT NOT NULL,
+    skills_detail TEXT,
+    city TEXT NOT NULL,
+    daily_wage INTEGER NOT NULL,
+    hourly_wage INTEGER,
+    overtime_wage INTEGER,
+    background_checked INTEGER DEFAULT 0,
+    about TEXT,
+    distance_km REAL,
+    availability TEXT,
+    rating REAL DEFAULT 0,
+    jobs_completed INTEGER DEFAULT 0,
+    experience_years INTEGER DEFAULT 0,
+    verification_status TEXT DEFAULT 'unverified',
+    id_document_path TEXT,
+    is_online INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS hirers (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+    id BIGSERIAL PRIMARY KEY,
+    hirer_id BIGINT NOT NULL REFERENCES hirers(id),
+    worker_id BIGINT NOT NULL REFERENCES workers(id),
+    start_date TEXT NOT NULL,
+    start_time TEXT,
+    days INTEGER NOT NULL DEFAULT 1,
+    hours INTEGER NOT NULL DEFAULT 2,
+    service_type TEXT NOT NULL DEFAULT 'regular',
+    special_instructions TEXT,
+    address TEXT,
+    payment_method TEXT NOT NULL DEFAULT 'online',
+    worker_response_at TEXT,
+    worker_rejection_reason TEXT,
+    cash_otp_hash TEXT,
+    cash_otp_expires_at TEXT,
+    cash_verified_at TEXT,
+    total_amount INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'requested',
+    payment_status TEXT NOT NULL DEFAULT 'pending',
+    payment_id TEXT,
+    razorpay_order_id TEXT,
+    cancelled_at TEXT,
+    cancellation_reason TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS booking_events (
+    id BIGSERIAL PRIMARY KEY,
+    booking_id BIGINT NOT NULL REFERENCES bookings(id),
+    status TEXT NOT NULL,
+    note TEXT,
+    latitude REAL,
+    longitude REAL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id BIGSERIAL PRIMARY KEY,
+    booking_id BIGINT NOT NULL REFERENCES bookings(id),
+    sender_role TEXT NOT NULL,
+    sender_id BIGINT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS worker_availability (
+    id BIGSERIAL PRIMARY KEY,
+    worker_id BIGINT NOT NULL REFERENCES workers(id),
+    weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+    enabled INTEGER NOT NULL DEFAULT 1,
+    start_time TEXT NOT NULL DEFAULT '08:00',
+    end_time TEXT NOT NULL DEFAULT '20:00',
+    UNIQUE(worker_id, weekday)
+);
+
+CREATE TABLE IF NOT EXISTS worker_unavailable_dates (
+    id BIGSERIAL PRIMARY KEY,
+    worker_id BIGINT NOT NULL REFERENCES workers(id),
+    unavailable_date TEXT NOT NULL,
+    UNIQUE(worker_id, unavailable_date)
+);
+
+CREATE TABLE IF NOT EXISTS in_app_notifications (
+    id BIGSERIAL PRIMARY KEY,
+    recipient_type TEXT NOT NULL CHECK(recipient_type IN ('hirer','worker')),
+    recipient_id BIGINT NOT NULL,
+    booking_id BIGINT,
+    event_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient
+ON in_app_notifications(recipient_type, recipient_id, is_read, created_at);
+
+CREATE TABLE IF NOT EXISTS admin_login_attempts (
+    attempt_key TEXT PRIMARY KEY,
+    failed_count INTEGER NOT NULL DEFAULT 0,
+    first_failed_at TEXT NOT NULL,
+    locked_until TEXT
+);
