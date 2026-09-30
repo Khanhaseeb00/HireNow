@@ -32,7 +32,7 @@ import secrets
 import re
 import requests as _requests
 
-from db import get_db, init_db, row_to_dict, rows_to_list
+from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql
 import payments
 import notifications
 
@@ -57,7 +57,7 @@ def ensure_schema_extensions():
     """Safely add upgraded-booking fields without deleting existing rows."""
     init_db()
     conn = get_db()
-    existing = {row["name"] for row in conn.execute("PRAGMA table_info(bookings)").fetchall()}
+    existing = table_columns(conn, "bookings")
     additions = {
         "start_time": "TEXT",
         "hours": "INTEGER NOT NULL DEFAULT 2",
@@ -77,13 +77,13 @@ def ensure_schema_extensions():
         if column not in existing:
             conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
 
-    worker_columns = {row["name"] for row in conn.execute("PRAGMA table_info(workers)").fetchall()}
+    worker_columns = table_columns(conn, "workers")
     if "is_online" not in worker_columns:
         conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
 
-    conn.execute("""
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_availability (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_column_sql()},
             worker_id INTEGER NOT NULL,
             weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
             enabled INTEGER NOT NULL DEFAULT 1,
@@ -93,18 +93,18 @@ def ensure_schema_extensions():
             FOREIGN KEY(worker_id) REFERENCES workers(id)
         )
     """)
-    conn.execute("""
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_unavailable_dates (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_column_sql()},
             worker_id INTEGER NOT NULL,
             unavailable_date TEXT NOT NULL,
             UNIQUE(worker_id, unavailable_date),
             FOREIGN KEY(worker_id) REFERENCES workers(id)
         )
     """)
-    conn.execute("""
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS in_app_notifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {id_column_sql()},
             recipient_type TEXT NOT NULL CHECK(recipient_type IN ('hirer','worker')),
             recipient_id INTEGER NOT NULL,
             booking_id INTEGER,
