@@ -762,7 +762,9 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var wrap = document.getElementById("bookingsList");
     if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + wt("no_bookings") + '</div>'; return; }
     wrap.innerHTML = state.bookings.map(function (b) {
-      var actionMap = NEXT_ACTION_BY_LANG[state.lang] || NEXT_ACTION_BY_LANG.en;\n      var statusMap = STATUS_LABELS_BY_LANG[state.lang] || STATUS_LABELS_BY_LANG.en;\n      var actionLabel = actionMap[b.status];
+      var actionMap = NEXT_ACTION_BY_LANG[state.lang] || NEXT_ACTION_BY_LANG.en;
+      var statusMap = STATUS_LABELS_BY_LANG[state.lang] || STATUS_LABELS_BY_LANG.en;
+      var actionLabel = actionMap[b.status];
       var canWork = (b.payment_method === "cash" && b.payment_status === "cash_pending") || b.payment_status === "paid";
       var canAct = canWork && actionLabel;
       var idx = STATUS_FLOW.indexOf(b.status);
