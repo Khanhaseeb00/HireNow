@@ -299,6 +299,26 @@
 #panel-settings .settings-block:nth-of-type(2) .choice-btn{justify-content:flex-start;text-align:left}
 nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:18px;height:3px;border-radius:3px;background:var(--app-orange)}
 @media(max-width:360px){ #panel-profile .profile-grid{grid-template-columns:1fr}.reference-profile-hero{padding:16px!important}#panel-settings .settings-block:nth-of-type(2) .choice-row{grid-template-columns:1fr}}
+
+/* Worker authentication reference polish */
+#authScreen.auth-wrap{max-width:430px;margin:34px auto;padding:26px 24px 24px;border-radius:24px;background:#fff;border:1px solid #e3eaf1;box-shadow:0 18px 50px rgba(6,35,63,.10)}
+#authScreen .worker-logo-lockup{margin-bottom:16px}
+#authScreen #authTitle{font-family:'Archivo';font-size:25px;color:var(--app-navy);margin:8px 0 4px}
+#authScreen .auth-subtitle{text-align:center;color:#73869a;font-size:13px;margin:0 0 22px}
+#authScreen .row{margin-bottom:14px}
+#authScreen label{display:block;font-size:12px;font-weight:800;color:#314b65;margin-bottom:7px}
+#authScreen input{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%}
+#authScreen input:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}
+.phone-field,.password-field{display:flex;align-items:center;position:relative}
+.phone-field .country-prefix{height:48px;min-width:54px;display:flex;align-items:center;justify-content:center;border:1px solid #dbe4ed;border-right:0;border-radius:12px 0 0 12px;background:#eef3f8;color:#173b5d;font-weight:800;font-size:13px}
+#authScreen .phone-field input{border-radius:0 12px 12px 0}
+#authScreen .password-field input{padding-right:58px}
+.password-toggle{position:absolute;right:8px;top:7px;height:34px;padding:0 8px;border:0;background:transparent;color:#1677f2;font-size:11px;font-weight:800}
+#authScreen .btn-safety{min-height:49px;border-radius:13px;background:var(--app-orange);color:#14243a;font-weight:900;margin-top:4px}
+#authScreen .auth-switch{text-align:center;margin-top:16px;font-size:12px;color:#75879a}
+#authScreen .auth-switch a{color:#1677f2;font-weight:800;cursor:pointer}
+#authScreen .field-2{gap:10px}
+@media(max-width:480px){ #authScreen.auth-wrap{margin:0;min-height:100vh;max-width:none;border:0;border-radius:0;box-shadow:none;padding:34px 20px 28px}#authScreen .field-2{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -306,26 +326,26 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 <div id="authScreen" class="auth-wrap tick" style="display:none;">
   <div class="worker-logo-lockup"><div class="worker-logo-box"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="workerHnO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><path d="M18 20Q18 15 23 15H34Q39 15 39 20V42Q39 47 44 47H49L38 58V78Q38 84 32 84H23Q18 84 18 79Z" fill="#fff"/><path d="M82 80Q82 85 77 85H67Q62 85 62 80V58L51 47H57Q62 47 62 42V28H54L72 10L90 28H82Z" fill="url(#workerHnO)"/><path d="M37 53L48 43Q52 40 56 43L65 51Q68 54 65 57L60 62Q57 65 54 62L50 58L47 61Q44 64 41 61L36 57Q34 55 37 53Z" fill="#071B3A"/><path d="M43 48L48 44Q51 42 54 44L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/><path d="M44 57L51 64M49 53L56 60M54 50L61 56" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M38 56L43 61M35 59L40 64M40 53L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/></svg></div><div class="worker-wordmark"><span class="hire">Hire</span><span class="now">Now</span></div></div>
   <h2 id="authTitle" style="text-align:center;">Worker Login</h2>
-  <p style="text-align:center;">Apne kaam aur bookings dekhne ke liye login karein</p>
+  <p class="auth-subtitle">Sign in to manage your jobs and earnings</p>
 
   <div id="loginForm">
-    <div class="row"><label>Phone number</label><input type="tel" id="loginPhone" placeholder="9876543210"></div>
-    <div class="row"><label>Password</label><input type="password" id="loginPassword"></div>
+    <div class="row"><label>Phone number</label><div class="phone-field"><span class="country-prefix">+91</span><input type="tel" id="loginPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="9876543210"></div></div>
+    <div class="row"><label>Password</label><div class="password-field"><input type="password" id="loginPassword" autocomplete="current-password" placeholder="Enter your password"><button type="button" class="password-toggle" data-password-target="loginPassword" aria-label="Show password">Show</button></div></div>
     <button class="btn btn-safety btn-block" id="loginBtn">Login</button>
-    <div class="auth-switch">Naya account? <a id="showRegister">Register karein</a></div>
+    <div class="auth-switch">New to HireNow? <a id="showRegister">Create account</a></div>
   </div>
 
   <div id="registerForm" style="display:none;">
-    <div class="row"><label>Naam</label><input type="text" id="regName"></div>
-    <div class="row"><label>Phone number</label><input type="tel" id="regPhone"></div>
-    <div class="row"><label>Password</label><input type="password" id="regPassword"></div>
+    <div class="row"><label>Full name</label><input type="text" id="regName" autocomplete="name" placeholder="Your full name"></div>
+    <div class="row"><label>Phone number</label><div class="phone-field"><span class="country-prefix">+91</span><input type="tel" id="regPhone" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="9876543210"></div></div>
+    <div class="row"><label>Password</label><div class="password-field"><input type="password" id="regPassword" autocomplete="new-password" minlength="6" placeholder="Minimum 6 characters"><button type="button" class="password-toggle" data-password-target="regPassword" aria-label="Show password">Show</button></div></div>
     <div class="row field-2">
-      <div><label>Skill</label><input type="text" id="regSkill" placeholder="jaise Electrician"></div>
-      <div><label>Daily wage (₹)</label><input type="number" id="regWage" placeholder="700"></div>
+      <div><label>Primary skill</label><input type="text" id="regSkill" placeholder="e.g. Electrician"></div>
+      <div><label>Daily wage (₹)</label><input type="number" id="regWage" min="1" inputmode="numeric" placeholder="700"></div>
     </div>
-    <div class="row"><label>Shahar</label><input type="text" id="regCity" placeholder="jaise Andheri, Mumbai"></div>
-    <button class="btn btn-safety btn-block" id="registerBtn">Account banayein</button>
-    <div class="auth-switch">Pehle se account hai? <a id="showLogin">Login karein</a></div>
+    <div class="row"><label>City / service area</label><input type="text" id="regCity" placeholder="e.g. Andheri, Mumbai"></div>
+    <button class="btn btn-safety btn-block" id="registerBtn">Create Worker Account</button>
+    <div class="auth-switch">Already have an account? <a id="showLogin">Login</a></div>
   </div>
   <div id="authError" class="error-box" style="display:none;"></div>
 </div>
@@ -595,11 +615,21 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     clearAuthError();
   });
 
+  document.querySelectorAll("[data-password-target]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var input=document.getElementById(btn.dataset.passwordTarget);
+      var reveal=input.type==="password";
+      input.type=reveal?"text":"password";
+      btn.textContent=reveal?"Hide":"Show";
+      btn.setAttribute("aria-label",reveal?"Hide password":"Show password");
+    });
+  });
+  function cleanIndianPhone(value){return String(value||"").replace(/\D/g,"").slice(-10);}
   document.getElementById("loginBtn").addEventListener("click", function () {
     clearAuthError();
     api("/api/worker-auth/login", {
       method: "POST",
-      body: JSON.stringify({ phone: document.getElementById("loginPhone").value, password: document.getElementById("loginPassword").value })
+      body: JSON.stringify({ phone: cleanIndianPhone(document.getElementById("loginPhone").value), password: document.getElementById("loginPassword").value })
     }).then(function (res) {
       if (!res.ok) return showAuthError(res.data.error || "Login fail hua");
       startApp(res.data);
@@ -612,7 +642,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       method: "POST",
       body: JSON.stringify({
         name: document.getElementById("regName").value,
-        phone: document.getElementById("regPhone").value,
+        phone: cleanIndianPhone(document.getElementById("regPhone").value),
         password: document.getElementById("regPassword").value,
         skill: document.getElementById("regSkill").value,
         city: document.getElementById("regCity").value,
