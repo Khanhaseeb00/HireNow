@@ -612,7 +612,7 @@ def worker_update_availability():
     conn.execute("DELETE FROM worker_unavailable_dates WHERE worker_id = ?", (worker_id,))
     for value in sorted(set(clean_dates)):
         conn.execute(
-            "INSERT OR IGNORE INTO worker_unavailable_dates(worker_id, unavailable_date) VALUES (?, ?)",
+            "INSERT INTO worker_unavailable_dates(worker_id, unavailable_date) VALUES (?, ?) ON CONFLICT(worker_id, unavailable_date) DO NOTHING",
             (worker_id, value),
         )
     conn.commit()
