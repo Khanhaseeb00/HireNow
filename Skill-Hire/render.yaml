@@ -9,7 +9,11 @@ services:
     envVars:
       - key: KAAMGAR_SECRET_KEY
         generateValue: true
-      - key: ADMIN_KEY
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: POSTGRES_MIGRATION_URL
         sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
