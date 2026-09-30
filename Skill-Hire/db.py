@@ -50,7 +50,6 @@ class _PostgresCursor:
         return self._cursor.rowcount
 
     @property
-    @property
     def lastrowid(self):
         # All application inserts that read lastrowid target SERIAL/BIGSERIAL
         # primary keys. LASTVAL() is connection-local, so concurrent requests
@@ -127,6 +126,10 @@ def text_timestamp_default():
 
 def foreign_id_sql():
     return "BIGINT" if DATABASE_URL else "INTEGER"
+
+
+def binary_sql():
+    return "BYTEA" if DATABASE_URL else "BLOB"
 
 
 def init_db():
