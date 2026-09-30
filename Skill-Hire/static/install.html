@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101B33">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/brand/hirenow-logo.webp">
+<title>Install Hire Now</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#101B33;color:#fff;font-family:Arial,sans-serif;display:grid;place-items:center;padding:24px}.card{width:min(420px,100%);text-align:center}.logo{width:132px;height:132px;border-radius:30px;display:block;margin:0 auto 22px;box-shadow:0 18px 55px #0006}.name{font-size:34px;font-weight:900;letter-spacing:-1px}.name span{color:#F5A623}.tag{color:#c8d2e2;margin:8px 0 28px}.btn{width:100%;border:0;border-radius:14px;padding:15px 18px;font-weight:800;font-size:16px;background:#F5A623;color:#241804;cursor:pointer}.btn.secondary{margin-top:10px;background:#fff;color:#101B33}.note{font-size:13px;color:#aebbd0;line-height:1.5;margin-top:18px}.status{min-height:22px;margin:14px 0 0;color:#e6edf7;font-size:13px}
+</style>
+</head>
+<body><main class="card">
+<img class="logo" src="/static/brand/hirenow-logo.webp" alt="Hire Now">
+<div class="name">Hire<span>Now</span></div>
+<div class="tag">Skilled People. Real Work. Faster.</div>
+<button class="btn" id="installBtn">Install Hire Now</button>
+<button class="btn secondary" onclick="location.href='/'">Open Hire Now</button>
+<div class="status" id="status"></div>
+<div class="note">On Android Chrome, if the install dialog does not appear, open the browser menu and choose <b>Install app</b> or <b>Add to Home screen</b>.</div>
+</main>
+<script>
+let installPrompt=null;const btn=document.getElementById('installBtn'),status=document.getElementById('status');
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;btn.disabled=false;status.textContent='Ready to install on this device.';});
+btn.addEventListener('click',async()=>{if(installPrompt){installPrompt.prompt();const result=await installPrompt.userChoice;status.textContent=result.outcome==='accepted'?'Hire Now installation started.':'Installation cancelled.';installPrompt=null;return;}status.textContent='Use Chrome menu → Install app / Add to Home screen.';});
+window.addEventListener('appinstalled',()=>{status.textContent='Hire Now installed successfully.';btn.textContent='Installed';btn.disabled=true;});
+</script></body></html>
