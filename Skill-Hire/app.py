@@ -23,7 +23,7 @@ in an offline sandbox — see notifications.py):
   - SMS notifications via Twilio. Every notify() call is wrapped so a
     missing/failed SMS never breaks the booking/payment/status flow itself.
 """
-from flask import Flask, request, jsonify, session, render_template_string, render_template
+from flask import Flask, request, jsonify, session, render_template_string, render_template, send_from_directory
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from datetime import datetime, timedelta
@@ -219,6 +219,12 @@ def dashboard():
 def worker_portal():
     """The connected WORKER frontend — separate login from hirers."""
     return render_template("worker.html")
+
+
+@app.get("/admin")
+def admin_portal():
+    """HireNow operations dashboard. API access still requires ADMIN_KEY."""
+    return render_template("admin.html")
 
 
 # ---------------------------------------------------------------- utilities
@@ -1466,6 +1472,72 @@ def _check_admin_key():
     return None
 
 
+@app.get("/api/admin/overview")
+def admin_overview():
+    err = _check_admin_key()
+    if err:
+        return err
+    conn = get_db()
+    stats = {
+        "workers": conn.execute("SELECT COUNT(*) AS n FROM workers").fetchone()["n"],
+        "hirers": conn.execute("SELECT COUNT(*) AS n FROM hirers").fetchone()["n"],
+        "pending_verifications": conn.execute("SELECT COUNT(*) AS n FROM workers WHERE verification_status = 'pending'").fetchone()["n"],
+        "active_bookings": conn.execute("SELECT COUNT(*) AS n FROM bookings WHERE status IN ('requested','confirmed','en_route','checked_in','in_progress')").fetchone()["n"],
+        "completed_bookings": conn.execute("SELECT COUNT(*) AS n FROM bookings WHERE status = 'completed'").fetchone()["n"],
+        "paid_value": conn.execute("SELECT COALESCE(SUM(total_amount),0) AS n FROM bookings WHERE payment_status = 'paid'").fetchone()["n"],
+    }
+    conn.close()
+    return jsonify(stats)
+
+
+@app.get("/api/admin/workers")
+def admin_workers():
+    err = _check_admin_key()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT id, name, phone, skill, city, daily_wage, hourly_wage, rating,
+                  jobs_completed, verification_status, id_document_path, is_online, created_at
+           FROM workers ORDER BY id DESC LIMIT 500"""
+    ).fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows))
+
+
+@app.get("/api/admin/bookings")
+def admin_bookings():
+    err = _check_admin_key()
+    if err:
+        return err
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT b.id, b.start_date, b.start_time, b.hours, b.total_amount, b.status,
+                  b.payment_status, b.payment_method, b.created_at,
+                  h.name AS hirer_name, w.name AS worker_name, w.skill AS worker_skill
+           FROM bookings b
+           JOIN hirers h ON h.id = b.hirer_id
+           JOIN workers w ON w.id = b.worker_id
+           ORDER BY b.id DESC LIMIT 500"""
+    ).fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows))
+
+
+@app.get("/api/admin/workers/<int:worker_id>/document")
+def admin_worker_document(worker_id):
+    err = _check_admin_key()
+    if err:
+        return err
+    conn = get_db()
+    worker = conn.execute("SELECT id_document_path FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    conn.close()
+    if not worker or not worker["id_document_path"]:
+        return jsonify({"error": "Verification document not found"}), 404
+    filename = os.path.basename(worker["id_document_path"])
+    return send_from_directory(UPLOAD_FOLDER, filename, as_attachment=False)
+
+
 @app.get("/api/admin/workers/pending")
 def admin_pending_workers():
     err = _check_admin_key()
@@ -1494,6 +1566,11 @@ def admin_verify_worker(worker_id):
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
     conn.execute("UPDATE workers SET verification_status = ? WHERE id = ?", (new_status, worker_id))
+    add_in_app_notification(
+        conn, "worker", worker_id, "verification",
+        "ID verified" if approve else "ID verification update",
+        "Your HireNow ID verification is approved." if approve else "Your ID could not be verified. Please upload a clear document again.",
+    )
     conn.commit()
     conn.close()
 
