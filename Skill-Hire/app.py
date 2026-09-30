@@ -655,41 +655,10 @@ def hirer_profile():
 
 @app.post("/api/bookings/<int:booking_id>/advance-status")
 def advance_status(booking_id):
-    """
-    Moves a booking to its next status and logs a location/status event.
-    In production, this endpoint is called by the WORKER's app (not the
-    hirer's), sending its live GPS lat/lng along with the status change.
-    """
-    auth_error = require_login()
-    if auth_error:
-        return auth_error
-
-    data = request.get_json(force=True) or {}
-    lat, lng, note = data.get("latitude"), data.get("longitude"), data.get("note")
-
-    conn = get_db()
-    booking = conn.execute("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?", (booking_id, current_hirer_id())).fetchone()
-    if not booking:
-        conn.close()
-        return jsonify({"error": "Booking not found"}), 404
-
-    if not booking_allows_work(booking):
-        conn.close()
-        return jsonify({"error": "Online payment pending hai. Cash booking me worker acceptance ke baad kaam start ho sakta hai."}), 400
-
-    nxt = next_status(booking["status"])
-    if not nxt:
-        conn.close()
-        return jsonify({"error": "Booking already completed"}), 400
-
-    conn.execute("UPDATE bookings SET status = ? WHERE id = ?", (nxt, booking_id))
-    conn.execute(
-        "INSERT INTO booking_events (booking_id, status, note, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
-        (booking_id, nxt, note or nxt, lat, lng),
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"status": nxt})
+    """Deprecated: job progress is controlled only by the assigned worker."""
+    return jsonify({
+        "error": "Job status can only be updated by the assigned worker from the worker portal."
+    }), 403
 
 
 @app.get("/api/bookings/<int:booking_id>/events")
