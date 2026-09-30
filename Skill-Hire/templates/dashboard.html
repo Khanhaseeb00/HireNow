@@ -551,7 +551,7 @@
   html[dir="rtl"] body{text-align:right}html[dir="rtl"] .header-row,html[dir="rtl"] .section-row,html[dir="rtl"] .ref-profile-person{direction:rtl}
   html[dir="rtl"] .bottom-nav,html[dir="rtl"] .category-grid{direction:rtl}
   @media(max-width:360px){.language-grid{grid-template-columns:1fr}}
-.slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}</style>
+.slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}.notif-button{position:relative}.notif-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#e84d4d;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--navy)}.notification-list{display:flex;flex-direction:column;gap:9px}.notification-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.notification-item.unread{border-left:4px solid var(--orange);background:#fffaf1}.notification-title{font-weight:800;font-size:13px}.notification-message{font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.45}.notification-time{font-size:9px;color:var(--ink-soft);margin-top:7px}.notification-empty{text-align:center;padding:42px 15px;color:var(--ink-soft)}</style>
 </head>
 
 <body>
@@ -618,7 +618,7 @@
           <select class="loc-select" id="fCity"><option value="">All India</option></select>
         </div>
         <div class="header-icons">
-          <button class="icon-btn" id="notifBtn">🔔</button>
+          <button class="icon-btn notif-button" id="notifBtn">🔔<span class="notif-badge" id="notifBadge" style="display:none;">0</span></button>
           <div class="avatar-mini" id="headerAvatar">?</div>
         </div>
       </div>
@@ -1214,6 +1214,26 @@
     }
   }
 
+  function loadNotifications(){
+    return api("/api/notifications").then(function(res){
+      if(!res.ok)return;
+      var badge=document.getElementById("notifBadge"),count=res.data.unread_count||0;
+      badge.textContent=count>99?"99+":count;badge.style.display=count?"flex":"none";
+    });
+  }
+  function openNotificationsScreen(){
+    openStack("notifications","Notifications",function(){
+      stackBody.innerHTML='<div class="notification-empty">Loading notifications...</div>';
+      api("/api/notifications").then(function(res){
+        var items=res.ok?(res.data.items||[]):[];
+        stackBody.innerHTML=items.length?'<div class="notification-list">'+items.map(function(n){return '<div class="notification-item '+(n.is_read?"":"unread")+'"><div class="notification-title">'+n.title+'</div><div class="notification-message">'+n.message+'</div><div class="notification-time">'+new Date(n.created_at.replace(" ","T")).toLocaleString()+'</div></div>';}).join("")+'</div>':'<div class="notification-empty">No notifications yet.</div>';
+        api("/api/notifications/read",{method:"POST",body:JSON.stringify({})}).then(loadNotifications);
+      });
+    },{});
+  }
+  document.getElementById("notifBtn").addEventListener("click",function(){nav(openNotificationsScreen);});
+  loadNotifications();
+  setInterval(loadNotifications,60000);
   document.getElementById("quickHireBtn").addEventListener("click", function () { openWorkerListScreen(null); });
   document.getElementById("fSearch").addEventListener("keydown", function (e) {
     if (e.key === "Enter") { var q = document.getElementById("fSearch").value; openWorkerListScreen(null, { title: "Search Results" }); document.getElementById("stackSearchToggle").click(); document.getElementById("stackSearchInput").value = q; document.getElementById("stackSearchInput").dispatchEvent(new Event("input")); }
