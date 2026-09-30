@@ -116,6 +116,14 @@ def ensure_schema_extensions():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON in_app_notifications(recipient_type, recipient_id, is_read, created_at)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS admin_login_attempts (
+            attempt_key TEXT PRIMARY KEY,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            first_failed_at TEXT NOT NULL,
+            locked_until TEXT
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -1470,6 +1478,83 @@ def upload_verification_doc():
     return jsonify({"verification_status": "pending"})
 
 
+ADMIN_LOGIN_MAX_FAILURES = 5
+ADMIN_LOGIN_WINDOW = timedelta(minutes=15)
+ADMIN_LOGIN_LOCK = timedelta(minutes=15)
+
+
+def _admin_attempt_key(username):
+    remote = request.remote_addr or "unknown"
+    return f"{remote}|{username.lower()}"
+
+
+def _admin_login_lock_status(conn, attempt_key):
+    row = conn.execute(
+        "SELECT failed_count, first_failed_at, locked_until FROM admin_login_attempts WHERE attempt_key = ?",
+        (attempt_key,),
+    ).fetchone()
+    if not row:
+        return 0
+    now = datetime.utcnow()
+    if row["locked_until"]:
+        try:
+            locked_until = datetime.fromisoformat(row["locked_until"])
+            if locked_until > now:
+                return max(1, int((locked_until - now).total_seconds()))
+        except ValueError:
+            pass
+    try:
+        first_failed = datetime.fromisoformat(row["first_failed_at"])
+    except ValueError:
+        first_failed = now
+    if now - first_failed > ADMIN_LOGIN_WINDOW:
+        conn.execute("DELETE FROM admin_login_attempts WHERE attempt_key = ?", (attempt_key,))
+        conn.commit()
+    return 0
+
+
+def _record_admin_login_failure(conn, attempt_key):
+    now = datetime.utcnow()
+    row = conn.execute(
+        "SELECT failed_count, first_failed_at FROM admin_login_attempts WHERE attempt_key = ?",
+        (attempt_key,),
+    ).fetchone()
+    if not row:
+        conn.execute(
+            "INSERT INTO admin_login_attempts(attempt_key, failed_count, first_failed_at) VALUES (?, 1, ?)",
+            (attempt_key, now.isoformat()),
+        )
+        conn.commit()
+        return 0
+    try:
+        first_failed = datetime.fromisoformat(row["first_failed_at"])
+    except ValueError:
+        first_failed = now
+    count = int(row["failed_count"])
+    if now - first_failed > ADMIN_LOGIN_WINDOW:
+        count = 1
+        first_failed = now
+    else:
+        count += 1
+    locked_until = None
+    retry_after = 0
+    if count >= ADMIN_LOGIN_MAX_FAILURES:
+        locked_until_dt = now + ADMIN_LOGIN_LOCK
+        locked_until = locked_until_dt.isoformat()
+        retry_after = int(ADMIN_LOGIN_LOCK.total_seconds())
+    conn.execute(
+        """INSERT INTO admin_login_attempts(attempt_key, failed_count, first_failed_at, locked_until)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(attempt_key) DO UPDATE SET
+             failed_count=excluded.failed_count,
+             first_failed_at=excluded.first_failed_at,
+             locked_until=excluded.locked_until""",
+        (attempt_key, count, first_failed.isoformat(), locked_until),
+    )
+    conn.commit()
+    return retry_after
+
+
 def _check_admin_session():
     if not session.get("admin_authenticated"):
         return jsonify({"error": "Admin login required"}), 401
@@ -1491,8 +1576,30 @@ def admin_login():
     data = request.get_json(silent=True) or {}
     username = str(data.get("username") or "").strip()
     password = str(data.get("password") or "")
-    if not secrets.compare_digest(username, ADMIN_USERNAME) or not check_password_hash(ADMIN_PASSWORD_HASH, password):
+    attempt_key = _admin_attempt_key(username)
+    conn = get_db()
+    retry_after = _admin_login_lock_status(conn, attempt_key)
+    if retry_after:
+        conn.close()
+        response = jsonify({"error": "Too many failed login attempts. Try again later.", "retry_after": retry_after})
+        response.status_code = 429
+        response.headers["Retry-After"] = str(retry_after)
+        return response
+    username_ok = secrets.compare_digest(username, ADMIN_USERNAME)
+    password_ok = check_password_hash(ADMIN_PASSWORD_HASH, password)
+    if not username_ok or not password_ok:
+        retry_after = _record_admin_login_failure(conn, attempt_key)
+        conn.close()
+        if retry_after:
+            response = jsonify({"error": "Too many failed login attempts. Login is locked for 15 minutes.", "retry_after": retry_after})
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
         return jsonify({"error": "Invalid username or password"}), 401
+    conn.execute("DELETE FROM admin_login_attempts WHERE attempt_key = ?", (attempt_key,))
+    conn.commit()
+    conn.close()
+    session.clear()
     session["admin_authenticated"] = True
     session["admin_username"] = ADMIN_USERNAME
     session["admin_csrf"] = secrets.token_urlsafe(32)
