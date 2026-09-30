@@ -32,7 +32,7 @@ import secrets
 import re
 import requests as _requests
 
-from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update
+from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql
 import payments
 import notifications
 
@@ -84,7 +84,7 @@ def ensure_schema_extensions():
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_availability (
             id {id_column_sql()},
-            worker_id INTEGER NOT NULL,
+            worker_id {foreign_id_sql()} NOT NULL,
             weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
             enabled INTEGER NOT NULL DEFAULT 1,
             start_time TEXT NOT NULL DEFAULT '08:00',
@@ -96,7 +96,7 @@ def ensure_schema_extensions():
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_unavailable_dates (
             id {id_column_sql()},
-            worker_id INTEGER NOT NULL,
+            worker_id {foreign_id_sql()} NOT NULL,
             unavailable_date TEXT NOT NULL,
             UNIQUE(worker_id, unavailable_date),
             FOREIGN KEY(worker_id) REFERENCES workers(id)
@@ -106,13 +106,13 @@ def ensure_schema_extensions():
         CREATE TABLE IF NOT EXISTS in_app_notifications (
             id {id_column_sql()},
             recipient_type TEXT NOT NULL CHECK(recipient_type IN ('hirer','worker')),
-            recipient_id INTEGER NOT NULL,
-            booking_id INTEGER,
+            recipient_id {foreign_id_sql()} NOT NULL,
+            booking_id {foreign_id_sql()},
             event_type TEXT NOT NULL,
             title TEXT NOT NULL,
             message TEXT NOT NULL,
             is_read INTEGER NOT NULL DEFAULT 0,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT NOT NULL DEFAULT {text_timestamp_default()}
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON in_app_notifications(recipient_type, recipient_id, is_read, created_at)")
