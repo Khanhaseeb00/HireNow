@@ -319,7 +319,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 #authScreen .auth-switch a{color:#1677f2;font-weight:800;cursor:pointer}
 #authScreen .field-2{gap:10px}
 @media(max-width:480px){ #authScreen.auth-wrap{margin:0;min-height:100vh;max-width:none;border:0;border-radius:0;box-shadow:none;padding:34px 20px 28px}#authScreen .field-2{grid-template-columns:1fr}}
-#authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}.availability-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;padding:16px;margin-bottom:12px}.availability-title{font-weight:800;font-size:15px;margin-bottom:12px}.availability-online{display:flex;align-items:center;justify-content:space-between;gap:15px}.availability-online strong,.availability-online span{display:block}.availability-online span{font-size:10px;color:var(--app-muted);margin-top:3px}.availability-switch{position:relative;width:48px;height:27px}.availability-switch input{opacity:0}.availability-switch>span{position:absolute;inset:0;background:#ccd6df;border-radius:20px}.availability-switch>span:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}.availability-switch input:checked+span{background:#20b978}.availability-switch input:checked+span:before{transform:translateX(21px)}.availability-day{display:grid;grid-template-columns:84px 1fr 1fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f5}.availability-day input[type=time]{width:100%;height:38px;border:1px solid #dbe4ed;border-radius:10px}.availability-day.off input[type=time]{opacity:.38}.availability-date-add{display:grid;grid-template-columns:1fr auto;gap:8px}.availability-date-add input{height:42px;border:1px solid #dbe4ed;border-radius:11px;padding:0 10px}.availability-date-add button{border:0;border-radius:11px;padding:0 15px;background:var(--app-navy);color:#fff}.unavailable-chip{display:inline-flex;gap:6px;margin:9px 6px 0 0;padding:7px 9px;background:#fff1ee;color:#b14b37;border-radius:10px;font-size:10px}.unavailable-chip button{border:0;background:transparent;color:inherit}</style>
+#authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}.availability-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;padding:16px;margin-bottom:12px}.availability-title{font-weight:800;font-size:15px;margin-bottom:12px}.availability-online{display:flex;align-items:center;justify-content:space-between;gap:15px}.availability-online strong,.availability-online span{display:block}.availability-online span{font-size:10px;color:var(--app-muted);margin-top:3px}.availability-switch{position:relative;width:48px;height:27px}.availability-switch input{opacity:0}.availability-switch>span{position:absolute;inset:0;background:#ccd6df;border-radius:20px}.availability-switch>span:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}.availability-switch input:checked+span{background:#20b978}.availability-switch input:checked+span:before{transform:translateX(21px)}.availability-day{display:grid;grid-template-columns:84px 1fr 1fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f5}.availability-day input[type=time]{width:100%;height:38px;border:1px solid #dbe4ed;border-radius:10px}.availability-day.off input[type=time]{opacity:.38}.availability-date-add{display:grid;grid-template-columns:1fr auto;gap:8px}.availability-date-add input{height:42px;border:1px solid #dbe4ed;border-radius:11px;padding:0 10px}.availability-date-add button{border:0;border-radius:11px;padding:0 15px;background:var(--app-navy);color:#fff}.unavailable-chip{display:inline-flex;gap:6px;margin:9px 6px 0 0;padding:7px 9px;background:#fff1ee;color:#b14b37;border-radius:10px;font-size:10px}.unavailable-chip button{border:0;background:transparent;color:inherit}.worker-name-line{display:flex;align-items:center;justify-content:space-between;gap:10px}.worker-notif-btn{position:relative;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:18px}.worker-notif-btn span{position:absolute;right:-4px;top:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:10px;background:#ff4f4f;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--app-navy)}.worker-notification-item{background:#fff;border:1px solid var(--app-border);border-radius:15px;padding:13px;margin-bottom:9px}.worker-notification-item.unread{border-left:4px solid var(--app-orange);background:#fffaf1}.worker-notification-item strong{display:block;font-size:13px}.worker-notification-item p{font-size:11px;color:var(--app-muted);line-height:1.45;margin:4px 0}.worker-notification-item time{font-size:9px;color:var(--app-muted)}</style>
 </head>
 <body>
 
@@ -370,7 +370,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     <section class="panel active" id="panel-work">
       <div class="worker-home-head">
         <div class="worker-greet">Good Morning,</div>
-        <div class="worker-name" id="workerHeroName">Worker</div>
+        <div class="worker-name-line"><div class="worker-name" id="workerHeroName">Worker</div><button type="button" class="worker-notif-btn" id="workerNotifBtn">🔔<span id="workerNotifBadge" style="display:none;">0</span></button></div>
         <div class="worker-online">Online</div>
       </div>
       <div class="worker-stats">
@@ -400,7 +400,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       <div id="bookingsList"><div class="empty">Loading...</div></div>
     </section>
 
-    <section class="panel" id="panel-jobs">
+    <section class="panel" id="panel-notifications"><div class="screen-head"><button class="screen-back" id="workerNotifBack">‹</button><div><h2>Notifications</h2><div class="screen-sub">Booking, payment and message updates</div></div></div><div id="workerNotificationList"></div></section><section class="panel" id="panel-jobs">
       <div class="screen-head"><div><h2>My Jobs</h2><div class="screen-sub">Manage requests, upcoming work and completed jobs</div></div></div><div class="jobs-summary"><div><strong>Requests</strong><span>New jobs</span></div><div><strong>Active</strong><span>In progress</span></div><div><strong>Done</strong><span>Completed</span></div></div>
       <div class="job-filter-row">
         <button class="job-filter active" data-job-filter="all">All</button>
@@ -598,6 +598,21 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
   document.getElementById("settingsBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
 
+  function loadWorkerNotifications(renderList){
+    return api("/api/worker/notifications").then(function(res){
+      if(!res.ok)return;
+      var badge=document.getElementById("workerNotifBadge"),count=res.data.unread_count||0;
+      badge.textContent=count>99?"99+":count;badge.style.display=count?"flex":"none";
+      if(renderList){
+        var list=document.getElementById("workerNotificationList"),items=res.data.items||[];
+        list.innerHTML=items.length?items.map(function(n){return '<div class="worker-notification-item '+(n.is_read?"":"unread")+'"><strong>'+n.title+'</strong><p>'+n.message+'</p><time>'+new Date(n.created_at.replace(" ","T")).toLocaleString()+'</time></div>';}).join(""):'<div class="empty-soft">No notifications yet.</div>';
+      }
+    });
+  }
+  document.getElementById("workerNotifBtn").addEventListener("click",function(){showWorkerPanel("notifications");loadWorkerNotifications(true).then(function(){return api("/api/worker/notifications/read",{method:"POST",body:JSON.stringify({})});}).then(function(){loadWorkerNotifications(false);});});
+  document.getElementById("workerNotifBack").addEventListener("click",function(){showWorkerPanel("work");});
+  loadWorkerNotifications(false);
+  setInterval(function(){loadWorkerNotifications(false);},60000);
   var viewJobsBtn=document.getElementById("viewJobsBtn");
   if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){showWorkerPanel("jobs");});
     function api(path, opts) {
