@@ -521,6 +521,94 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertEqual(finance["settlement_status"], "settled")
         self.assertEqual(finance["settlement_reference"], "cash_otp")
 
+    def test_completed_cash_booking_can_switch_to_online_payment(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Switch Hirer", "9000000901", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000901",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Switch Worker", "9000000902", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000902",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-11", 2, "cash", 500, 0, 500, "completed", "cash_pending"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["hirer_id"] = hirer_id
+
+        fake_order={"id":"order_switch_1","amount":50000,"currency":"INR"}
+        with patch.object(app.payments, "create_order", return_value=fake_order):
+            response = self.client.post(f"/api/bookings/{booking_id}/create-order")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["order_id"], "order_switch_1")
+
+        conn = get_db()
+        booking = conn.execute("SELECT razorpay_order_id, payment_method, payment_status FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(booking["razorpay_order_id"], "order_switch_1")
+        self.assertEqual(booking["payment_method"], "cash")
+        self.assertEqual(booking["payment_status"], "cash_pending")
+
+    def test_completed_online_selected_booking_can_choose_cash_if_unpaid(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Cash Choice Hirer", "9000000911", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000911",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Cash Choice Worker", "9000000912", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000912",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-12", 2, "online", 500, 0, 500, "completed", "pending"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["hirer_id"] = hirer_id
+        response = self.client.post(f"/api/bookings/{booking_id}/cash-otp")
+        self.assertEqual(response.status_code, 200, response.get_json())
+
+        conn = get_db()
+        booking = conn.execute("SELECT payment_method, payment_status, cash_otp_hash FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(booking["payment_method"], "cash")
+        self.assertEqual(booking["payment_status"], "cash_pending")
+        self.assertIsNotNone(booking["cash_otp_hash"])
+
+    def test_online_verification_switches_completed_cash_booking_to_online(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Verify Switch Hirer", "9000000921", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000921",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Verify Switch Worker", "9000000922", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000922",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status, razorpay_order_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-13", 2, "cash", 500, 0, 500, "completed", "cash_pending", "order_switch_verify"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["hirer_id"] = hirer_id
+        with patch.object(app.payments, "verify_checkout_signature", return_value=True),              patch.object(app, "notify", return_value=None):
+            response = self.client.post("/api/payments/verify", json={
+                "razorpay_order_id":"order_switch_verify",
+                "razorpay_payment_id":"pay_switch_verify",
+                "razorpay_signature":"sig",
+            })
+        self.assertEqual(response.status_code, 200, response.get_json())
+
+        conn = get_db()
+        booking = conn.execute("SELECT payment_method, payment_status, paid_amount, payment_id FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(booking["payment_method"], "online")
+        self.assertEqual(booking["payment_status"], "paid")
+        self.assertEqual(booking["paid_amount"], 500)
+        self.assertEqual(booking["payment_id"], "pay_switch_verify")
+
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:
             sess.clear()
