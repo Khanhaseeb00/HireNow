@@ -183,6 +183,8 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertNotIn(worker_id, [w["id"] for w in public.get_json()])
 
     def test_worker_payout_endpoint_requires_login(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
         response = self.client.get("/api/worker/payout-account")
         self.assertIn(response.status_code, (401, 403))
 
