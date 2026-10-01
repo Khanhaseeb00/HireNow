@@ -91,6 +91,10 @@ def ensure_schema_extensions():
     worker_columns = table_columns(conn, "workers")
     if "is_online" not in worker_columns:
         conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
+    if "rate_status" not in worker_columns:
+        conn.execute("ALTER TABLE workers ADD COLUMN rate_status TEXT NOT NULL DEFAULT 'approved'")
+    if "rate_review_note" not in worker_columns:
+        conn.execute("ALTER TABLE workers ADD COLUMN rate_review_note TEXT")
 
     kyc_columns = {
         "id_document_data": binary_sql(),
@@ -574,7 +578,7 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
@@ -1826,11 +1830,36 @@ def admin_workers():
     conn = get_db()
     rows = conn.execute(
         """SELECT id, name, phone, skill, city, daily_wage, hourly_wage, rating,
-                  jobs_completed, verification_status, id_document_path, is_online, created_at
+                  jobs_completed, verification_status, rate_status, rate_review_note, id_document_path, is_online, created_at
            FROM workers ORDER BY id DESC LIMIT 500"""
     ).fetchall()
     conn.close()
     return jsonify(rows_to_list(rows))
+
+
+@app.post("/api/admin/workers/<int:worker_id>/rate-review")
+def admin_rate_review(worker_id):
+    err = _check_admin_session()
+    if err:
+        return err
+    err = _check_admin_csrf()
+    if err:
+        return err
+    data = request.get_json(force=True) or {}
+    decision = (data.get("decision") or "").strip().lower()
+    note = (data.get("note") or "").strip() or None
+    if decision not in ("approved", "rejected", "change_requested"):
+        return jsonify({"error": "Invalid rate-review decision"}), 400
+    conn = get_db()
+    worker = conn.execute("SELECT id, daily_wage FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    if not worker:
+        conn.close()
+        return jsonify({"error": "Worker not found"}), 404
+    conn.execute("UPDATE workers SET rate_status = ?, rate_review_note = ? WHERE id = ?", (decision, note, worker_id))
+    add_in_app_notification(conn, "worker", worker_id, "rate_review", "Daily rate review", "Admin reviewed your daily rate.", None)
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "rate_status": decision, "note": note})
 
 
 @app.get("/api/admin/bookings")
