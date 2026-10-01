@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 # Force an isolated SQLite database before importing the application.
 _tmp = tempfile.NamedTemporaryFile(prefix="hirenow-test-", suffix=".db", delete=False)
@@ -119,6 +120,55 @@ class HireNowSmokeTests(unittest.TestCase):
         data = response.get_json()
         self.assertEqual(data["quote"]["fee"], 100)
         self.assertLess(data["quote"]["distance_km"], 5)
+
+    def test_diagnosis_booking_uses_server_gps_quote_not_client_distance(self):
+        conn = get_db()
+        conn.execute("DELETE FROM diagnosis_pricing_rules")
+        now = "2099-01-01T00:00:00"
+        for km, fee in ((5,100),(10,150),(20,250)):
+            conn.execute("""INSERT INTO diagnosis_pricing_rules(city, skill, max_km, fee, is_active, created_at, updated_at)
+                            VALUES (NULL,NULL,?,?,1,?,?)""", (km, fee, now, now))
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("GPS Booking Hirer", "9000000610", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000610",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status,
+                        service_latitude, service_longitude, service_location_updated_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     ("GPS Booking Worker", "9000000611", "x", "Plumber", "Test City", 800, "approved",
+                      28.6139, 77.2090, now))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000611",)).fetchone()["id"]
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear()
+            sess["hirer_id"] = hirer_id
+
+        with patch.object(app, "worker_available_for_slot", return_value=(True, None)),              patch.object(app, "find_worker_schedule_conflict", return_value=None),              patch.object(app, "notify", return_value=None):
+            response = self.client.post("/api/bookings", json={
+                "worker_id": worker_id,
+                "start_date": "2099-01-10",
+                "start_time": "10:00",
+                "end_time": "11:00",
+                "booking_type": "diagnosis",
+                "payment_method": "cash",
+                "address": "Test service address",
+                "service_latitude": 28.6200,
+                "service_longitude": 77.2090,
+                "distance_km": 9999,
+            })
+        self.assertEqual(response.status_code, 201, response.get_json())
+        data = response.get_json()
+        self.assertEqual(data["diagnosis_fee"], 100)
+        self.assertLess(data["diagnosis_distance_km"], 5)
+        booking_id = data["id"]
+        conn = get_db()
+        booking = conn.execute("""SELECT diagnosis_fee, diagnosis_distance_km, service_latitude,
+                                  service_longitude, diagnosis_pricing_rule_id
+                                  FROM bookings WHERE id=?""", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(booking["diagnosis_fee"], 100)
+        self.assertLess(booking["diagnosis_distance_km"], 5)
+        self.assertAlmostEqual(booking["service_latitude"], 28.6200, places=4)
+        self.assertIsNotNone(booking["diagnosis_pricing_rule_id"])
 
     def test_public_worker_payload_hides_exact_service_coordinates(self):
         conn = get_db()
