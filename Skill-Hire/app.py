@@ -1080,7 +1080,7 @@ def reconcile_online_booking_payment(conn, booking, notify_users=False):
 
     This is idempotent and only trusts captured/provider-paid amounts.
     """
-    if not booking or booking["payment_method"] != "online" or not booking["razorpay_order_id"]:
+    if not booking or not booking["razorpay_order_id"]:
         return {"changed": False, "payment_status": booking["payment_status"] if booking else None}
 
     try:
@@ -1114,7 +1114,7 @@ def reconcile_online_booking_payment(conn, booking, notify_users=False):
     changed = old_status != payment_status or old_paid != provider_paid or (payment_id and booking["payment_id"] != payment_id)
     if changed:
         conn.execute(
-            "UPDATE bookings SET payment_status=?, payment_id=?, paid_amount=? WHERE id=?",
+            "UPDATE bookings SET payment_method='online', payment_status=?, payment_id=?, paid_amount=? WHERE id=?",
             (payment_status, payment_id, provider_paid, booking["id"]),
         )
         conn.execute(
@@ -1767,21 +1767,60 @@ def create_razorpay_order(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
-    if booking["payment_method"] != "online":
+    if booking["payment_status"] in ("paid", "refund_pending"):
         conn.close()
-        return jsonify({"error": "This booking is set to Cash after work"}), 400
-    if booking["status"] != "confirmed":
+        return jsonify({"error": "This booking is already paid or awaiting refund"}), 400
+
+    if booking["status"] == "confirmed":
+        if booking["payment_method"] != "online":
+            conn.close()
+            return jsonify({"error": "Cash-selected bookings can switch to online only after the work is completed"}), 400
+        amount_due = int(booking["total_amount"] or 0)
+    elif booking["status"] == "completed":
+        if booking["payment_status"] == "balance_due":
+            conn.close()
+            return jsonify({"error": "Use the remaining-balance payment flow for this booking"}), 400
+        if int(booking["paid_amount"] or 0) > 0:
+            conn.close()
+            return jsonify({"error": "A payment has already been recorded for this booking"}), 400
+
+        # If a previous checkout order exists, first ask Razorpay whether it was already captured.
+        if booking["razorpay_order_id"]:
+            reconciled = reconcile_online_booking_payment(conn, booking, notify_users=True)
+            if reconciled.get("error"):
+                conn.rollback()
+                conn.close()
+                return jsonify({"error": reconciled["error"]}), 502
+            conn.commit()
+            booking = conn.execute(
+                "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
+                (booking_id, current_hirer_id()),
+            ).fetchone()
+            if booking["payment_status"] == "paid" or int(booking["paid_amount"] or 0) > 0:
+                conn.close()
+                return jsonify({
+                    "error": "Payment is already confirmed",
+                    "payment_status": booking["payment_status"],
+                    "receipt_url": f"/api/bookings/{booking_id}/receipt.pdf",
+                }), 409
+        amount_due = int(booking["total_amount"] or 0)
+    else:
         conn.close()
-        return jsonify({"error": "Worker must accept the booking before online payment"}), 400
-    if booking["payment_status"] in ("paid", "balance_due", "refund_pending"):
+        return jsonify({"error": "Online payment is available after worker acceptance or after work completion"}), 400
+
+    if amount_due <= 0:
         conn.close()
-        return jsonify({"error": "Use the reconciliation payment flow for this booking"}), 400
+        return jsonify({"error": "There is no amount due for this booking"}), 400
 
     try:
         order = payments.create_order(
-            amount_rupees=booking["total_amount"],
-            receipt=f"booking_{booking_id}",
-            notes={"booking_id": str(booking_id), "hirer_id": str(current_hirer_id())},
+            amount_rupees=amount_due,
+            receipt=f"booking_{booking_id}_{secrets.token_hex(4)}",
+            notes={
+                "booking_id": str(booking_id),
+                "hirer_id": str(current_hirer_id()),
+                "payment_stage": "post_work" if booking["status"] == "completed" else "pre_work",
+            },
         )
     except payments.RazorpayConfigError as e:
         conn.close()
@@ -2121,9 +2160,9 @@ def verify_payment():
     if not booking:
         conn.close()
         return jsonify({"error": "No booking matches this order"}), 404
-    if booking["payment_method"] != "online":
+    if booking["status"] == "confirmed" and booking["payment_method"] != "online":
         conn.close()
-        return jsonify({"error": "This booking is not an online-payment booking"}), 400
+        return jsonify({"error": "Cash-selected bookings can switch to online only after work completion"}), 400
     if booking["status"] not in ("confirmed", "en_route", "checked_in", "in_progress", "completed"):
         conn.close()
         return jsonify({"error": "Booking is not ready for payment verification"}), 400
@@ -2139,7 +2178,7 @@ def verify_payment():
         return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
 
     conn.execute(
-        "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
+        "UPDATE bookings SET payment_method='online', payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
         (payment_id, booking["id"]),
     )
     conn.execute(
@@ -2222,9 +2261,9 @@ def razorpay_webhook():
             conn.commit()
         else:
             booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-            if booking and booking["payment_method"] == "online" and booking["payment_status"] != "paid":
+            if booking and booking["payment_status"] != "paid":
                 conn.execute(
-                    "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
+                    "UPDATE bookings SET payment_method='online', payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
                     (payment_id, booking["id"]),
                 )
                 conn.execute(
@@ -2256,7 +2295,7 @@ def list_bookings():
         (current_hirer_id(),),
     ).fetchall()
     for booking in rows:
-        if booking["payment_method"] == "online" and booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "balance_due"):
+        if booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "cash_pending", "balance_due"):
             reconcile_online_booking_payment(conn, booking, notify_users=False)
     conn.commit()
     rows = conn.execute(
@@ -2391,7 +2430,7 @@ def worker_bookings():
         (current_worker_id(),),
     ).fetchall()
     for booking in rows:
-        if booking["payment_method"] == "online" and booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "balance_due"):
+        if booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "cash_pending", "balance_due"):
             reconcile_online_booking_payment(conn, booking, notify_users=False)
     conn.commit()
     rows = conn.execute(
@@ -2572,20 +2611,36 @@ def generate_cash_payment_otp(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found"}), 404
-    if booking["payment_method"] != "cash":
-        conn.close()
-        return jsonify({"error": "This booking uses online payment"}), 400
     if booking["status"] != "completed":
         conn.close()
         return jsonify({"error": "Cash OTP can be generated only after the job is completed"}), 400
     if booking["payment_status"] == "paid":
         conn.close()
-        return jsonify({"error": "Cash payment is already verified"}), 400
+        return jsonify({"error": "Payment is already verified"}), 400
+    if int(booking["paid_amount"] or 0) > 0 or booking["payment_status"] in ("balance_due", "refund_pending"):
+        conn.close()
+        return jsonify({"error": "Cash can be selected only when no online amount has already been paid"}), 409
+
+    # If checkout was previously opened, reconcile first so we never accept cash after an already captured online payment.
+    if booking["razorpay_order_id"]:
+        reconciled = reconcile_online_booking_payment(conn, booking, notify_users=True)
+        if reconciled.get("error"):
+            conn.rollback()
+            conn.close()
+            return jsonify({"error": reconciled["error"]}), 502
+        conn.commit()
+        booking = conn.execute(
+            "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?",
+            (booking_id, current_hirer_id()),
+        ).fetchone()
+        if booking["payment_status"] == "paid" or int(booking["paid_amount"] or 0) > 0:
+            conn.close()
+            return jsonify({"error": "Online payment is already confirmed for this booking"}), 409
 
     otp = f"{__import__('secrets').randbelow(1000000):06d}"
     expires = datetime.now() + timedelta(minutes=10)
     conn.execute(
-        """UPDATE bookings SET cash_otp_hash = ?, cash_otp_expires_at = ?,
+        """UPDATE bookings SET payment_method='cash', cash_otp_hash = ?, cash_otp_expires_at = ?,
            payment_status = 'cash_pending' WHERE id = ?""",
         (generate_password_hash(otp), expires.isoformat(), booking_id),
     )
@@ -2617,9 +2672,9 @@ def verify_cash_payment_otp(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found or not assigned to you"}), 404
-    if booking["payment_method"] != "cash" or booking["status"] != "completed":
+    if booking["status"] != "completed" or booking["payment_method"] != "cash":
         conn.close()
-        return jsonify({"error": "Cash OTP is available only after a completed cash booking"}), 400
+        return jsonify({"error": "Cash OTP is available only for a completed booking currently set to cash"}), 400
     if booking["payment_status"] == "paid":
         conn.close()
         return jsonify({"error": "Payment already verified"}), 400
@@ -3137,7 +3192,7 @@ def worker_earnings_summary():
     if err: return err
     conn = get_db()
     stale = conn.execute(
-        "SELECT * FROM bookings WHERE worker_id=? AND payment_method='online' AND razorpay_order_id IS NOT NULL AND payment_status IN ('pending','balance_due')",
+        "SELECT * FROM bookings WHERE worker_id=? AND razorpay_order_id IS NOT NULL AND payment_status IN ('pending','cash_pending','balance_due')",
         (current_worker_id(),),
     ).fetchall()
     for booking in stale:
