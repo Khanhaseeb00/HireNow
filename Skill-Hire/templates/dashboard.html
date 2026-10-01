@@ -7,8 +7,10 @@
 <link rel="manifest" href="/static/manifest.webmanifest?v=6">
 <meta name="theme-color" content="#0B1E3F">
 <link rel="stylesheet" href="/static/brand/final-brand.css?v=6">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 48 48%27%3E%3Crect width=%2748%27 height=%2748%27 rx=%2710%27 fill=%27%23101B33%27/%3E%3Crect x=%279%27 y=%277%27 width=%279%27 height=%2719%27 rx=%273%27 fill=%27%23EAF2F7%27/%3E%3Crect x=%2730%27 y=%2712%27 width=%279%27 height=%2714%27 rx=%273%27 fill=%27%23F5A623%27/%3E%3C/svg%3E">
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -18,6 +20,12 @@
     --orange: #F5A623; --orange-ink: #241804; --orange-tint: #FFF3E0;
     --ok: #2F8F5B; --ok-tint: #E7F6EC; --rust: #D8483C; --rust-tint: #FCEAE8;
     --radius: 14px;
+  }
+  :root[data-theme="dark"] {
+    --bg:#071525; --card:#0D2035; --navy:#06182E; --navy-2:#0D2B4C;
+    --ink:#EEF5FC; --ink-soft:#9FB1C4; --line:#203A54;
+    --orange:#F5A623; --orange-ink:#241804; --orange-tint:#3A2B16;
+    --ok:#58B37C; --ok-tint:#153828; --rust:#FF7A69; --rust-tint:#3A211F;
   }
   * { box-sizing: border-box; }
   body {
@@ -40,6 +48,8 @@
   .btn-outline { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
   .btn-block { width: 100%; }
   .card { background: var(--card); border-radius: var(--radius); border: 1px solid var(--line); }
+  .settings-list{display:flex;flex-direction:column;gap:10px}.settings-list-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;background:var(--card);border:1px solid var(--line);border-radius:14px;color:var(--ink);text-align:left}.settings-list-row .meta{font-size:11px;color:var(--ink-soft);margin-top:2px}.settings-list-row .chev{font-size:22px;color:var(--ink-soft)}.settings-toggle{width:44px;height:25px;border-radius:20px;background:#C9D4DF;position:relative;flex:none}.settings-toggle:before{content:"";position:absolute;width:19px;height:19px;border-radius:50%;background:#fff;left:3px;top:3px;transition:.2s}.settings-toggle.on{background:var(--ok)}.settings-toggle.on:before{transform:translateX(19px)}
+  .map-picker{height:280px;border-radius:16px;border:1px solid var(--line);overflow:hidden;margin:12px 0}.map-coords{font-size:11px;color:var(--ink-soft);text-align:center;margin:7px 0}.location-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.language-list{display:flex;flex-direction:column;gap:8px}.language-list .choice-btn{width:100%;justify-content:space-between;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}.language-list .choice-btn.selected{border-color:var(--orange);background:var(--orange-tint)}
 
   /* ============ AUTH SCREEN ============ */
   .auth-wrap { max-width: 400px; margin: 40px auto; padding: 32px 26px; }
@@ -599,6 +609,7 @@
           <label>Create password</label>
           <div class="input-shell"><input type="password" id="regPassword" autocomplete="new-password" placeholder="Minimum 6 characters"><button type="button" class="pass-toggle" data-toggle-password="regPassword" aria-label="Show password">◉</button></div>
         </div>
+        <div class="row"><label>Home / service location</label><input type="text" id="regAddress" placeholder="Enter area, street or landmark"><input type="text" id="regCity" placeholder="City" style="margin-top:8px"><div class="location-actions" style="margin-top:8px"><button type="button" class="btn btn-outline" id="regUseGps">Use Current Location</button><button type="button" class="btn btn-outline" id="regPickMap">Choose on Map</button></div><div id="regLocationInfo" class="auth-tip" style="margin-top:8px">Location is optional now; you can update it later from Settings.</div></div>
         <div class="auth-tip">Use a password you do not use on other apps. Phone number will be used for your HireNow account and booking updates.</div>
         <button class="btn btn-safety btn-block auth-submit" id="registerBtn">Create Account</button>
         <div class="auth-switch">Already have an account? <a id="showLogin">Login</a></div>
@@ -697,28 +708,10 @@
         </div>
         <div class="ref-menu">
           <button id="profileMyBookings">▣ &nbsp; My Bookings <span>›</span></button>
-          <button data-profile-soon>▤ &nbsp; Payment Methods <span>›</span></button>
-          <button data-profile-soon>♟ &nbsp; Address Book <span>›</span></button>
-          <button data-profile-soon>? &nbsp; Help &amp; Support <span>›</span></button>
-          <button data-profile-soon>⚙ &nbsp; Settings <span>›</span></button>
-        </div>
-        <div class="settings-block card language-settings" style="margin-top:14px;">
-          <h3 data-i18n="settings_lang">Language</h3>
-          <div class="sub" data-i18n="settings_lang_sub">Choose the app language</div>
-          <div class="language-grid">
-            <button class="choice-btn" data-lang-choice="en"><span class="lang-code">EN</span><span>English</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="hi"><span class="lang-code">हि</span><span>हिन्दी</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="ar"><span class="lang-code">ع</span><span>العربية</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="bn"><span class="lang-code">বা</span><span>বাংলা</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="ta"><span class="lang-code">த</span><span>தமிழ்</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="te"><span class="lang-code">తె</span><span>తెలుగు</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="mr"><span class="lang-code">म</span><span>मराठी</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="gu"><span class="lang-code">ગુ</span><span>ગુજરાતી</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="kn"><span class="lang-code">ಕ</span><span>ಕನ್ನಡ</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="ml"><span class="lang-code">മ</span><span>മലയാളം</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="pa"><span class="lang-code">ਪੰ</span><span>ਪੰਜਾਬੀ</span><span class="lang-check">✓</span></button>
-            <button class="choice-btn" data-lang-choice="ur"><span class="lang-code">ا</span><span>اردو</span><span class="lang-check">✓</span></button>
-          </div>
+          <button id="profilePaymentMethods">▤ &nbsp; Payment Methods <span>›</span></button>
+          <button id="profileAddressBook">♟ &nbsp; Address / Location <span>›</span></button>
+          <button id="profileHelp">? &nbsp; Help &amp; Support <span>›</span></button>
+          <button id="profileSettings">⚙ &nbsp; Settings <span>›</span></button>
         </div>
         <button class="btn btn-outline btn-block" id="logoutBtn" data-i18n="logout" style="margin-top:14px;">Logout</button>
       </div>
@@ -800,13 +793,13 @@
 (function () {
   "use strict";
 
-  var state = { hirer: null, workers: [], bookings: [], lang: "hi", chatBookingId: null, selectedSkill: "", favorites: {}, bookingFilter: "upcoming" };
+  var state = { hirer: null, workers: [], bookings: [], lang: "en", theme:"light", notificationsEnabled:true, chatBookingId: null, selectedSkill: "", favorites: {}, bookingFilter: "upcoming", location:{address:"",city:"",latitude:null,longitude:null} };
 
   // ---------------- i18n ----------------
   var LANG = {
-    en:{nav_home:"Home",nav_bookings:"Bookings",nav_messages:"Messages",nav_profile:"Profile",popular_categories:"Popular Categories",featured_workers:"Featured Workers",hire_heading:"All Workers",bookings_heading:"My Bookings",messages_heading:"Messages",messages_sub:"Chat with workers on your bookings",search_placeholder:"Search for a skill or service...",all_cities:"All India",no_workers:"No workers found.",no_bookings:"No bookings yet.",no_messages:"No messages yet.",per_day:"/day",verified:"ID verified",profile_heading:"My Profile",settings_lang:"Language",settings_lang_sub:"Choose the app language",chat_title:"Message",chat_placeholder:"Type a message...",chat_send:"Send",logout:"Logout",good_morning:"Good Morning,",good_afternoon:"Good Afternoon,",good_evening:"Good Evening,",greet_sub:"Let's get your work done today!"},
-    hi:{nav_home:"होम",nav_bookings:"बुकिंग",nav_messages:"संदेश",nav_profile:"प्रोफ़ाइल",popular_categories:"लोकप्रिय श्रेणियाँ",featured_workers:"चुनिंदा कामगार",hire_heading:"सभी कामगार",bookings_heading:"मेरी बुकिंग",messages_heading:"संदेश",messages_sub:"अपनी बुकिंग के कामगारों से बात करें",search_placeholder:"कौशल या सेवा खोजें...",all_cities:"पूरा भारत",no_workers:"कोई कामगार नहीं मिला।",no_bookings:"अभी कोई बुकिंग नहीं है।",no_messages:"अभी कोई संदेश नहीं है।",per_day:"/दिन",verified:"ID सत्यापित",profile_heading:"मेरी प्रोफ़ाइल",settings_lang:"भाषा",settings_lang_sub:"ऐप की भाषा चुनें",chat_title:"संदेश",chat_placeholder:"संदेश लिखें...",chat_send:"भेजें",logout:"लॉग आउट",good_morning:"सुप्रभात,",good_afternoon:"नमस्कार,",good_evening:"शुभ संध्या,",greet_sub:"आज आपका काम पूरा करवाते हैं!"},
-    ar:{nav_home:"الرئيسية",nav_bookings:"الحجوزات",nav_messages:"الرسائل",nav_profile:"الملف الشخصي",popular_categories:"الفئات الشائعة",featured_workers:"عمال مميزون",hire_heading:"جميع العمال",bookings_heading:"حجوزاتي",messages_heading:"الرسائل",messages_sub:"تواصل مع العامل في حجوزاتك",search_placeholder:"ابحث عن مهارة أو خدمة...",all_cities:"كل الهند",no_workers:"لم يتم العثور على عمال.",no_bookings:"لا توجد حجوزات بعد.",no_messages:"لا توجد رسائل بعد.",per_day:"/يوم",verified:"هوية موثقة",profile_heading:"ملفي الشخصي",settings_lang:"اللغة",settings_lang_sub:"اختر لغة التطبيق",chat_title:"رسالة",chat_placeholder:"اكتب رسالة...",chat_send:"إرسال",logout:"تسجيل الخروج",good_morning:"صباح الخير،",good_afternoon:"مساء الخير،",good_evening:"مساء الخير،",greet_sub:"لننجز عملك اليوم!"},
+    en:{settings:"Settings",theme:"Theme",theme_sub:"Choose light or dark appearance",language:"Language",language_sub:"Choose your app language",notifications:"Notifications",notifications_sub:"Booking, payment and message alerts",location:"Location",location_sub:"Home and service location",light:"Light",dark:"Dark",save:"Save",use_current_location:"Use Current Location",choose_on_map:"Choose on Map",address:"Address",city:"City",back:"Back",nav_home:"Home",nav_bookings:"Bookings",nav_messages:"Messages",nav_profile:"Profile",popular_categories:"Popular Categories",featured_workers:"Featured Workers",hire_heading:"All Workers",bookings_heading:"My Bookings",messages_heading:"Messages",messages_sub:"Chat with workers on your bookings",search_placeholder:"Search for a skill or service...",all_cities:"All India",no_workers:"No workers found.",no_bookings:"No bookings yet.",no_messages:"No messages yet.",per_day:"/day",verified:"ID verified",profile_heading:"My Profile",settings_lang:"Language",settings_lang_sub:"Choose the app language",chat_title:"Message",chat_placeholder:"Type a message...",chat_send:"Send",logout:"Logout",good_morning:"Good Morning,",good_afternoon:"Good Afternoon,",good_evening:"Good Evening,",greet_sub:"Let's get your work done today!"},
+    hi:{settings:"सेटिंग्स",theme:"थीम",theme_sub:"लाइट या डार्क रूप चुनें",language:"भाषा",language_sub:"ऐप की भाषा चुनें",notifications:"सूचनाएँ",notifications_sub:"बुकिंग, भुगतान और संदेश अलर्ट",location:"लोकेशन",location_sub:"घर और सर्विस लोकेशन",light:"लाइट",dark:"डार्क",save:"सेव करें",use_current_location:"मौजूदा लोकेशन लें",choose_on_map:"मैप पर चुनें",address:"पता",city:"शहर",back:"वापस",nav_home:"होम",nav_bookings:"बुकिंग",nav_messages:"संदेश",nav_profile:"प्रोफ़ाइल",popular_categories:"लोकप्रिय श्रेणियाँ",featured_workers:"चुनिंदा कामगार",hire_heading:"सभी कामगार",bookings_heading:"मेरी बुकिंग",messages_heading:"संदेश",messages_sub:"अपनी बुकिंग के कामगारों से बात करें",search_placeholder:"कौशल या सेवा खोजें...",all_cities:"पूरा भारत",no_workers:"कोई कामगार नहीं मिला।",no_bookings:"अभी कोई बुकिंग नहीं है।",no_messages:"अभी कोई संदेश नहीं है।",per_day:"/दिन",verified:"ID सत्यापित",profile_heading:"मेरी प्रोफ़ाइल",settings_lang:"भाषा",settings_lang_sub:"ऐप की भाषा चुनें",chat_title:"संदेश",chat_placeholder:"संदेश लिखें...",chat_send:"भेजें",logout:"लॉग आउट",good_morning:"सुप्रभात,",good_afternoon:"नमस्कार,",good_evening:"शुभ संध्या,",greet_sub:"आज आपका काम पूरा करवाते हैं!"},
+    ar:{settings:"الإعدادات",theme:"المظهر",theme_sub:"اختر الوضع الفاتح أو الداكن",language:"اللغة",language_sub:"اختر لغة التطبيق",notifications:"الإشعارات",notifications_sub:"تنبيهات الحجز والدفع والرسائل",location:"الموقع",location_sub:"موقع المنزل والخدمة",light:"فاتح",dark:"داكن",save:"حفظ",use_current_location:"استخدم موقعي الحالي",choose_on_map:"اختر على الخريطة",address:"العنوان",city:"المدينة",back:"رجوع",nav_home:"الرئيسية",nav_bookings:"الحجوزات",nav_messages:"الرسائل",nav_profile:"الملف الشخصي",popular_categories:"الفئات الشائعة",featured_workers:"عمال مميزون",hire_heading:"جميع العمال",bookings_heading:"حجوزاتي",messages_heading:"الرسائل",messages_sub:"تواصل مع العامل في حجوزاتك",search_placeholder:"ابحث عن مهارة أو خدمة...",all_cities:"كل الهند",no_workers:"لم يتم العثور على عمال.",no_bookings:"لا توجد حجوزات بعد.",no_messages:"لا توجد رسائل بعد.",per_day:"/يوم",verified:"هوية موثقة",profile_heading:"ملفي الشخصي",settings_lang:"اللغة",settings_lang_sub:"اختر لغة التطبيق",chat_title:"رسالة",chat_placeholder:"اكتب رسالة...",chat_send:"إرسال",logout:"تسجيل الخروج",good_morning:"صباح الخير،",good_afternoon:"مساء الخير،",good_evening:"مساء الخير،",greet_sub:"لننجز عملك اليوم!"},
     bn:{nav_home:"হোম",nav_bookings:"বুকিং",nav_messages:"বার্তা",nav_profile:"প্রোফাইল",popular_categories:"জনপ্রিয় বিভাগ",featured_workers:"নির্বাচিত কর্মী",search_placeholder:"দক্ষতা বা সেবা খুঁজুন...",settings_lang:"ভাষা",settings_lang_sub:"অ্যাপের ভাষা বেছে নিন",logout:"লগ আউট",good_morning:"সুপ্রভাত,",good_afternoon:"শুভ অপরাহ্ণ,",good_evening:"শুভ সন্ধ্যা,",greet_sub:"আজ আপনার কাজ সম্পন্ন করি!"},
     ta:{nav_home:"முகப்பு",nav_bookings:"முன்பதிவுகள்",nav_messages:"செய்திகள்",nav_profile:"சுயவிவரம்",popular_categories:"பிரபல பிரிவுகள்",featured_workers:"சிறப்பு பணியாளர்கள்",search_placeholder:"திறன் அல்லது சேவையைத் தேடுங்கள்...",settings_lang:"மொழி",settings_lang_sub:"பயன்பாட்டு மொழியைத் தேர்ந்தெடுக்கவும்",logout:"வெளியேறு"},
     te:{nav_home:"హోమ్",nav_bookings:"బుకింగ్‌లు",nav_messages:"సందేశాలు",nav_profile:"ప్రొఫైల్",popular_categories:"ప్రసిద్ధ వర్గాలు",featured_workers:"ఎంపిక చేసిన కార్మికులు",search_placeholder:"నైపుణ్యం లేదా సేవ కోసం వెతకండి...",settings_lang:"భాష",settings_lang_sub:"యాప్ భాషను ఎంచుకోండి",logout:"లాగ్ అవుట్"},
@@ -815,7 +808,7 @@
     kn:{nav_home:"ಮುಖಪುಟ",nav_bookings:"ಬುಕಿಂಗ್‌ಗಳು",nav_messages:"ಸಂದೇಶಗಳು",nav_profile:"ಪ್ರೊಫೈಲ್",popular_categories:"ಜನಪ್ರಿಯ ವರ್ಗಗಳು",featured_workers:"ಆಯ್ದ ಕೆಲಸಗಾರರು",search_placeholder:"ಕೌಶಲ್ಯ ಅಥವಾ ಸೇವೆ ಹುಡುಕಿ...",settings_lang:"ಭಾಷೆ",settings_lang_sub:"ಆ್ಯಪ್ ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ",logout:"ಲಾಗ್ ಔಟ್"},
     ml:{nav_home:"ഹോം",nav_bookings:"ബുക്കിംഗുകൾ",nav_messages:"സന്ദേശങ്ങൾ",nav_profile:"പ്രൊഫൈൽ",popular_categories:"ജനപ്രിയ വിഭാഗങ്ങൾ",featured_workers:"തിരഞ്ഞെടുത്ത തൊഴിലാളികൾ",search_placeholder:"കഴിവോ സേവനമോ തിരയുക...",settings_lang:"ഭാഷ",settings_lang_sub:"ആപ്പ് ഭാഷ തിരഞ്ഞെടുക്കുക",logout:"ലോഗ് ഔട്ട്"},
     pa:{nav_home:"ਹੋਮ",nav_bookings:"ਬੁਕਿੰਗਾਂ",nav_messages:"ਸੁਨੇਹੇ",nav_profile:"ਪ੍ਰੋਫਾਈਲ",popular_categories:"ਪ੍ਰਸਿੱਧ ਸ਼੍ਰੇਣੀਆਂ",featured_workers:"ਚੁਣੇ ਹੋਏ ਕਾਮੇ",search_placeholder:"ਹੁਨਰ ਜਾਂ ਸੇਵਾ ਲੱਭੋ...",settings_lang:"ਭਾਸ਼ਾ",settings_lang_sub:"ਐਪ ਦੀ ਭਾਸ਼ਾ ਚੁਣੋ",logout:"ਲਾਗ ਆਉਟ"},
-    ur:{nav_home:"ہوم",nav_bookings:"بکنگز",nav_messages:"پیغامات",nav_profile:"پروفائل",popular_categories:"مقبول زمرے",featured_workers:"منتخب کارکن",search_placeholder:"مہارت یا سروس تلاش کریں...",settings_lang:"زبان",settings_lang_sub:"ایپ کی زبان منتخب کریں",logout:"لاگ آؤٹ"}
+    ur:{settings:"ترتیبات",theme:"تھیم",theme_sub:"لائٹ یا ڈارک موڈ منتخب کریں",language:"زبان",language_sub:"ایپ کی زبان منتخب کریں",notifications:"اطلاعات",notifications_sub:"بکنگ، ادائیگی اور پیغام الرٹس",location:"مقام",location_sub:"گھر اور سروس کا مقام",light:"لائٹ",dark:"ڈارک",save:"محفوظ کریں",use_current_location:"موجودہ مقام استعمال کریں",choose_on_map:"نقشے پر منتخب کریں",address:"پتہ",city:"شہر",back:"واپس",nav_home:"ہوم",nav_bookings:"بکنگز",nav_messages:"پیغامات",nav_profile:"پروفائل",popular_categories:"مقبول زمرے",featured_workers:"منتخب کارکن",search_placeholder:"مہارت یا سروس تلاش کریں...",settings_lang:"زبان",settings_lang_sub:"ایپ کی زبان منتخب کریں",logout:"لاگ آؤٹ"}
   };
   var EN_FALLBACK = LANG.en;
   function t(key) { return (LANG[state.lang] && LANG[state.lang][key]) || EN_FALLBACK[key] || key; }
@@ -830,17 +823,30 @@
     document.documentElement.dir = rtl ? "rtl" : "ltr";
     document.documentElement.lang = state.lang;
   }
+  function syncHirerPreferences(){
+    if(!state.hirer)return;
+    api("/api/hirer/preferences",{method:"PUT",body:JSON.stringify({preferred_language:state.lang,preferred_theme:state.theme,notifications_enabled:state.notificationsEnabled})});
+  }
   function setLanguage(lang) {
     state.lang = lang;
     try { localStorage.setItem("hirenow_lang", lang); } catch (e) {}
     applyStaticI18n();
     renderWorkers(); renderBookings(); renderMessages(); renderFeatured(); renderCategories();
+    syncHirerPreferences();
+  }
+  function setTheme(theme){
+    state.theme=theme==="dark"?"dark":"light";
+    document.documentElement.setAttribute("data-theme",state.theme);
+    try{localStorage.setItem("hirenow_theme",state.theme);}catch(e){}
+    syncHirerPreferences();
   }
   (function initLang() {
-    var saved = "en";
+    var saved = "en", savedTheme="light";
     try { saved = localStorage.getItem("hirenow_lang") || "en"; } catch (e) {}
+    try { savedTheme = localStorage.getItem("hirenow_theme") || "light"; } catch (e) {}
     if (!LANG[saved]) saved = "en";
-    state.lang = saved;
+    state.lang = saved; state.theme=savedTheme==="dark"?"dark":"light";
+    document.documentElement.setAttribute("data-theme",state.theme);
   })();
   document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
     btn.addEventListener("click", function () { setLanguage(btn.dataset.langChoice); });
@@ -922,6 +928,17 @@
   var authError = document.getElementById("authError");
   var splashScreen = document.getElementById("splashScreen");
   var splashStartedAt = Date.now();
+  var regLocation = {latitude:null,longitude:null};
+  function setRegLocation(lat,lng,label){
+    regLocation.latitude=lat;regLocation.longitude=lng;
+    document.getElementById("regLocationInfo").textContent=label||("Selected: "+Number(lat).toFixed(5)+", "+Number(lng).toFixed(5));
+  }
+  function acquireRegistrationLocation(){
+    if(!navigator.geolocation){showAuthError("Location is not supported in this browser.");return;}
+    navigator.geolocation.getCurrentPosition(function(p){setRegLocation(p.coords.latitude,p.coords.longitude,"Current GPS location selected.");},function(e){showAuthError("Location permission failed: "+e.message);},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
+  }
+  document.getElementById("regUseGps").addEventListener("click",acquireRegistrationLocation);
+  document.getElementById("regPickMap").addEventListener("click",function(){openRegistrationMapPicker();});
 
   function showAuthError(msg) { authError.textContent = msg; authError.style.display = "block"; }
   function clearAuthError() { authError.textContent = ""; authError.style.display = "none"; }
@@ -1002,7 +1019,7 @@
     var btn=this; btn.disabled=true; btn.textContent="Creating account...";
     api("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ name: name, phone: phone, password: password })
+      body: JSON.stringify({ name: name, phone: phone, password: password, address:document.getElementById("regAddress").value.trim(), city:document.getElementById("regCity").value.trim(), latitude:regLocation.latitude, longitude:regLocation.longitude, preferred_language:state.lang, preferred_theme:state.theme })
     }).then(function (res) {
       btn.disabled=false; btn.textContent="Create Account";
       if (!res.ok) { showAuthError(res.data.error || "Registration fail hua"); return; }
@@ -1019,9 +1036,7 @@
   if (profileBookingsBtn) profileBookingsBtn.addEventListener("click", function () {
     document.querySelector('.nav-item[data-tab="bookings"]').click();
   });
-  document.querySelectorAll("[data-profile-soon]").forEach(function(btn){
-    btn.addEventListener("click",function(){ window.alert("This section will be added in the next phase."); });
-  });
+
 
   // ---------------- tabs ----------------
   document.querySelectorAll(".nav-item").forEach(function (btn) {
@@ -1087,6 +1102,82 @@
     if (name === "categories") nav(openCategoriesScreen);
     if (name === "worker-list") nav(function () { openWorkerListScreen(arg); });
   }
+
+  var hirerMap=null, hirerMapMarker=null, locationDraft={latitude:null,longitude:null,address:"",city:""};
+  var languageNames={en:"English",hi:"हिन्दी",ar:"العربية",bn:"বাংলা",ta:"தமிழ்",te:"తెలుగు",mr:"मराठी",gu:"ગુજરાતી",kn:"ಕನ್ನಡ",ml:"മലയാളം",pa:"ਪੰਜਾਬੀ",ur:"اردو"};
+
+  function openSettingsScreen(){
+    openStack("settings",t("settings"),function(){
+      stackBody.innerHTML='<div class="settings-list">'+
+        '<button class="settings-list-row" id="settingsTheme"><span><b>'+t("theme")+'</b><div class="meta">'+t("theme_sub")+'</div></span><span class="chev">'+(state.theme==="dark"?"🌙":"☀️")+' ›</span></button>'+
+        '<button class="settings-list-row" id="settingsLanguage"><span><b>'+t("language")+'</b><div class="meta">'+t("language_sub")+'</div></span><span class="chev">'+(languageNames[state.lang]||"English")+' ›</span></button>'+
+        '<button class="settings-list-row" id="settingsNotifications"><span><b>'+t("notifications")+'</b><div class="meta">'+t("notifications_sub")+'</div></span><span class="settings-toggle '+(state.notificationsEnabled?"on":"")+'" id="notifToggleVisual"></span></button>'+
+        '<button class="settings-list-row" id="settingsLocation"><span><b>'+t("location")+'</b><div class="meta">'+t("location_sub")+'</div></span><span class="chev">›</span></button>'+
+      '</div>';
+      document.getElementById("settingsTheme").onclick=function(){nav(openThemeScreen);};
+      document.getElementById("settingsLanguage").onclick=function(){nav(openLanguageScreen);};
+      document.getElementById("settingsLocation").onclick=function(){nav(openLocationScreen);};
+      document.getElementById("settingsNotifications").onclick=function(){state.notificationsEnabled=!state.notificationsEnabled;syncHirerPreferences();openSettingsScreen();};
+    },{subtitle:"HireNow preferences"});
+  }
+  function openThemeScreen(){
+    openStack("theme",t("theme"),function(){
+      stackBody.innerHTML='<div class="settings-list">'+
+        '<button class="settings-list-row" data-hirer-theme="light"><span><b>☀️ '+t("light")+'</b></span><span>'+(state.theme==="light"?"✓":"")+'</span></button>'+
+        '<button class="settings-list-row" data-hirer-theme="dark"><span><b>🌙 '+t("dark")+'</b></span><span>'+(state.theme==="dark"?"✓":"")+'</span></button></div>';
+      stackBody.querySelectorAll("[data-hirer-theme]").forEach(function(btn){btn.onclick=function(){setTheme(btn.dataset.hirerTheme);openThemeScreen();};});
+    },{subtitle:t("theme_sub")});
+  }
+  function openLanguageScreen(){
+    openStack("language",t("language"),function(){
+      stackBody.innerHTML='<div class="language-list">'+Object.keys(languageNames).map(function(code){return '<button class="choice-btn '+(state.lang===code?"selected":"")+'" data-setting-lang="'+code+'"><span>'+languageNames[code]+'</span><span>'+(state.lang===code?"✓":"")+'</span></button>';}).join("")+'</div>';
+      stackBody.querySelectorAll("[data-setting-lang]").forEach(function(btn){btn.onclick=function(){setLanguage(btn.dataset.settingLang);openLanguageScreen();};});
+    },{subtitle:t("language_sub")});
+  }
+  function openLocationScreen(){
+    openStack("location",t("location"),function(){
+      var loc=state.location||{};
+      locationDraft={latitude:loc.latitude,longitude:loc.longitude,address:loc.address||"",city:loc.city||""};
+      stackBody.innerHTML='<div class="card" style="padding:14px"><label>'+t("address")+'</label><input id="hirerLocationAddress" value="'+(locationDraft.address||"").replace(/"/g,"&quot;")+'" placeholder="Area, street, landmark"><label style="display:block;margin-top:10px">'+t("city")+'</label><input id="hirerLocationCity" value="'+(locationDraft.city||"").replace(/"/g,"&quot;")+'" placeholder="City"><div class="location-actions" style="margin-top:10px"><button class="btn btn-outline" id="useHirerGps">'+t("use_current_location")+'</button><button class="btn btn-outline" id="centerMapBtn">'+t("choose_on_map")+'</button></div><div id="hirerMap" class="map-picker"></div><div class="map-coords" id="hirerCoords"></div><button class="btn btn-safety btn-block" id="saveHirerLocation">'+t("save")+'</button><div id="hirerLocationMsg" class="map-coords"></div></div>';
+      setTimeout(initHirerMap,40);
+      document.getElementById("useHirerGps").onclick=function(){if(!navigator.geolocation){document.getElementById("hirerLocationMsg").textContent="Location unavailable";return;}navigator.geolocation.getCurrentPosition(function(p){locationDraft.latitude=p.coords.latitude;locationDraft.longitude=p.coords.longitude;updateHirerMapMarker();},function(e){document.getElementById("hirerLocationMsg").textContent=e.message;},{enableHighAccuracy:true,timeout:15000});};
+      document.getElementById("centerMapBtn").onclick=function(){if(hirerMap&&locationDraft.latitude!=null)hirerMap.setView([locationDraft.latitude,locationDraft.longitude],16);};
+      document.getElementById("saveHirerLocation").onclick=function(){locationDraft.address=document.getElementById("hirerLocationAddress").value.trim();locationDraft.city=document.getElementById("hirerLocationCity").value.trim();api("/api/hirer/location",{method:"PUT",body:JSON.stringify({address:locationDraft.address,city:locationDraft.city,latitude:locationDraft.latitude,longitude:locationDraft.longitude})}).then(function(r){if(!r.ok){document.getElementById("hirerLocationMsg").textContent=r.data.error||"Unable to save";return;}state.location={address:r.data.home_address||"",city:r.data.home_city||"",latitude:r.data.home_latitude,longitude:r.data.home_longitude};document.getElementById("hirerLocationMsg").textContent="Location saved.";});};
+    },{subtitle:t("location_sub")});
+  }
+  function initHirerMap(){
+    var el=document.getElementById("hirerMap");if(!el||typeof L==="undefined")return;
+    if(hirerMap){hirerMap.remove();hirerMap=null;}
+    var lat=locationDraft.latitude!=null?locationDraft.latitude:22.9734,lng=locationDraft.longitude!=null?locationDraft.longitude:78.6569,zoom=locationDraft.latitude!=null?14:5;
+    hirerMap=L.map(el).setView([lat,lng],zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(hirerMap);
+    hirerMap.on("click",function(e){locationDraft.latitude=e.latlng.lat;locationDraft.longitude=e.latlng.lng;updateHirerMapMarker();});
+    updateHirerMapMarker();
+  }
+  function updateHirerMapMarker(){
+    var cEl=document.getElementById("hirerCoords");if(cEl)cEl.textContent=locationDraft.latitude==null?"Tap the map to choose a point":("Selected: "+Number(locationDraft.latitude).toFixed(5)+", "+Number(locationDraft.longitude).toFixed(5));
+    if(!hirerMap||locationDraft.latitude==null)return;
+    if(hirerMapMarker)hirerMap.removeLayer(hirerMapMarker);
+    hirerMapMarker=L.marker([locationDraft.latitude,locationDraft.longitude],{draggable:true}).addTo(hirerMap);
+    hirerMapMarker.on("dragend",function(e){var p=e.target.getLatLng();locationDraft.latitude=p.lat;locationDraft.longitude=p.lng;updateHirerMapMarker();});
+    hirerMap.setView([locationDraft.latitude,locationDraft.longitude],Math.max(hirerMap.getZoom(),14));
+  }
+  function openRegistrationMapPicker(){
+    authPage.style.display="none";
+    stackScreen.style.display="block";
+    screenStack=[function(){
+      openStack("registration-location","Choose location",function(){
+        stackBody.innerHTML='<div id="regMapPicker" class="map-picker"></div><div class="map-coords" id="regMapCoords"></div><button class="btn btn-safety btn-block" id="useRegMapPoint">Use This Location</button>';
+        setTimeout(function(){var lat=regLocation.latitude!=null?regLocation.latitude:22.9734,lng=regLocation.longitude!=null?regLocation.longitude:78.6569,zoom=regLocation.latitude!=null?14:5;var map=L.map("regMapPicker").setView([lat,lng],zoom);L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap"}).addTo(map);var marker=regLocation.latitude!=null?L.marker([lat,lng],{draggable:true}).addTo(map):null;function update(p){regLocation.latitude=p.lat;regLocation.longitude=p.lng;document.getElementById("regMapCoords").textContent="Selected: "+p.lat.toFixed(5)+", "+p.lng.toFixed(5);if(marker)marker.setLatLng(p);else marker=L.marker(p,{draggable:true}).addTo(map);marker.off("dragend");marker.on("dragend",function(e){update(e.target.getLatLng());});}map.on("click",function(e){update(e.latlng);});if(marker)update(marker.getLatLng());document.getElementById("useRegMapPoint").onclick=function(){if(regLocation.latitude==null)return;stackScreen.classList.remove("open");stackScreen.style.display="";authPage.style.display="block";setRegLocation(regLocation.latitude,regLocation.longitude,"Map location selected.");screenStack=[];};},30);
+      },{subtitle:"Tap anywhere on the map"});
+    }];
+    screenStack[0]();
+  }
+
+  document.getElementById("profileSettings").addEventListener("click",function(){nav(openSettingsScreen);});
+  document.getElementById("profileAddressBook").addEventListener("click",function(){nav(openLocationScreen);});
+  document.getElementById("profilePaymentMethods").addEventListener("click",function(){window.alert("Payment methods are selected per booking. Saved payment methods will be added when the payment provider supports tokenized cards/UPI.");});
+  document.getElementById("profileHelp").addEventListener("click",function(){window.alert("Hire Now Customer Care: +918303478983 / +9660503429167\nEmail: Hirenow@gmail.com");});
 
   // ---- Categories screen ----
   var CAT_GROUPS = {
@@ -1305,6 +1396,12 @@
   // ---------------- boot ----------------
   function startApp(hirer) {
     state.hirer = hirer;
+    if(hirer.preferred_language && LANG[hirer.preferred_language]) state.lang=hirer.preferred_language;
+    if(hirer.preferred_theme) state.theme=hirer.preferred_theme;
+    if(hirer.notifications_enabled!=null) state.notificationsEnabled=!!hirer.notifications_enabled;
+    if(hirer.home_address||hirer.home_latitude!=null) state.location={address:hirer.home_address||"",city:hirer.home_city||"",latitude:hirer.home_latitude,longitude:hirer.home_longitude};
+    document.documentElement.setAttribute("data-theme",state.theme);
+    applyStaticI18n();
     authPage.style.display = "none";
     authScreen.style.display = "none";
     appScreen.style.display = "block";
