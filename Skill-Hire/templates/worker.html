@@ -464,8 +464,10 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
         <div class="profile-field flatcard"><div class="label" id="profLabelJobs">Jobs poore hue</div><div class="value num" id="profileJobs">0</div></div>
         <div class="profile-field flatcard"><div class="label" id="profLabelVerify">ID Verification</div><div class="value"><span class="badge" id="profileVerifyBadge">—</span></div></div>
       </div>
-      <button class="btn btn-outline btn-block" id="openAvailabilityBtn" style="margin-top:14px;">Availability &amp; Schedule</button><button class="btn btn-outline btn-block" id="openSettingsBtn" style="margin-top:9px;">⚙ Settings</button>
+      <button class="btn btn-outline btn-block" id="openPayoutBtn" style="margin-top:14px;">Bank &amp; Payout Account</button><button class="btn btn-outline btn-block" id="openAvailabilityBtn" style="margin-top:9px;">Availability &amp; Schedule</button><button class="btn btn-outline btn-block" id="openSettingsBtn" style="margin-top:9px;">⚙ Settings</button>
     </section>
+
+    <section class="panel" id="panel-payout"><div class="screen-head"><button class="screen-back" id="payoutBackBtn">‹</button><div><h2>Bank &amp; Payout</h2><div class="screen-sub">Verified earnings will settle here after payout provider activation</div></div></div><div class="availability-card"><div class="availability-title">Payout account</div><label>Account holder name</label><input id="payoutHolder" placeholder="Name as per bank"><label>Account number</label><input id="payoutAccount" inputmode="numeric" placeholder="Enter account number"><label>IFSC</label><input id="payoutIfsc" placeholder="e.g. HDFC0001234"><label>Bank name</label><input id="payoutBank" placeholder="Optional"><label>UPI ID</label><input id="payoutUpi" placeholder="Optional"><div id="payoutSaved" class="gps-note"></div></div><button class="btn btn-safety btn-block" id="savePayoutBtn">Save for Verification</button><div id="payoutMessage" class="gps-note"></div></section>
 
     <section class="panel" id="panel-availability"><div class="screen-head"><button class="screen-back" id="availabilityBackBtn">‹</button><div><h2>Availability</h2><div class="screen-sub">Choose when hirers can book you</div></div></div><div class="availability-card"><div class="availability-online"><div><strong>Accept new bookings</strong><span>Turn off when you do not want new requests</span></div><label class="availability-switch"><input type="checkbox" id="availabilityOnline" checked><span></span></label></div></div><div class="availability-card"><div class="availability-title">Weekly working hours</div><div id="availabilityDays"></div></div><div class="availability-card"><div class="availability-title">Unavailable dates</div><div class="availability-date-add"><input type="date" id="availabilityDate"><button type="button" id="addUnavailableDate">Add</button></div><div id="unavailableDateList"></div></div><button class="btn btn-safety btn-block availability-save" id="saveAvailabilityBtn">Save Availability</button><div id="availabilityMessage" class="gps-note"></div></section><section class="panel" id="panel-settings">
       <div class="screen-head"><button class="screen-back" id="settingsBackBtn">‹</button><div><h2 class="section-title">Settings</h2><div class="screen-sub">Personalize your HireNow experience</div></div></div>
@@ -583,6 +585,10 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
   document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.tab);});});
   document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.backTab);});});
+  function loadPayout(){return api("/api/worker/payout-account").then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to load payout account");var d=r.data||{};document.getElementById("payoutHolder").value=d.account_holder_name||"";document.getElementById("payoutIfsc").value=d.ifsc||"";document.getElementById("payoutBank").value=d.bank_name||"";document.getElementById("payoutUpi").value=d.upi_id||"";document.getElementById("payoutAccount").value="";document.getElementById("payoutAccount").placeholder=d.account_number_last4?"Saved account ••••"+d.account_number_last4:"Enter account number";document.getElementById("payoutSaved").textContent=d.verification_status?"Verification: "+d.verification_status:"No payout account saved";});}
+  document.getElementById("openPayoutBtn").addEventListener("click",function(){showWorkerPanel("payout");loadPayout().catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
+  document.getElementById("payoutBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("savePayoutBtn").addEventListener("click",function(){var payload={account_holder_name:document.getElementById("payoutHolder").value,account_number:document.getElementById("payoutAccount").value,ifsc:document.getElementById("payoutIfsc").value,bank_name:document.getElementById("payoutBank").value,upi_id:document.getElementById("payoutUpi").value};api("/api/worker/payout-account",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to save payout account");document.getElementById("payoutMessage").textContent="Saved. Pending admin verification.";loadPayout();}).catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
   var availabilityState={days:[],unavailable_dates:[],is_online:true};
   var dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
   function renderAvailability(){
@@ -933,11 +939,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
 
   function renderEarningsScreen(){
-    var completed=state.bookings.filter(function(b){return b.status==="completed" && b.payment_status==="paid";});
-    var total=completed.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
-    document.getElementById("earningsTotal").textContent=fmtMoney(total);
     var box=document.getElementById("earningsBreakdown");
-    box.innerHTML=completed.length?completed.slice().reverse().map(function(b){return '<div class="earn-break"><span>'+jobTitle(b)+'<small style="display:block;color:var(--app-muted)">'+fmtDate(b.start_date)+'</small></span><strong>'+fmtMoney(b.total_amount)+'</strong></div>';}).join(""):'<div class="empty-soft">Completed jobs will appear here.</div>';
+    box.innerHTML='<div class="empty-soft">Loading earnings…</div>';
+    api("/api/worker/earnings-summary").then(function(r){
+      if(!r.ok)throw Error(r.data.error||"Unable to load earnings");
+      var d=r.data||{},items=d.items||[];
+      document.getElementById("earningsTotal").textContent=fmtMoney(d.net||0);
+      box.innerHTML='<div class="earn-break"><span>Platform commission</span><strong>'+fmtMoney(d.commission||0)+'</strong></div><div class="earn-break"><span>Pending settlement</span><strong>'+fmtMoney(d.pending||0)+'</strong></div><div class="earn-break"><span>Settled</span><strong>'+fmtMoney(d.settled||0)+'</strong></div>'+(items.length?items.map(function(x){return '<div class="earn-break"><span>Booking #'+x.booking_id+'<small style="display:block;color:var(--app-muted)">'+fmtDate(x.start_date)+' · '+x.settlement_status+'</small></span><strong>'+fmtMoney(x.worker_net)+'</strong></div>';}).join(""):'<div class="empty-soft">Completed paid jobs will appear here.</div>');
+    }).catch(function(e){box.innerHTML='<div class="empty-soft">'+e.message+'</div>';});
   }
 
   function renderMessagesScreen(){
