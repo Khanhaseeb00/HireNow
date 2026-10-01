@@ -38,9 +38,6 @@ CREATE TABLE IF NOT EXISTS worker_payout_accounts (
     account_status TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at TEXT,
-    account_status TEXT NOT NULL DEFAULT 'active',
-    account_status_reason TEXT,
-    deleted_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
