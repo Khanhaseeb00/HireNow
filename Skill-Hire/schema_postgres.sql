@@ -131,6 +131,23 @@ CREATE TABLE IF NOT EXISTS booking_financials (
     updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
+CREATE TABLE IF NOT EXISTS payment_adjustments (
+    id BIGSERIAL PRIMARY KEY,
+    booking_id BIGINT NOT NULL REFERENCES bookings(id),
+    adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('balance_due','refund')),
+    amount INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_order_id TEXT,
+    provider_payment_id TEXT,
+    provider_refund_id TEXT,
+    note TEXT,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_adjustments_booking
+ON payment_adjustments(booking_id, adjustment_type, status);
+
 CREATE TABLE IF NOT EXISTS booking_events (
     id BIGSERIAL PRIMARY KEY,
     booking_id BIGINT NOT NULL REFERENCES bookings(id),
