@@ -99,6 +99,13 @@ def ensure_schema_extensions():
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
         if column not in worker_columns:
             conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+    for column, definition in {
+        "service_latitude": "REAL",
+        "service_longitude": "REAL",
+        "service_location_updated_at": "TEXT",
+    }.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
     hirer_columns = table_columns(conn, "hirers")
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
         if column not in hirer_columns:
