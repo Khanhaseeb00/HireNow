@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 import os
 import secrets
 import re
+import math
 import requests as _requests
 
 from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
@@ -77,6 +78,9 @@ def ensure_schema_extensions():
         "booking_type": "TEXT NOT NULL DEFAULT 'regular'",
         "diagnosis_fee": "INTEGER NOT NULL DEFAULT 0",
         "diagnosis_distance_km": "REAL",
+        "service_latitude": "REAL",
+        "service_longitude": "REAL",
+        "diagnosis_pricing_rule_id": "INTEGER",
         "diagnosis_notes": "TEXT",
         "work_approved_at": "TEXT",
         "work_declined_at": "TEXT",
@@ -175,6 +179,26 @@ def ensure_schema_extensions():
             created_at TEXT DEFAULT {text_timestamp_default()}
         )
     """)
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS diagnosis_pricing_rules (
+            id {id_column_sql()},
+            city TEXT,
+            skill TEXT,
+            max_km REAL NOT NULL,
+            fee INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT DEFAULT {text_timestamp_default()},
+            updated_at TEXT DEFAULT {text_timestamp_default()}
+        )
+    """)
+    existing_pricing = conn.execute("SELECT COUNT(*) AS n FROM diagnosis_pricing_rules").fetchone()["n"]
+    if not existing_pricing:
+        now = datetime.utcnow().isoformat()
+        for max_km, fee in DIAGNOSIS_DISTANCE_SLABS:
+            conn.execute(
+                "INSERT INTO diagnosis_pricing_rules(city, skill, max_km, fee, is_active, created_at, updated_at) VALUES (NULL, NULL, ?, ?, 1, ?, ?)",
+                (max_km, fee, now, now),
+            )
     conn.execute("""
         CREATE TABLE IF NOT EXISTS platform_settings (
             setting_key TEXT PRIMARY KEY,
@@ -722,13 +746,55 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online, service_latitude, service_longitude, service_location_updated_at FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/worker/service-location")
+def get_worker_service_location():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        "SELECT service_latitude, service_longitude, service_location_updated_at FROM workers WHERE id=?",
+        (current_worker_id(),),
+    ).fetchone()
+    conn.close()
+    if not row or row["service_latitude"] is None or row["service_longitude"] is None:
+        return jsonify({"configured": False})
+    return jsonify({
+        "configured": True,
+        "latitude": float(row["service_latitude"]),
+        "longitude": float(row["service_longitude"]),
+        "updated_at": row["service_location_updated_at"],
+    })
+
+
+@app.put("/api/worker/service-location")
+def update_worker_service_location():
+    err = require_worker_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    try:
+        latitude = float(data.get("latitude"))
+        longitude = float(data.get("longitude"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Valid latitude and longitude are required"}), 400
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return jsonify({"error": "Latitude or longitude is outside the valid range"}), 400
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    conn.execute(
+        "UPDATE workers SET service_latitude=?, service_longitude=?, service_location_updated_at=? WHERE id=?",
+        (latitude, longitude, now, current_worker_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "configured": True, "updated_at": now})
 
 
 @app.get("/api/worker/payout-account")
@@ -910,6 +976,10 @@ def list_workers():
         w.pop("password_hash", None)
         w.pop("phone", None)
         w.pop("id_document_path", None)
+        w["service_location_configured"] = w.get("service_latitude") is not None and w.get("service_longitude") is not None
+        w.pop("service_latitude", None)
+        w.pop("service_longitude", None)
+        w.pop("service_location_updated_at", None)
     return jsonify(result)
 
 
@@ -925,6 +995,10 @@ def get_worker(worker_id):
     result.pop("password_hash", None)
     result.pop("phone", None)
     result.pop("id_document_path", None)
+    result["service_location_configured"] = result.get("service_latitude") is not None and result.get("service_longitude") is not None
+    result.pop("service_latitude", None)
+    result.pop("service_longitude", None)
+    result.pop("service_location_updated_at", None)
     return jsonify(result)
 
 
@@ -1037,22 +1111,138 @@ def derived_hourly_rate(worker):
     return round(float(worker["daily_wage"]) / STANDARD_WORKDAY_HOURS, 2)
 
 
-def diagnosis_fee_for_distance(distance_km):
+def haversine_distance_km(lat1, lon1, lat2, lon2):
+    """Straight-line GPS distance in kilometres between two coordinates."""
+    lat1, lon1, lat2, lon2 = map(float, (lat1, lon1, lat2, lon2))
+    radius = 6371.0088
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 2)
+
+
+def diagnosis_pricing_rules(conn, city=None, skill=None):
+    """Choose the most-specific active pricing scope, then return its ordered slabs."""
+    city = (city or "").strip()
+    skill = normalize_worker_skill(skill) if skill else None
+    rows = conn.execute(
+        """SELECT * FROM diagnosis_pricing_rules
+           WHERE is_active=1 AND (city IS NULL OR city='') AND (skill IS NULL OR skill='')
+           ORDER BY max_km ASC"""
+    ).fetchall()
+    scopes = []
+    if city and skill:
+        scopes.append((city, skill))
+    if city:
+        scopes.append((city, None))
+    if skill:
+        scopes.append((None, skill))
+    for scope_city, scope_skill in scopes:
+        if scope_city is not None and scope_skill is not None:
+            scoped = conn.execute(
+                """SELECT * FROM diagnosis_pricing_rules
+                   WHERE is_active=1 AND LOWER(city)=LOWER(?) AND skill=?
+                   ORDER BY max_km ASC""",
+                (scope_city, scope_skill),
+            ).fetchall()
+        elif scope_city is not None:
+            scoped = conn.execute(
+                """SELECT * FROM diagnosis_pricing_rules
+                   WHERE is_active=1 AND LOWER(city)=LOWER(?) AND (skill IS NULL OR skill='')
+                   ORDER BY max_km ASC""",
+                (scope_city,),
+            ).fetchall()
+        else:
+            scoped = conn.execute(
+                """SELECT * FROM diagnosis_pricing_rules
+                   WHERE is_active=1 AND (city IS NULL OR city='') AND skill=?
+                   ORDER BY max_km ASC""",
+                (scope_skill,),
+            ).fetchall()
+        if scoped:
+            return scoped
+    return rows
+
+
+def diagnosis_fee_for_distance(distance_km, conn=None, city=None, skill=None):
     distance = max(0.0, float(distance_km or 0))
-    for max_km, fee in DIAGNOSIS_DISTANCE_SLABS:
-        if distance <= max_km:
-            return fee, max_km
-    return None, None
+    own_conn = conn is None
+    if own_conn:
+        conn = get_db()
+    try:
+        rules = diagnosis_pricing_rules(conn, city=city, skill=skill)
+        for rule in rules:
+            if distance <= float(rule["max_km"]):
+                return int(rule["fee"]), float(rule["max_km"])
+        return None, None
+    finally:
+        if own_conn:
+            conn.close()
+
+
+def diagnosis_quote_for_worker(conn, worker, service_latitude, service_longitude):
+    if worker["service_latitude"] is None or worker["service_longitude"] is None:
+        return None, "Worker has not configured a service location yet"
+    try:
+        service_latitude = float(service_latitude)
+        service_longitude = float(service_longitude)
+    except (TypeError, ValueError):
+        return None, "Valid service GPS location is required"
+    if not (-90 <= service_latitude <= 90 and -180 <= service_longitude <= 180):
+        return None, "Service GPS location is invalid"
+    distance = haversine_distance_km(
+        worker["service_latitude"], worker["service_longitude"],
+        service_latitude, service_longitude,
+    )
+    rules = diagnosis_pricing_rules(conn, city=worker["city"], skill=worker["skill"])
+    matched = next((r for r in rules if distance <= float(r["max_km"])), None)
+    if not matched:
+        return None, "Diagnosis address is outside this worker's configured service radius"
+    return {
+        "distance_km": distance,
+        "fee": int(matched["fee"]),
+        "rule_id": int(matched["id"]),
+        "max_km": float(matched["max_km"]),
+        "city": matched["city"],
+        "skill": matched["skill"],
+    }, None
 
 
 @app.get("/api/pricing/diagnosis")
 def diagnosis_pricing():
-    """Transparent public policy: same slabs are shown to hirer and worker."""
-    return jsonify({
+    """Public pricing policy plus an optional server-computed GPS quote."""
+    worker_id = request.args.get("worker_id")
+    latitude = request.args.get("latitude")
+    longitude = request.args.get("longitude")
+    conn = get_db()
+    worker = None
+    if worker_id:
+        worker = conn.execute(
+            """SELECT id, city, skill, service_latitude, service_longitude
+               FROM workers WHERE id=? AND account_status='active' AND deleted_at IS NULL AND rate_status='approved'""",
+            (worker_id,),
+        ).fetchone()
+        if not worker:
+            conn.close()
+            return jsonify({"error": "Worker not found"}), 404
+    rules = diagnosis_pricing_rules(conn, city=worker["city"] if worker else None, skill=worker["skill"] if worker else None)
+    response = {
         "currency": "INR",
-        "slabs": [{"up_to_km": km, "fee": fee} for km, fee in DIAGNOSIS_DISTANCE_SLABS],
-        "note": "Diagnosis/inspection only. Repair work starts only after hirer approval."
-    })
+        "slabs": [{"id": int(r["id"]), "up_to_km": float(r["max_km"]), "fee": int(r["fee"]), "city": r["city"], "skill": r["skill"]} for r in rules],
+        "distance_method": "gps_straight_line",
+        "note": "Diagnosis fee is calculated by the server from hirer GPS to the worker service location. Road travel distance may differ. Repair work starts only after hirer approval.",
+    }
+    if worker and latitude is not None and longitude is not None:
+        quote, error = diagnosis_quote_for_worker(conn, worker, latitude, longitude)
+        if error:
+            conn.close()
+            return jsonify({"error": error, **response}), 409
+        response["quote"] = quote
+    elif worker:
+        response["worker_location_configured"] = worker["service_latitude"] is not None and worker["service_longitude"] is not None
+    conn.close()
+    return jsonify(response)
 
 
 @app.post("/api/bookings/<int:booking_id>/diagnosis")
@@ -1257,6 +1447,8 @@ def create_booking():
     payment_method = (data.get("payment_method") or "cash").strip().lower()
     special_instructions = (data.get("special_instructions") or "").strip() or None
     address = (data.get("address") or "").strip() or None
+    service_latitude = data.get("service_latitude")
+    service_longitude = data.get("service_longitude")
 
     try:
         hours = int(data.get("hours", 2))
@@ -1321,27 +1513,32 @@ def create_booking():
     rate = derived_hourly_rate(worker)
     diagnosis_fee = 0
     diagnosis_distance_km = None
+    diagnosis_pricing_rule_id = None
     if booking_type == "diagnosis":
-        try:
-            diagnosis_distance_km = float(data.get("distance_km"))
-        except (TypeError, ValueError):
+        quote, quote_error = diagnosis_quote_for_worker(conn, worker, service_latitude, service_longitude)
+        if quote_error:
             conn.rollback(); conn.close()
-            return jsonify({"error": "distance_km is required for diagnosis bookings"}), 400
-        diagnosis_fee, _ = diagnosis_fee_for_distance(diagnosis_distance_km)
-        if diagnosis_fee is None:
-            conn.rollback(); conn.close()
-            return jsonify({"error": "Diagnosis address is outside the current service radius"}), 409
+            return jsonify({"error": quote_error}), 409
+        diagnosis_distance_km = quote["distance_km"]
+        diagnosis_fee = quote["fee"]
+        diagnosis_pricing_rule_id = quote["rule_id"]
+        service_latitude = float(service_latitude)
+        service_longitude = float(service_longitude)
         total = diagnosis_fee
     else:
+        service_latitude = None
+        service_longitude = None
         total = round(rate * hours)
 
     cur = conn.execute(
         """INSERT INTO bookings
            (hirer_id, worker_id, start_date, start_time, end_time, days, hours, service_type, booking_type,
-            diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+            diagnosis_fee, diagnosis_distance_km, diagnosis_pricing_rule_id, service_latitude, service_longitude,
+            special_instructions, address, payment_method, total_amount, status, payment_status)
+           VALUES (?, ?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
         (current_hirer_id(), worker_id, start_date, start_time, end_time, hours, booking_type,
-         diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total),
+         diagnosis_fee, diagnosis_distance_km, diagnosis_pricing_rule_id, service_latitude, service_longitude,
+         special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
     conn.execute(
@@ -1370,6 +1567,7 @@ def create_booking():
         "derived_hourly_rate": rate,
         "booking_type": booking_type,
         "diagnosis_fee": diagnosis_fee,
+        "diagnosis_distance_km": diagnosis_distance_km,
         "hours": hours,
         "payment_method": payment_method,
         "status": "requested",
@@ -2452,7 +2650,9 @@ def admin_workers():
     conn = get_db()
     rows = conn.execute(
         """SELECT id, name, phone, skill, city, daily_wage, rating,
-                  jobs_completed, verification_status, rate_status, rate_review_note, id_document_path, is_online, created_at
+                  jobs_completed, verification_status, rate_status, rate_review_note, id_document_path, is_online,
+                  CASE WHEN service_latitude IS NOT NULL AND service_longitude IS NOT NULL THEN 1 ELSE 0 END AS service_location_configured,
+                  service_location_updated_at, created_at
            FROM workers ORDER BY id DESC LIMIT 500"""
     ).fetchall()
     conn.close()
@@ -2482,6 +2682,96 @@ def admin_rate_review(worker_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "rate_status": decision, "note": note})
+
+
+@app.get("/api/admin/diagnosis-pricing")
+def admin_diagnosis_pricing():
+    err = _check_admin_session()
+    if err: return err
+    conn = get_db()
+    rows = conn.execute(
+        "SELECT * FROM diagnosis_pricing_rules ORDER BY COALESCE(city,''), COALESCE(skill,''), max_km, id"
+    ).fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows))
+
+
+@app.post("/api/admin/diagnosis-pricing")
+def admin_save_diagnosis_pricing():
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    rule_id = data.get("id")
+    city = (data.get("city") or "").strip() or None
+    raw_skill = (data.get("skill") or "").strip()
+    skill = normalize_worker_skill(raw_skill, strict=True) if raw_skill else None
+    if raw_skill and not skill:
+        return jsonify({"error": "Invalid skill category"}), 400
+    try:
+        max_km = float(data.get("max_km"))
+        fee = int(data.get("fee"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "max_km and fee must be numbers"}), 400
+    if max_km <= 0 or max_km > 500:
+        return jsonify({"error": "max_km must be between 0 and 500"}), 400
+    if fee < 0 or fee > 100000:
+        return jsonify({"error": "fee is outside the allowed range"}), 400
+    active = 1 if data.get("is_active", True) else 0
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    duplicate = conn.execute(
+        """SELECT id FROM diagnosis_pricing_rules
+           WHERE COALESCE(LOWER(city),'')=COALESCE(LOWER(?),'')
+             AND COALESCE(skill,'')=COALESCE(?,'')
+             AND ABS(max_km-?) < 0.000001
+             AND (? IS NULL OR id<>?)""",
+        (city, skill, max_km, rule_id, rule_id),
+    ).fetchone()
+    if duplicate:
+        conn.close()
+        return jsonify({"error": "A pricing slab already exists for this scope and distance"}), 409
+    if rule_id:
+        existing = conn.execute("SELECT id FROM diagnosis_pricing_rules WHERE id=?", (rule_id,)).fetchone()
+        if not existing:
+            conn.close()
+            return jsonify({"error": "Pricing rule not found"}), 404
+        conn.execute(
+            """UPDATE diagnosis_pricing_rules
+               SET city=?, skill=?, max_km=?, fee=?, is_active=?, updated_at=? WHERE id=?""",
+            (city, skill, max_km, fee, active, now, rule_id),
+        )
+        saved_id = int(rule_id)
+    else:
+        cur = conn.execute(
+            """INSERT INTO diagnosis_pricing_rules(city, skill, max_km, fee, is_active, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (city, skill, max_km, fee, active, now, now),
+        )
+        saved_id = cur.lastrowid
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "id": saved_id})
+
+
+@app.delete("/api/admin/diagnosis-pricing/<int:rule_id>")
+def admin_delete_diagnosis_pricing(rule_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    conn = get_db()
+    row = conn.execute("SELECT id FROM diagnosis_pricing_rules WHERE id=?", (rule_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Pricing rule not found"}), 404
+    conn.execute("DELETE FROM diagnosis_pricing_rules WHERE id=?", (rule_id,))
+    remaining = conn.execute("SELECT COUNT(*) AS n FROM diagnosis_pricing_rules WHERE is_active=1").fetchone()["n"]
+    if not remaining:
+        conn.rollback(); conn.close()
+        return jsonify({"error": "At least one active diagnosis pricing rule must remain"}), 409
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
 
 
 @app.get("/api/worker/earnings-summary")
