@@ -1666,21 +1666,47 @@ def razorpay_webhook():
         payment_id = payment_entity.get("id")
 
         conn = get_db()
-        booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-        if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
+        adjustment = conn.execute(
+            """SELECT pa.*, b.worker_id, b.total_amount, b.paid_amount
+               FROM payment_adjustments pa JOIN bookings b ON b.id=pa.booking_id
+               WHERE pa.provider_order_id=? AND pa.adjustment_type='balance_due'""",
+            (order_id,),
+        ).fetchone()
+        if adjustment and adjustment["status"] != "resolved":
+            new_paid = int(adjustment["paid_amount"] or 0) + int(adjustment["amount"] or 0)
+            total = int(adjustment["total_amount"] or 0)
+            payment_status = "paid" if new_paid == total else ("balance_due" if new_paid < total else "refund_pending")
+            now = datetime.utcnow().isoformat()
             conn.execute(
-                "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
-                (payment_id, booking["id"]),
+                "UPDATE payment_adjustments SET status='resolved', provider_payment_id=?, updated_at=? WHERE id=?",
+                (payment_id, now, adjustment["id"]),
             )
             conn.execute(
-                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
-                (booking["id"],),
+                "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
+                (new_paid, payment_status, adjustment["booking_id"]),
             )
-            worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
-            sync_booking_financials(conn, booking["id"])
+            conn.execute(
+                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
+                (adjustment["booking_id"], f"Outstanding balance ₹{adjustment['amount']} confirmed via payment webhook."),
+            )
+            sync_booking_financials(conn, adjustment["booking_id"])
             conn.commit()
-            if worker and worker["phone"]:
-                notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
+        else:
+            booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
+            if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
+                conn.execute(
+                    "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
+                    (payment_id, booking["id"]),
+                )
+                conn.execute(
+                    "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
+                    (booking["id"],),
+                )
+                worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+                sync_booking_financials(conn, booking["id"])
+                conn.commit()
+                if worker and worker["phone"]:
+                    notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
         conn.close()
 
     return jsonify({"ok": True})
