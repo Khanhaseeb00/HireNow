@@ -1411,6 +1411,7 @@
   }
 
   function approveDiagnosisWork(bookingId){api("/api/bookings/"+bookingId+"/approve-work",{method:"POST",body:"{}"}).then(function(r){if(!r.ok){alert(r.data.error||"Approval failed");return;}alert("Work approved. Worker can now start the paid work timer.");loadBookings();});}
+  function declineDiagnosisWork(bookingId){var reason=prompt("Why do you want to stop after diagnosis?","Repair not required");if(reason===null)return;api("/api/bookings/"+bookingId+"/decline-work",{method:"POST",body:JSON.stringify({reason:reason})}).then(function(r){if(!r.ok){alert(r.data.error||"Unable to close diagnosis booking");return;}alert("Diagnosis visit completed. Only the diagnosis fee remains payable.");loadBookings();openBookingDetailsScreen(bookingId);});}
 
   function createReferenceBooking(worker, payload) {
     var msg = stackBody.querySelector("#refBookingMsg");
@@ -1599,7 +1600,7 @@
             '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
           '<div class="ref-detail-list">' +
             '<div class="ref-detail-row"><div class="k">Date &amp; Time</div><div class="v">📅 '+b.start_date+' &nbsp; ◷ '+(b.start_time||"Time not set")+'</div></div>' +
-            '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.booking_type||"regular")+'</div></div>' + (b.diagnosis_notes?'<div class="ref-detail-row"><div class="k">Diagnosis</div><div class="v">'+b.diagnosis_notes+'</div></div>':'') + (b.booking_type==='diagnosis'&&b.diagnosis_notes&&!b.work_approved_at?'<button class="btn btn-safety btn-block" onclick="approveDiagnosisWork('+b.id+')">Approve & Start Paid Work</button>':'') +
+            '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.booking_type||"regular")+'</div></div>' + (b.diagnosis_notes?'<div class="ref-detail-row"><div class="k">Diagnosis</div><div class="v">'+b.diagnosis_notes+'</div></div>':'') + (b.booking_type==='diagnosis'&&b.diagnosis_notes&&!b.work_approved_at&&!b.work_declined_at&&b.status==='checked_in'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0"><button class="btn btn-safety" onclick="approveDiagnosisWork('+b.id+')">Approve Paid Work</button><button class="btn btn-outline" onclick="declineDiagnosisWork('+b.id+')">Diagnosis Only</button></div>':'') + (b.work_declined_at?'<div class="pay-note">Repair work declined after diagnosis. Final bill is diagnosis fee only.</div>':'') +
             '<div class="ref-detail-row"><div class="k">Address</div><div class="v">'+(b.address||"Not provided")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Special Instructions</div><div class="v">'+(b.special_instructions||"None")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Total Amount</div><div class="v" style="font-size:18px;">'+fmtMoney(b.total_amount)+'</div></div>' +
