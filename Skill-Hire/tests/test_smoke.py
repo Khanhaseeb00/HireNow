@@ -186,6 +186,23 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertNotIn("service_latitude", data)
         self.assertNotIn("service_longitude", data)
 
+    def test_legacy_worker_schema_is_extended_with_service_location(self):
+        conn = get_db()
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(workers)").fetchall()}
+        for name in ("service_location_updated_at", "service_longitude", "service_latitude"):
+            if name in cols:
+                conn.execute(f"ALTER TABLE workers DROP COLUMN {name}")
+        conn.commit(); conn.close()
+
+        app.ensure_schema_extensions()
+
+        conn = get_db()
+        cols = {r["name"] for r in conn.execute("PRAGMA table_info(workers)").fetchall()}
+        conn.close()
+        self.assertIn("service_latitude", cols)
+        self.assertIn("service_longitude", cols)
+        self.assertIn("service_location_updated_at", cols)
+
     def test_finance_ledger_uses_configured_commission(self):
         conn = get_db()
         conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Test Hirer", "9000000001", "x"))
