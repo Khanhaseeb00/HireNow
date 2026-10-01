@@ -5,7 +5,7 @@ services:
     plan: free
     rootDir: Skill-Hire
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60"
+    startCommand: "gunicorn access_control:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60"
     envVars:
       - key: KAAMGAR_SECRET_KEY
         generateValue: true
