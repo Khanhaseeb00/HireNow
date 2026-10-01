@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS workers (
     account_status TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at TEXT,
+    service_latitude REAL,
+    service_longitude REAL,
+    service_location_updated_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
@@ -69,6 +72,17 @@ CREATE TABLE IF NOT EXISTS admin_account_actions (
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
+CREATE TABLE IF NOT EXISTS diagnosis_pricing_rules (
+    id BIGSERIAL PRIMARY KEY,
+    city TEXT,
+    skill TEXT,
+    max_km REAL NOT NULL,
+    fee INTEGER NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
 CREATE TABLE IF NOT EXISTS platform_settings (
     setting_key TEXT PRIMARY KEY,
     setting_value TEXT NOT NULL,
@@ -88,6 +102,9 @@ CREATE TABLE IF NOT EXISTS bookings (
     booking_type TEXT NOT NULL DEFAULT 'regular',
     diagnosis_fee INTEGER NOT NULL DEFAULT 0,
     diagnosis_distance_km REAL,
+    service_latitude REAL,
+    service_longitude REAL,
+    diagnosis_pricing_rule_id BIGINT,
     diagnosis_notes TEXT,
     work_approved_at TEXT,
     work_declined_at TEXT,
