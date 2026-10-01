@@ -8,6 +8,8 @@ on:
   pull_request:
     branches:
       - main
+      - daily-rate-diagnosis-timer-v1
+  workflow_dispatch:
 
 jobs:
   smoke-tests:
