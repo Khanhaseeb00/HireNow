@@ -825,6 +825,9 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
             '</div>' : '') +
           (nodes ? '<div class="timeline">' + nodes + '</div>' : '') +
           (canAct ? '<button class="btn btn-safety" data-checkin="' + b.id + '">' + actionLabel + '</button>' : '') +
+          (b.booking_type === "diagnosis" && (b.status === "confirmed" || b.status === "checked_in") && !b.diagnosis_notes ? '<button class="btn btn-outline" data-diagnose="' + b.id + '">Submit Diagnosis</button>' : '') +
+          (b.booking_type === "diagnosis" && b.work_approved_at && !b.work_started_at ? '<button class="btn btn-safety" data-timer-start="' + b.id + '">Start Work Timer</button>' : '') +
+          (b.work_started_at && !b.work_ended_at ? '<button class="btn btn-safety" data-timer-stop="' + b.id + '">Stop & Complete Work</button>' : '') +
           (b.status === "completed" && b.payment_method === "cash" && b.payment_status !== "paid" ?
             '<div style="margin-top:10px;"><input type="text" maxlength="6" inputmode="numeric" id="cash-otp-' + b.id + '" placeholder="6-digit cash OTP">' +
             '<button class="btn btn-safety btn-block" data-verify-cash="' + b.id + '" style="margin-top:8px;">Verify Cash OTP</button></div>' : '') +
@@ -855,6 +858,9 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
         });
       });
     });
+    wrap.querySelectorAll("[data-diagnose]").forEach(function(btn){btn.addEventListener("click",function(){submitDiagnosis(Number(btn.dataset.diagnose));});});
+    wrap.querySelectorAll("[data-timer-start]").forEach(function(btn){btn.addEventListener("click",function(){workTimer(Number(btn.dataset.timerStart),"start");});});
+    wrap.querySelectorAll("[data-timer-stop]").forEach(function(btn){btn.addEventListener("click",function(){workTimer(Number(btn.dataset.timerStop),"stop");});});
     wrap.querySelectorAll("[data-checkin]").forEach(function (btn) {
       btn.addEventListener("click", function () { doCheckIn(Number(btn.dataset.checkin)); });
     });
@@ -907,7 +913,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var b=findBooking(id); if(!b)return;
     var canAccept=b.status==="requested";
     var canNavigate=["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;
-    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.hours||2)+' hrs</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button></div></div>';
+    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button></div></div>';
     showWorkerPanel("job-detail");
     var a=document.querySelector("[data-detail-accept]");if(a)a.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"accept"})}).then(function(r){if(r.ok){loadBookings();showWorkerPanel("jobs");}else alert(r.data.error||"Accept failed");});});
     var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"reject",reason:""})}).then(function(x){if(x.ok){loadBookings();showWorkerPanel("jobs");}else alert(x.data.error||"Reject failed");});});
@@ -922,6 +928,9 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     document.querySelector("[data-real-checkin]").addEventListener("click",function(){doCheckIn(b.id,"gps-nav-"+b.id);});
     document.querySelector("[data-external-nav]").addEventListener("click",function(){if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(p){window.open("https://www.google.com/maps/dir/?api=1&origin="+p.coords.latitude+","+p.coords.longitude+"&destination="+encodeURIComponent(b.address||b.city||""),"_blank");},function(){alert("Location permission is required for navigation.");});}});
   }
+
+  function submitDiagnosis(id){var notes=prompt("Enter diagnosis / problem found:");if(!notes)return;api("/api/bookings/"+id+"/diagnosis",{method:"POST",body:JSON.stringify({notes:notes})}).then(function(r){if(!r.ok)alert(r.data.error||"Diagnosis failed");else{alert("Diagnosis sent to hirer for approval.");loadBookings();}});}
+  function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
 
   function renderEarningsScreen(){
     var completed=state.bookings.filter(function(b){return b.status==="completed" && b.payment_status==="paid";});
