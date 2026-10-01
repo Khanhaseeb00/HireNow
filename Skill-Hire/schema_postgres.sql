@@ -25,7 +25,27 @@ CREATE TABLE IF NOT EXISTS workers (
     id_document_name TEXT,
     id_document_uploaded_at TEXT,
     is_online INTEGER NOT NULL DEFAULT 1,
+    rate_status TEXT NOT NULL DEFAULT 'approved',
+    rate_review_note TEXT,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
+CREATE TABLE IF NOT EXISTS worker_payout_accounts (
+    worker_id BIGINT PRIMARY KEY REFERENCES workers(id),
+    account_holder_name TEXT NOT NULL,
+    account_number_last4 TEXT NOT NULL,
+    account_number_encrypted TEXT,
+    ifsc TEXT NOT NULL,
+    bank_name TEXT,
+    upi_id TEXT,
+    provider_account_id TEXT,
+    provider_fund_account_id TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS hirers (
@@ -33,6 +53,19 @@ CREATE TABLE IF NOT EXISTS hirers (
     name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
+CREATE TABLE IF NOT EXISTS admin_account_actions (
+    id BIGSERIAL PRIMARY KEY,
+    account_type TEXT NOT NULL,
+    account_id BIGINT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    admin_username TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
@@ -42,9 +75,19 @@ CREATE TABLE IF NOT EXISTS bookings (
     worker_id BIGINT NOT NULL REFERENCES workers(id),
     start_date TEXT NOT NULL,
     start_time TEXT,
+    end_time TEXT,
     days INTEGER NOT NULL DEFAULT 1,
     hours INTEGER NOT NULL DEFAULT 2,
     service_type TEXT NOT NULL DEFAULT 'regular',
+    booking_type TEXT NOT NULL DEFAULT 'regular',
+    diagnosis_fee INTEGER NOT NULL DEFAULT 0,
+    diagnosis_distance_km REAL,
+    diagnosis_notes TEXT,
+    work_approved_at TEXT,
+    work_started_at TEXT,
+    work_ended_at TEXT,
+    actual_minutes INTEGER NOT NULL DEFAULT 0,
+    work_amount INTEGER NOT NULL DEFAULT 0,
     special_instructions TEXT,
     address TEXT,
     payment_method TEXT NOT NULL DEFAULT 'online',

@@ -49,6 +49,9 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
+STANDARD_WORKDAY_HOURS = 8
+# V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
+DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
 
 
 def ensure_schema_extensions():
@@ -70,14 +73,35 @@ def ensure_schema_extensions():
         "cash_verified_at": "TEXT",
         "cancelled_at": "TEXT",
         "cancellation_reason": "TEXT",
+        "end_time": "TEXT",
+        "booking_type": "TEXT NOT NULL DEFAULT 'regular'",
+        "diagnosis_fee": "INTEGER NOT NULL DEFAULT 0",
+        "diagnosis_distance_km": "REAL",
+        "diagnosis_notes": "TEXT",
+        "work_approved_at": "TEXT",
+        "work_started_at": "TEXT",
+        "work_ended_at": "TEXT",
+        "actual_minutes": "INTEGER NOT NULL DEFAULT 0",
+        "work_amount": "INTEGER NOT NULL DEFAULT 0",
     }
     for column, definition in additions.items():
         if column not in existing:
             conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
 
     worker_columns = table_columns(conn, "workers")
+    for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+    hirer_columns = table_columns(conn, "hirers")
+    for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in hirer_columns:
+            conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
     if "is_online" not in worker_columns:
         conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
+    if "rate_status" not in worker_columns:
+        conn.execute("ALTER TABLE workers ADD COLUMN rate_status TEXT NOT NULL DEFAULT 'approved'")
+    if "rate_review_note" not in worker_columns:
+        conn.execute("ALTER TABLE workers ADD COLUMN rate_review_note TEXT")
 
     kyc_columns = {
         "id_document_data": binary_sql(),
@@ -89,6 +113,23 @@ def ensure_schema_extensions():
         if column not in worker_columns:
             conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
 
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS worker_payout_accounts (
+            worker_id {foreign_id_sql()} PRIMARY KEY,
+            account_holder_name TEXT NOT NULL,
+            account_number_last4 TEXT NOT NULL,
+            account_number_encrypted TEXT,
+            ifsc TEXT NOT NULL,
+            bank_name TEXT,
+            upi_id TEXT,
+            provider_account_id TEXT,
+            provider_fund_account_id TEXT,
+            verification_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT DEFAULT {text_timestamp_default()},
+            updated_at TEXT DEFAULT {text_timestamp_default()},
+            FOREIGN KEY(worker_id) REFERENCES workers(id)
+        )
+    """)
     conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_availability (
             id {id_column_sql()},
@@ -124,6 +165,13 @@ def ensure_schema_extensions():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON in_app_notifications(recipient_type, recipient_id, is_read, created_at)")
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS admin_account_actions (
+            id {id_column_sql()}, account_type TEXT NOT NULL, account_id {foreign_id_sql()} NOT NULL,
+            action TEXT NOT NULL, reason TEXT, admin_username TEXT,
+            created_at TEXT DEFAULT {text_timestamp_default()}
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS admin_login_attempts (
             attempt_key TEXT PRIMARY KEY,
@@ -306,7 +354,7 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
     if include_requested:
         blocked.add("requested")
     rows = conn.execute(
-        "SELECT id, start_date, start_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
+        "SELECT id, start_date, start_time, end_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
         (worker_id, start_date),
     ).fetchall()
     new_start = parse_booking_start(start_date, start_time) if start_time else None
@@ -322,7 +370,13 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
             old_start = parse_booking_start(row["start_date"], row["start_time"])
         except ValueError:
             return row
-        old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        if row["end_time"]:
+            try:
+                old_end = datetime.combine(old_start.date(), datetime.strptime(row["end_time"], "%H:%M").time())
+            except ValueError:
+                old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        else:
+            old_end = old_start + timedelta(hours=int(row["hours"] or 2))
         if new_start < old_end and old_start < new_end:
             return row
     return None
@@ -561,13 +615,46 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/worker/payout-account")
+def get_worker_payout_account():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute("SELECT account_holder_name, account_number_last4, ifsc, bank_name, upi_id, verification_status FROM worker_payout_accounts WHERE worker_id = ?", (current_worker_id(),)).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/worker/payout-account")
+def save_worker_payout_account():
+    err = require_worker_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    holder = (data.get("account_holder_name") or "").strip()
+    account = re.sub(r"\s+", "", str(data.get("account_number") or ""))
+    ifsc = (data.get("ifsc") or "").strip().upper()
+    bank = (data.get("bank_name") or "").strip() or None
+    upi = (data.get("upi_id") or "").strip() or None
+    if not holder or not account.isdigit() or len(account) < 6 or not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
+        return jsonify({"error": "Valid account holder, account number and IFSC are required"}), 400
+    # V1 intentionally does not return the full account number. Provider tokenization/encryption is required before production payouts.
+    conn = get_db()
+    existing = conn.execute("SELECT worker_id FROM worker_payout_accounts WHERE worker_id = ?", (current_worker_id(),)).fetchone()
+    if existing:
+        conn.execute("UPDATE worker_payout_accounts SET account_holder_name=?, account_number_last4=?, account_number_encrypted=NULL, ifsc=?, bank_name=?, upi_id=?, verification_status='pending', updated_at=? WHERE worker_id=?", (holder, account[-4:], ifsc, bank, upi, datetime.utcnow().isoformat(), current_worker_id()))
+    else:
+        conn.execute("INSERT INTO worker_payout_accounts (worker_id, account_holder_name, account_number_last4, ifsc, bank_name, upi_id) VALUES (?, ?, ?, ?, ?, ?)", (current_worker_id(), holder, account[-4:], ifsc, bank, upi))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "account_number_last4": account[-4:], "verification_status": "pending"})
 
 
 @app.get("/api/worker/availability")
@@ -734,6 +821,104 @@ def get_worker(worker_id):
     return jsonify(result)
 
 
+def derived_hourly_rate(worker):
+    """Display/billing rate derived from the admin-reviewable daily wage."""
+    return round(float(worker["daily_wage"]) / STANDARD_WORKDAY_HOURS, 2)
+
+
+def diagnosis_fee_for_distance(distance_km):
+    distance = max(0.0, float(distance_km or 0))
+    for max_km, fee in DIAGNOSIS_DISTANCE_SLABS:
+        if distance <= max_km:
+            return fee, max_km
+    return None, None
+
+
+@app.get("/api/pricing/diagnosis")
+def diagnosis_pricing():
+    """Transparent public policy: same slabs are shown to hirer and worker."""
+    return jsonify({
+        "currency": "INR",
+        "slabs": [{"up_to_km": km, "fee": fee} for km, fee in DIAGNOSIS_DISTANCE_SLABS],
+        "note": "Diagnosis/inspection only. Repair work starts only after hirer approval."
+    })
+
+
+@app.post("/api/bookings/<int:booking_id>/diagnosis")
+def submit_diagnosis(booking_id):
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(force=True) or {}
+    notes = (data.get("notes") or "").strip()
+    if not notes:
+        return jsonify({"error": "Diagnosis notes are required"}), 400
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] != "diagnosis" or booking["status"] not in ("confirmed", "checked_in"):
+        conn.close(); return jsonify({"error": "Diagnosis can be submitted only for an active diagnosis booking"}), 400
+    conn.execute("UPDATE bookings SET diagnosis_notes = ? WHERE id = ?", (notes, booking_id))
+    add_in_app_notification(conn, "hirer", booking["hirer_id"], "diagnosis_ready", "Diagnosis ready", f"Worker submitted diagnosis for booking #{booking_id}. Review it before starting paid work.", booking_id)
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "diagnosis_notes": notes})
+
+
+@app.post("/api/bookings/<int:booking_id>/approve-work")
+def approve_diagnosed_work(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"), (booking_id, current_hirer_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] != "diagnosis" or not booking["diagnosis_notes"]:
+        conn.close(); return jsonify({"error": "Worker diagnosis is required before approval"}), 400
+    approved_at = datetime.utcnow().isoformat()
+    conn.execute("UPDATE bookings SET work_approved_at = ? WHERE id = ?", (approved_at, booking_id))
+    add_in_app_notification(conn, "worker", booking["worker_id"], "work_approved", "Work approved", f"Hirer approved paid work for booking #{booking_id}. Start the timer when work begins.", booking_id)
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "work_approved_at": approved_at})
+
+
+@app.post("/api/worker/bookings/<int:booking_id>/work-timer")
+def worker_work_timer(booking_id):
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    action = ((request.get_json(force=True) or {}).get("action") or "").lower()
+    if action not in ("start", "stop"):
+        return jsonify({"error": "action must be start or stop"}), 400
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] == "diagnosis" and not booking["work_approved_at"]:
+        conn.close(); return jsonify({"error": "Hirer must approve diagnosed work before timer starts"}), 409
+    now = datetime.utcnow()
+    if action == "start":
+        if booking["work_started_at"]:
+            conn.close(); return jsonify({"error": "Work timer already started"}), 409
+        conn.execute("UPDATE bookings SET work_started_at = ?, status = 'in_progress' WHERE id = ?", (now.isoformat(), booking_id))
+        conn.commit(); conn.close()
+        return jsonify({"status": "in_progress", "work_started_at": now.isoformat()})
+    if not booking["work_started_at"]:
+        conn.close(); return jsonify({"error": "Work timer has not started"}), 409
+    started = datetime.fromisoformat(booking["work_started_at"])
+    minutes = max(1, int((now - started).total_seconds() // 60))
+    worker = conn.execute("SELECT daily_wage FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+    hourly = derived_hourly_rate(worker)
+    work_amount = round(hourly * minutes / 60)
+    total = int(booking["diagnosis_fee"] or 0) + int(work_amount)
+    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed' WHERE id = ?""",
+                 (now.isoformat(), minutes, work_amount, total, booking_id))
+    conn.commit(); conn.close()
+    return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total})
+
+
+
 # ----------------------------------------------------------- booking routes
 @app.post("/api/bookings")
 def create_booking():
@@ -745,7 +930,8 @@ def create_booking():
     worker_id = data.get("worker_id")
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
-    service_type = (data.get("service_type") or "regular").strip().lower()
+    end_time = (data.get("end_time") or "").strip() or None
+    booking_type = (data.get("booking_type") or "regular").strip().lower()
     payment_method = (data.get("payment_method") or "cash").strip().lower()
     special_instructions = (data.get("special_instructions") or "").strip() or None
     address = (data.get("address") or "").strip() or None
@@ -756,8 +942,8 @@ def create_booking():
         return jsonify({"error": "hours must be a number"}), 400
     if hours < 1 or hours > 12:
         return jsonify({"error": "hours must be between 1 and 12"}), 400
-    if service_type not in ("regular", "overtime"):
-        return jsonify({"error": "service_type must be regular or overtime"}), 400
+    if booking_type not in ("regular", "diagnosis"):
+        return jsonify({"error": "booking_type must be regular or diagnosis"}), 400
     if payment_method not in ("cash", "online"):
         return jsonify({"error": "payment_method must be cash or online"}), 400
     if not worker_id or not start_date:
@@ -775,6 +961,16 @@ def create_booking():
             return jsonify({"error": str(e)}), 400
         if booking_start <= datetime.now():
             return jsonify({"error": "Please choose a future booking time"}), 400
+        if end_time:
+            try:
+                end_clock = datetime.strptime(end_time, "%H:%M").time()
+                booking_end = datetime.combine(booking_date, end_clock)
+            except ValueError:
+                return jsonify({"error": "end_time must use 24-hour HH:MM format"}), 400
+            if booking_end <= booking_start:
+                return jsonify({"error": "End time must be after start time"}), 400
+            minutes = int((booking_end - booking_start).total_seconds() // 60)
+            hours = max(1, int((minutes + 59) // 60))
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
@@ -800,18 +996,30 @@ def create_booking():
             "error": "This worker already has a booking that overlaps the selected date and time. Please choose another slot."
         }), 409
 
-    regular_rate = worker["hourly_wage"] or max(1, int(worker["daily_wage"] / 8))
-    overtime_rate = worker["overtime_wage"] or regular_rate
-    rate = overtime_rate if service_type == "overtime" else regular_rate
-    total = int(rate) * hours
+    rate = derived_hourly_rate(worker)
+    diagnosis_fee = 0
+    diagnosis_distance_km = None
+    if booking_type == "diagnosis":
+        try:
+            diagnosis_distance_km = float(data.get("distance_km"))
+        except (TypeError, ValueError):
+            conn.rollback(); conn.close()
+            return jsonify({"error": "distance_km is required for diagnosis bookings"}), 400
+        diagnosis_fee, _ = diagnosis_fee_for_distance(diagnosis_distance_km)
+        if diagnosis_fee is None:
+            conn.rollback(); conn.close()
+            return jsonify({"error": "Diagnosis address is outside the current service radius"}), 409
+        total = diagnosis_fee
+    else:
+        total = round(rate * hours)
 
     cur = conn.execute(
         """INSERT INTO bookings
-           (hirer_id, worker_id, start_date, start_time, days, hours, service_type,
-            special_instructions, address, payment_method, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
-        (current_hirer_id(), worker_id, start_date, start_time, hours, service_type,
-         special_instructions, address, payment_method, total),
+           (hirer_id, worker_id, start_date, start_time, end_time, days, hours, service_type, booking_type,
+            diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total_amount, status, payment_status)
+           VALUES (?, ?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+        (current_hirer_id(), worker_id, start_date, start_time, end_time, hours, booking_type,
+         diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
     conn.execute(
@@ -837,7 +1045,9 @@ def create_booking():
     return jsonify({
         "id": booking_id,
         "total_amount": total,
-        "hourly_rate": int(rate),
+        "derived_hourly_rate": rate,
+        "booking_type": booking_type,
+        "diagnosis_fee": diagnosis_fee,
         "hours": hours,
         "payment_method": payment_method,
         "status": "requested",
@@ -1017,7 +1227,7 @@ def list_bookings():
     conn = get_db()
     rows = conn.execute(
         """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
-                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage, w.distance_km
+                  w.rating AS worker_rating, w.daily_wage, w.distance_km
            FROM bookings b JOIN workers w ON w.id = b.worker_id
            WHERE b.hirer_id = ? ORDER BY b.created_at DESC""",
         (current_hirer_id(),),
@@ -1034,7 +1244,7 @@ def booking_detail(booking_id):
     conn = get_db()
     row = conn.execute(
         """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
-                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage,
+                  w.rating AS worker_rating, w.daily_wage,
                   w.verification_status, w.background_checked
            FROM bookings b JOIN workers w ON w.id = b.worker_id
            WHERE b.id = ? AND b.hirer_id = ?""",
@@ -1693,6 +1903,47 @@ def admin_overview():
     return jsonify(stats)
 
 
+@app.get("/api/admin/accounts")
+def admin_accounts():
+    err = _check_admin_session()
+    if err: return err
+    conn = get_db()
+    workers = conn.execute("SELECT id, name, phone, 'worker' AS account_type, account_status, account_status_reason, created_at FROM workers WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
+    hirers = conn.execute("SELECT id, name, phone, 'hirer' AS account_type, account_status, account_status_reason, created_at FROM hirers WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_list(workers) + rows_to_list(hirers))
+
+
+@app.post("/api/admin/accounts/<account_type>/<int:account_id>/moderate")
+def admin_moderate_account(account_type, account_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    if account_type not in ("worker", "hirer"):
+        return jsonify({"error": "Invalid account type"}), 400
+    data = request.get_json(force=True) or {}
+    action = (data.get("action") or "").strip().lower()
+    reason = (data.get("reason") or "").strip() or None
+    if action not in ("activate", "freeze", "delete"):
+        return jsonify({"error": "Action must be activate, freeze or delete"}), 400
+    if action in ("freeze", "delete") and not reason:
+        return jsonify({"error": "Reason is required"}), 400
+    table = "workers" if account_type == "worker" else "hirers"
+    conn = get_db()
+    row = conn.execute(f"SELECT id FROM {table} WHERE id = ? AND deleted_at IS NULL", (account_id,)).fetchone()
+    if not row:
+        conn.close(); return jsonify({"error": "Account not found"}), 404
+    if action == "delete":
+        conn.execute(f"UPDATE {table} SET account_status='deleted', account_status_reason=?, deleted_at=? WHERE id=?", (reason, datetime.utcnow().isoformat(), account_id))
+    else:
+        status = "active" if action == "activate" else "frozen"
+        conn.execute(f"UPDATE {table} SET account_status=?, account_status_reason=? WHERE id=?", (status, reason, account_id))
+    conn.execute("INSERT INTO admin_account_actions(account_type, account_id, action, reason, admin_username) VALUES (?, ?, ?, ?, ?)", (account_type, account_id, action, reason, session.get("admin_username")))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "action": action})
+
+
 @app.get("/api/admin/workers")
 def admin_workers():
     err = _check_admin_session()
@@ -1700,12 +1951,37 @@ def admin_workers():
         return err
     conn = get_db()
     rows = conn.execute(
-        """SELECT id, name, phone, skill, city, daily_wage, hourly_wage, rating,
-                  jobs_completed, verification_status, id_document_path, is_online, created_at
+        """SELECT id, name, phone, skill, city, daily_wage, rating,
+                  jobs_completed, verification_status, rate_status, rate_review_note, id_document_path, is_online, created_at
            FROM workers ORDER BY id DESC LIMIT 500"""
     ).fetchall()
     conn.close()
     return jsonify(rows_to_list(rows))
+
+
+@app.post("/api/admin/workers/<int:worker_id>/rate-review")
+def admin_rate_review(worker_id):
+    err = _check_admin_session()
+    if err:
+        return err
+    err = _check_admin_csrf()
+    if err:
+        return err
+    data = request.get_json(force=True) or {}
+    decision = (data.get("decision") or "").strip().lower()
+    note = (data.get("note") or "").strip() or None
+    if decision not in ("approved", "rejected", "change_requested"):
+        return jsonify({"error": "Invalid rate-review decision"}), 400
+    conn = get_db()
+    worker = conn.execute("SELECT id, daily_wage FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    if not worker:
+        conn.close()
+        return jsonify({"error": "Worker not found"}), 404
+    conn.execute("UPDATE workers SET rate_status = ?, rate_review_note = ? WHERE id = ?", (decision, note, worker_id))
+    add_in_app_notification(conn, "worker", worker_id, "rate_review", "Daily rate review", "Admin reviewed your daily rate.", None)
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "rate_status": decision, "note": note})
 
 
 @app.get("/api/admin/bookings")
@@ -1715,7 +1991,7 @@ def admin_bookings():
         return err
     conn = get_db()
     rows = conn.execute(
-        """SELECT b.id, b.start_date, b.start_time, b.hours, b.total_amount, b.status,
+        """SELECT b.id, b.start_date, b.start_time, b.end_time, b.hours, b.booking_type, b.diagnosis_fee, b.work_amount, b.actual_minutes, b.total_amount, b.status,
                   b.payment_status, b.payment_method, b.created_at,
                   h.name AS hirer_name, w.name AS worker_name, w.skill AS worker_skill
            FROM bookings b
