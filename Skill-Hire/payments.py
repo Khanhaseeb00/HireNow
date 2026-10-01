@@ -24,7 +24,8 @@ RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
 
-ORDERS_URL = "https://api.razorpay.com/v1/orders"
+API_BASE = "https://api.razorpay.com/v1"
+ORDERS_URL = f"{API_BASE}/orders"
 
 
 class RazorpayConfigError(Exception):
@@ -102,3 +103,43 @@ def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
         RAZORPAY_WEBHOOK_SECRET.encode(), raw_body, hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
+
+
+def fetch_order(order_id: str) -> dict:
+    """Fetch a Razorpay order from the provider for server-side reconciliation."""
+    _check_configured()
+    resp = requests.get(
+        f"{ORDERS_URL}/{order_id}",
+        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
+        timeout=10,
+    )
+    if resp.status_code >= 400:
+        raise RazorpayAPIError(f"Razorpay order fetch failed ({resp.status_code}): {resp.text}")
+    return resp.json()
+
+
+def fetch_order_payments(order_id: str) -> list[dict]:
+    """Return all payments attached to a Razorpay order."""
+    _check_configured()
+    resp = requests.get(
+        f"{ORDERS_URL}/{order_id}/payments",
+        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
+        timeout=10,
+    )
+    if resp.status_code >= 400:
+        raise RazorpayAPIError(f"Razorpay order payments fetch failed ({resp.status_code}): {resp.text}")
+    data = resp.json()
+    return data.get("items", []) if isinstance(data, dict) else []
+
+
+def fetch_payment(payment_id: str) -> dict:
+    """Fetch one payment directly from Razorpay."""
+    _check_configured()
+    resp = requests.get(
+        f"{API_BASE}/payments/{payment_id}",
+        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
+        timeout=10,
+    )
+    if resp.status_code >= 400:
+        raise RazorpayAPIError(f"Razorpay payment fetch failed ({resp.status_code}): {resp.text}")
+    return resp.json()
