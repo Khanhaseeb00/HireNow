@@ -1170,16 +1170,14 @@
       });
       if (sortMode === "Nearby") list = list.slice().sort(function (a, b) { return (a.distance_km == null ? 999 : a.distance_km) - (b.distance_km == null ? 999 : b.distance_km); });
       else if (sortMode === "Top Rated") list = list.slice().sort(function (a, b) { return b.rating - a.rating; });
-      else if (sortMode === "Price: Low to High") list = list.slice().sort(function (a, b) { return (a.hourly_wage || a.daily_wage) - (b.hourly_wage || b.daily_wage); });
+      else if (sortMode === "Price: Low to High") list = list.slice().sort(function (a, b) { return a.daily_wage - b.daily_wage; });
 
       var chipsHtml = SORT_CHIPS.map(function (s) {
         return '<button class="chip ' + (s === sortMode ? "active" : "") + '" data-sort="' + s + '">' + s + '</button>';
       }).join("");
       var rowsHtml = list.map(function (w) {
         var isVerified = w.verification_status === "verified";
-        var priceHtml = w.hourly_wage
-          ? '<div class="wl-price num">' + fmtMoney(w.hourly_wage) + '<small>/hr</small></div>'
-          : '<div class="wl-price num">' + fmtMoney(w.daily_wage) + '<small>' + t("per_day") + '</small></div>';
+        var priceHtml = '<div class="wl-price num">' + fmtMoney(w.daily_wage) + '<small>' + t("per_day") + '</small></div>';
         return '<div class="wl-row" data-worker="' + w.id + '">' +
           '<div class="avatar" style="background:' + colorFor(w.id) + '">' + initials(w.name) + '</div>' +
           '<div class="wl-body">' +
@@ -1250,7 +1248,7 @@
     function renderWorkerProfile() {
       var isVerified = w.verification_status === "verified";
       var isFav = !!state.favorites[w.id];
-      var overtimeRate = w.overtime_wage || Math.round((w.hourly_wage || 0) * 1.4);
+      var derivedHourly = Number(w.daily_wage || 0) / 8;
       var tags = (w.skills_detail || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 
       stackBody.innerHTML =
@@ -1272,8 +1270,8 @@
           '</div>' +
           '<div class="wp-divider"></div>' +
           '<div class="wp-price-row">' +
-            '<div class="wp-price-box"><div class="amt num">' + fmtMoney(w.hourly_wage || w.daily_wage) + '/hr</div><div class="lbl">(Regular Rate)</div></div>' +
-            '<div class="wp-price-box right"><div class="amt num">' + fmtMoney(overtimeRate) + '/hr</div><div class="lbl">(Overtime Rate)</div></div>' +
+            '<div class="wp-price-box"><div class="amt num">' + fmtMoney(w.daily_wage) + '/day</div><div class="lbl">(Daily Rate)</div></div>' +
+            '<div class="wp-price-box right"><div class="amt num">' + fmtMoney(derivedHourly) + '/hr</div><div class="lbl">(Derived · 8 hr day)</div></div>' +
           '</div>' +
           '<div class="wp-divider"></div>' +
           '<div class="wp-section-title">Skills &amp; Experience</div>' +
