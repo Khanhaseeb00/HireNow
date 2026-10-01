@@ -52,8 +52,10 @@ class HireNowSmokeTests(unittest.TestCase):
         hirer_cols = {r["name"] for r in conn.execute("PRAGMA table_info(hirers)").fetchall()}
         payout_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='worker_payout_accounts'").fetchone()
         action_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_account_actions'").fetchone()
+        finance_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='booking_financials'").fetchone()
+        settings_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='platform_settings'").fetchone()
         conn.close()
-        for name in ("booking_type", "diagnosis_fee", "diagnosis_distance_km", "diagnosis_notes", "work_approved_at", "work_started_at", "work_ended_at", "actual_minutes", "work_amount"):
+        for name in ("booking_type", "diagnosis_fee", "diagnosis_distance_km", "diagnosis_notes", "work_approved_at", "work_started_at", "work_ended_at", "actual_minutes", "work_amount", "paid_amount"):
             self.assertIn(name, booking_cols)
         for cols in (worker_cols, hirer_cols):
             self.assertIn("account_status", cols)
@@ -61,6 +63,26 @@ class HireNowSmokeTests(unittest.TestCase):
             self.assertIn("deleted_at", cols)
         self.assertIsNotNone(payout_table)
         self.assertIsNotNone(action_table)
+        self.assertIsNotNone(finance_table)
+        self.assertIsNotNone(settings_table)
+
+    def test_finance_ledger_uses_configured_commission(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Test Hirer", "9000000001", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000001",)).fetchone()["id"]
+        conn.execute("INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage) VALUES (?,?,?,?,?,?)", ("Test Worker", "9000000002", "x", "Plumber", "Test City", 800))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000002",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, total_amount, status, payment_status, paid_amount, work_amount, diagnosis_fee)
+                      VALUES (?,?,?,?,?,?,?,?,?,?)""", (hirer_id, worker_id, "2099-01-01", 2, 500, "completed", "paid", 500, 400, 100))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        result = app.sync_booking_financials(conn, booking_id)
+        conn.commit()
+        row = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(result["commission_percent"], 10.0)
+        self.assertEqual(row["platform_commission"], 50)
+        self.assertEqual(row["worker_net"], 450)
+        self.assertEqual(row["settlement_status"], "held")
 
     def test_worker_payout_endpoint_requires_login(self):
         response = self.client.get("/api/worker/payout-account")
