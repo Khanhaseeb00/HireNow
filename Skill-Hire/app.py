@@ -79,6 +79,8 @@ def ensure_schema_extensions():
         "diagnosis_distance_km": "REAL",
         "diagnosis_notes": "TEXT",
         "work_approved_at": "TEXT",
+        "work_declined_at": "TEXT",
+        "work_decline_reason": "TEXT",
         "work_started_at": "TEXT",
         "work_ended_at": "TEXT",
         "actual_minutes": "INTEGER NOT NULL DEFAULT 0",
@@ -648,6 +650,12 @@ def worker_register():
     skill, city, daily_wage = normalize_worker_skill(data.get("skill"), strict=True), data.get("city"), data.get("daily_wage")
     if not (name and phone and password and skill and city and daily_wage):
         return jsonify({"error": "name, phone, password, a valid skill category, city and daily_wage are required"}), 400
+    try:
+        daily_wage = int(daily_wage)
+    except (TypeError, ValueError):
+        return jsonify({"error": "daily_wage must be a whole number"}), 400
+    if daily_wage <= 0:
+        return jsonify({"error": "daily_wage must be greater than zero"}), 400
 
     conn = get_db()
     existing = conn.execute("SELECT id FROM workers WHERE phone = ?", (phone,)).fetchone()
@@ -656,8 +664,8 @@ def worker_register():
         return jsonify({"error": "Phone already registered"}), 409
 
     cur = conn.execute(
-        """INSERT INTO workers (name, phone, password_hash, skill, city, daily_wage, verification_status)
-           VALUES (?, ?, ?, ?, ?, ?, 'unverified')""",
+        """INSERT INTO workers (name, phone, password_hash, skill, city, daily_wage, verification_status, rate_status)
+           VALUES (?, ?, ?, ?, ?, ?, 'unverified', 'pending')""",
         (name, phone, generate_password_hash(password), skill, city, int(daily_wage)),
     )
     conn.commit()
@@ -863,7 +871,7 @@ def list_workers():
     city = request.args.get("city")
     q = request.args.get("q")
 
-    query = "SELECT * FROM workers WHERE account_status = 'active' AND deleted_at IS NULL"
+    query = "SELECT * FROM workers WHERE account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"
     params = []
     if skill:
         query += " AND skill = ?"
@@ -891,7 +899,7 @@ def list_workers():
 @app.get("/api/workers/<int:worker_id>")
 def get_worker(worker_id):
     conn = get_db()
-    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL"), (worker_id,)).fetchone()
+    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"), (worker_id,)).fetchone()
     conn.close()
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
@@ -998,8 +1006,8 @@ def submit_diagnosis(booking_id):
     booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
     if not booking:
         conn.close(); return jsonify({"error": "Booking not found"}), 404
-    if booking["booking_type"] != "diagnosis" or booking["status"] not in ("confirmed", "checked_in"):
-        conn.close(); return jsonify({"error": "Diagnosis can be submitted only for an active diagnosis booking"}), 400
+    if booking["booking_type"] != "diagnosis" or booking["status"] != "checked_in":
+        conn.close(); return jsonify({"error": "Diagnosis can be submitted only after the worker checks in at the site"}), 400
     conn.execute("UPDATE bookings SET diagnosis_notes = ? WHERE id = ?", (notes, booking_id))
     add_in_app_notification(conn, "hirer", booking["hirer_id"], "diagnosis_ready", "Diagnosis ready", f"Worker submitted diagnosis for booking #{booking_id}. Review it before starting paid work.", booking_id)
     conn.commit(); conn.close()
@@ -1017,11 +1025,90 @@ def approve_diagnosed_work(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["booking_type"] != "diagnosis" or not booking["diagnosis_notes"]:
         conn.close(); return jsonify({"error": "Worker diagnosis is required before approval"}), 400
+    if booking["status"] != "checked_in":
+        conn.close(); return jsonify({"error": "Work can be approved only while the worker is checked in"}), 409
+    if booking["work_declined_at"]:
+        conn.close(); return jsonify({"error": "Work was already declined after diagnosis"}), 409
+    if booking["work_approved_at"]:
+        conn.close(); return jsonify({"error": "Work is already approved"}), 409
     approved_at = datetime.utcnow().isoformat()
     conn.execute("UPDATE bookings SET work_approved_at = ? WHERE id = ?", (approved_at, booking_id))
     add_in_app_notification(conn, "worker", booking["worker_id"], "work_approved", "Work approved", f"Hirer approved paid work for booking #{booking_id}. Start the timer when work begins.", booking_id)
     conn.commit(); conn.close()
     return jsonify({"ok": True, "work_approved_at": approved_at})
+
+
+@app.post("/api/bookings/<int:booking_id>/decline-work")
+def decline_diagnosed_work(booking_id):
+    """Close a diagnosis booking without repair work; only the diagnosis fee remains billable."""
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True) or {}
+    reason = (data.get("reason") or "Hirer declined repair after diagnosis").strip()
+
+    conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
+    booking = conn.execute(
+        for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"),
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] != "diagnosis" or not booking["diagnosis_notes"]:
+        conn.close()
+        return jsonify({"error": "A submitted diagnosis is required before declining repair work"}), 400
+    if booking["work_started_at"]:
+        conn.close()
+        return jsonify({"error": "Paid work has already started and can no longer be declined"}), 409
+    if booking["work_approved_at"]:
+        conn.close()
+        return jsonify({"error": "Paid work was already approved"}), 409
+    if booking["status"] != "checked_in":
+        conn.close()
+        return jsonify({"error": "Diagnosis-only closure is available only after site check-in"}), 409
+
+    total = int(booking["diagnosis_fee"] or 0)
+    paid_amount = int(booking["paid_amount"] or 0)
+    payment_status = booking["payment_status"]
+    if booking["payment_method"] == "online" and payment_status == "paid":
+        if paid_amount < total:
+            payment_status = "balance_due"
+        elif paid_amount > total:
+            payment_status = "refund_pending"
+    elif booking["payment_method"] == "cash" and payment_status != "paid":
+        payment_status = "cash_pending"
+
+    declined_at = datetime.utcnow().isoformat()
+    conn.execute(
+        """UPDATE bookings
+           SET work_declined_at = ?, work_decline_reason = ?, work_amount = 0,
+               actual_minutes = 0, total_amount = ?, status = 'completed', payment_status = ?
+           WHERE id = ?""",
+        (declined_at, reason, total, payment_status, booking_id),
+    )
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
+        (booking_id, f"Diagnosis completed; repair work declined. {reason}"),
+    )
+    add_in_app_notification(
+        conn, "worker", booking["worker_id"], "diagnosis_closed", "Diagnosis visit completed",
+        f"Hirer declined repair work for booking #{booking_id}. Only the diagnosis fee remains billable.",
+        booking_id,
+    )
+    finance = sync_booking_financials(conn, booking_id)
+    conn.commit()
+    conn.close()
+    return jsonify({
+        "status": "completed",
+        "diagnosis_only": True,
+        "diagnosis_fee": total,
+        "total_amount": total,
+        "payment_status": payment_status,
+        "work_declined_at": declined_at,
+        "finance": finance,
+    })
 
 
 @app.post("/api/worker/bookings/<int:booking_id>/work-timer")
@@ -1036,17 +1123,33 @@ def worker_work_timer(booking_id):
     booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
     if not booking:
         conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["status"] in ("completed", "cancelled", "rejected"):
+        conn.close(); return jsonify({"error": "This booking can no longer start or stop work"}), 409
+    if not booking_allows_work(booking):
+        conn.close(); return jsonify({"error": "Payment is not ready for work to start"}), 409
     if booking["booking_type"] == "diagnosis" and not booking["work_approved_at"]:
         conn.close(); return jsonify({"error": "Hirer must approve diagnosed work before timer starts"}), 409
     now = datetime.utcnow()
     if action == "start":
+        if booking["status"] != "checked_in":
+            conn.close(); return jsonify({"error": "Worker must check in at the site before starting the work timer"}), 409
         if booking["work_started_at"]:
             conn.close(); return jsonify({"error": "Work timer already started"}), 409
         conn.execute("UPDATE bookings SET work_started_at = ?, status = 'in_progress' WHERE id = ?", (now.isoformat(), booking_id))
+        conn.execute(
+            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'in_progress', 'Paid work timer started by worker')",
+            (booking_id,),
+        )
+        add_in_app_notification(
+            conn, "hirer", booking["hirer_id"], "work_started", "Work started",
+            f"Worker started the paid work timer for booking #{booking_id}.", booking_id
+        )
         conn.commit(); conn.close()
         return jsonify({"status": "in_progress", "work_started_at": now.isoformat()})
-    if not booking["work_started_at"]:
-        conn.close(); return jsonify({"error": "Work timer has not started"}), 409
+    if booking["status"] != "in_progress" or not booking["work_started_at"]:
+        conn.close(); return jsonify({"error": "Work timer is not currently running"}), 409
+    if booking["work_ended_at"]:
+        conn.close(); return jsonify({"error": "Work timer is already completed"}), 409
     started = datetime.fromisoformat(booking["work_started_at"])
     minutes = max(1, int((now - started).total_seconds() // 60))
     worker = conn.execute("SELECT daily_wage FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
@@ -1062,6 +1165,14 @@ def worker_work_timer(booking_id):
             payment_status = "refund_pending"
     conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed', payment_status = ? WHERE id = ?""",
                  (now.isoformat(), minutes, work_amount, total, payment_status, booking_id))
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
+        (booking_id, f"Paid work timer stopped after {minutes} minute(s); final work amount ₹{work_amount}."),
+    )
+    add_in_app_notification(
+        conn, "hirer", booking["hirer_id"], "work_completed", "Work completed",
+        f"Booking #{booking_id} completed. Final amount is ₹{total}.", booking_id
+    )
     finance = sync_booking_financials(conn, booking_id)
     conn.commit(); conn.close()
     return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total, "payment_status": payment_status, "finance": finance})
@@ -1123,7 +1234,7 @@ def create_booking():
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
-    worker = conn.execute("SELECT * FROM workers WHERE id = ?", (worker_id,)).fetchone()
+    worker = conn.execute("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'", (worker_id,)).fetchone()
     if not worker:
         conn.rollback()
         conn.close()
@@ -1616,23 +1727,30 @@ def worker_check_in(booking_id):
         conn.close()
         return jsonify({"error": "Booking not found or not assigned to you"}), 404
 
-    if booking["status"] in ("requested", "rejected", "cancelled"):
+    if booking["status"] in ("requested", "rejected", "cancelled", "completed"):
         conn.close()
-        return jsonify({"error": "Booking request pehle accept honi chahiye"}), 400
+        return jsonify({"error": "This booking is not eligible for GPS progress updates"}), 400
     if not booking_allows_work(booking):
         conn.close()
-        return jsonify({"error": "Online payment pending hai — hirer payment kare tab kaam start karein"}), 400
+        return jsonify({"error": "Payment must be ready before the worker travels or checks in"}), 400
 
-    nxt = next_status(booking["status"])
-    if not nxt:
+    if booking["status"] == "confirmed":
+        nxt = "en_route"
+    elif booking["status"] == "en_route":
+        nxt = "checked_in"
+    elif booking["status"] == "checked_in":
         conn.close()
-        return jsonify({"error": "Booking already completed"}), 400
+        return jsonify({"error": "Worker is already checked in. Start work using the work timer."}), 409
+    elif booking["status"] == "in_progress":
+        conn.close()
+        return jsonify({"error": "Work is already in progress. Complete it using the work timer."}), 409
+    else:
+        conn.close()
+        return jsonify({"error": "This booking cannot be advanced by GPS check-in"}), 409
 
     note_map = {
-        "en_route": "Worker nikal chuka hai, GPS location ke saath",
-        "checked_in": "Worker site par pahunch gaya (GPS verified)",
-        "in_progress": "Kaam shuru ho gaya",
-        "completed": "Kaam poora hua",
+        "en_route": "Worker is heading to the job location with GPS recorded",
+        "checked_in": "Worker arrived and checked in at the site with GPS",
     }
     conn.execute("UPDATE bookings SET status = ? WHERE id = ?", (nxt, booking_id))
     conn.execute(
@@ -1649,8 +1767,6 @@ def worker_check_in(booking_id):
 
     if hirer and hirer["phone"]:
         notify(hirer["phone"], f"HireNow: Booking #{booking_id} status — {note_map.get(nxt, nxt)}")
-        if nxt == "completed" and booking["payment_method"] == "cash" and booking["payment_status"] != "paid":
-            notify(hirer["phone"], f"HireNow: Kaam complete ho gaya. Cash dene ke baad app me Cash Payment OTP generate karke worker ko dein.")
 
     return jsonify({"status": nxt, "latitude": lat, "longitude": lng})
 
