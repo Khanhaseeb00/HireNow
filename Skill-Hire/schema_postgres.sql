@@ -27,6 +27,12 @@ CREATE TABLE IF NOT EXISTS workers (
     is_online INTEGER NOT NULL DEFAULT 1,
     rate_status TEXT NOT NULL DEFAULT 'approved',
     rate_review_note TEXT,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
@@ -50,6 +56,16 @@ CREATE TABLE IF NOT EXISTS hirers (
     name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
+CREATE TABLE IF NOT EXISTS admin_account_actions (
+    id BIGSERIAL PRIMARY KEY,
+    account_type TEXT NOT NULL,
+    account_id BIGINT NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    admin_username TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
