@@ -792,7 +792,16 @@ def login():
         return _moderated_account_response(hirer)
 
     session["hirer_id"] = hirer["id"]
-    return jsonify({"id": hirer["id"], "name": hirer["name"], "phone": hirer["phone"]})
+    return jsonify({
+        "id": hirer["id"], "name": hirer["name"], "phone": hirer["phone"],
+        "preferred_language": hirer["preferred_language"] if "preferred_language" in hirer.keys() else "en",
+        "preferred_theme": hirer["preferred_theme"] if "preferred_theme" in hirer.keys() else "light",
+        "notifications_enabled": bool(hirer["notifications_enabled"]) if "notifications_enabled" in hirer.keys() else True,
+        "home_address": hirer["home_address"] if "home_address" in hirer.keys() else None,
+        "home_city": hirer["home_city"] if "home_city" in hirer.keys() else None,
+        "home_latitude": hirer["home_latitude"] if "home_latitude" in hirer.keys() else None,
+        "home_longitude": hirer["home_longitude"] if "home_longitude" in hirer.keys() else None,
+    })
 
 
 @app.post("/api/auth/logout")
@@ -863,7 +872,12 @@ def worker_login():
         return _moderated_account_response(worker)
 
     session["worker_id"] = worker["id"]
-    return jsonify({"id": worker["id"], "name": worker["name"], "phone": worker["phone"]})
+    return jsonify({
+        "id": worker["id"], "name": worker["name"], "phone": worker["phone"],
+        "preferred_language": worker["preferred_language"] if "preferred_language" in worker.keys() else "en",
+        "preferred_theme": worker["preferred_theme"] if "preferred_theme" in worker.keys() else "light",
+        "notifications_enabled": bool(worker["notifications_enabled"]) if "notifications_enabled" in worker.keys() else True,
+    })
 
 
 @app.post("/api/worker-auth/logout")
