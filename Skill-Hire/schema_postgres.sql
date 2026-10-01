@@ -30,9 +30,6 @@ CREATE TABLE IF NOT EXISTS workers (
     account_status TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at TEXT,
-    account_status TEXT NOT NULL DEFAULT 'active',
-    account_status_reason TEXT,
-    deleted_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
@@ -56,6 +53,9 @@ CREATE TABLE IF NOT EXISTS hirers (
     name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
