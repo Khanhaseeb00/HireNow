@@ -54,6 +54,7 @@ class HireNowSmokeTests(unittest.TestCase):
         action_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_account_actions'").fetchone()
         finance_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='booking_financials'").fetchone()
         settings_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='platform_settings'").fetchone()
+        adjustment_table = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='payment_adjustments'").fetchone()
         conn.close()
         for name in ("booking_type", "diagnosis_fee", "diagnosis_distance_km", "diagnosis_notes", "work_approved_at", "work_declined_at", "work_decline_reason", "work_started_at", "work_ended_at", "actual_minutes", "work_amount", "paid_amount"):
             self.assertIn(name, booking_cols)
@@ -65,6 +66,7 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertIsNotNone(action_table)
         self.assertIsNotNone(finance_table)
         self.assertIsNotNone(settings_table)
+        self.assertIsNotNone(adjustment_table)
 
     def test_finance_ledger_uses_configured_commission(self):
         conn = get_db()
@@ -181,6 +183,70 @@ class HireNowSmokeTests(unittest.TestCase):
         public = self.client.get("/api/workers")
         self.assertEqual(public.status_code, 200)
         self.assertNotIn(worker_id, [w["id"] for w in public.get_json()])
+
+    def test_payment_reconciliation_tracks_balance_and_refund(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Reconcile Hirer", "9000000401", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000401",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Reconcile Worker", "9000000402", "x", "Plumber", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000402",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-04", 2, "online", 600, 500, 600, "completed", "balance_due"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        balance = app.sync_payment_adjustment(conn, booking_id)
+        conn.commit()
+        self.assertEqual(balance["type"], "balance_due")
+        self.assertEqual(balance["amount"], 100)
+
+        conn.execute("UPDATE bookings SET total_amount=450, paid_amount=500, payment_status='refund_pending' WHERE id=?", (booking_id,))
+        refund = app.sync_payment_adjustment(conn, booking_id)
+        conn.commit()
+        self.assertEqual(refund["type"], "refund")
+        self.assertEqual(refund["amount"], 50)
+
+        pending_balance = conn.execute("""SELECT COUNT(*) AS n FROM payment_adjustments
+                                          WHERE booking_id=? AND adjustment_type='balance_due' AND status='pending'""", (booking_id,)).fetchone()["n"]
+        pending_refund = conn.execute("""SELECT COUNT(*) AS n FROM payment_adjustments
+                                         WHERE booking_id=? AND adjustment_type='refund' AND status='pending'""", (booking_id,)).fetchone()["n"]
+        self.assertEqual(pending_balance, 0)
+        self.assertEqual(pending_refund, 1)
+
+        conn.execute("UPDATE bookings SET total_amount=500, paid_amount=500, payment_status='paid' WHERE id=?", (booking_id,))
+        none_left = app.sync_payment_adjustment(conn, booking_id)
+        conn.commit()
+        remaining = conn.execute("SELECT COUNT(*) AS n FROM payment_adjustments WHERE booking_id=? AND status='pending'", (booking_id,)).fetchone()["n"]
+        conn.close()
+        self.assertIsNone(none_left)
+        self.assertEqual(remaining, 0)
+
+    def test_payment_summary_reports_outstanding_adjustment(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Summary Hirer", "9000000501", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000501",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Summary Worker", "9000000502", "x", "Electrician", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000502",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-05", 2, "online", 700, 500, "completed", "balance_due"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        app.sync_payment_adjustment(conn, booking_id)
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear()
+            sess["hirer_id"] = hirer_id
+        response = self.client.get(f"/api/bookings/{booking_id}/payment-summary")
+        self.assertEqual(response.status_code, 200)
+        data = response.get_json()
+        self.assertEqual(data["total_amount"], 700)
+        self.assertEqual(data["paid_amount"], 500)
+        self.assertEqual(data["adjustment"]["adjustment_type"], "balance_due")
+        self.assertEqual(data["adjustment"]["amount"], 200)
 
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:
