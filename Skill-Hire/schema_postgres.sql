@@ -90,6 +90,8 @@ CREATE TABLE IF NOT EXISTS bookings (
     diagnosis_distance_km REAL,
     diagnosis_notes TEXT,
     work_approved_at TEXT,
+    work_declined_at TEXT,
+    work_decline_reason TEXT,
     work_started_at TEXT,
     work_ended_at TEXT,
     actual_minutes INTEGER NOT NULL DEFAULT 0,
