@@ -40,6 +40,8 @@ from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
+from bidi.algorithm import get_display
+import arabic_reshaper
 
 from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
 import payments
@@ -2011,8 +2013,86 @@ def create_razorpay_order(booking_id):
     })
 
 
+RECEIPT_I18N = {
+    "en": {"payment_receipt":"PAYMENT RECEIPT","worker_receipt":"WORKER EARNINGS RECEIPT","receipt_summary":"Receipt Summary","booking_service":"Booking & Service Details","hirer_worker":"Hirer & Worker","payment_details":"Payment Details","worker_earnings":"Worker Earnings","receipt_no":"Receipt No.","booking_id":"Booking ID","generated":"Generated","booking_status":"Booking Status","payment_status":"Payment Status","service_type":"Service Type","service_skill":"Service / Skill","service_date":"Service Date","scheduled_time":"Scheduled Time","actual_work":"Actual Work Time","work_address":"Work Address","instructions":"Instructions","hirer":"Hirer","hirer_contact":"Hirer Contact","worker":"Worker","worker_contact":"Worker Contact","worker_city":"Worker City","payment_method":"Payment Method","final_amount":"Final Booking Amount","received":"Amount Received","diagnosis_fee":"Diagnosis Fee","work_amount":"Work Amount","payment_id":"Payment ID","order_id":"Order ID","cash_verified":"Cash OTP Verified","gross":"Gross Booking Amount","commission":"Platform Commission","worker_net":"Worker Net Earning","settlement":"Settlement Status","settlement_ref":"Settlement Reference","support":"HIRE NOW - CUSTOMER SUPPORT","system_note":"This is a system-generated receipt. No signature is required."},
+    "hi": {"payment_receipt":"भुगतान रसीद","worker_receipt":"कामगार कमाई रसीद","receipt_summary":"रसीद सारांश","booking_service":"बुकिंग और सेवा विवरण","hirer_worker":"हायरर और कामगार","payment_details":"भुगतान विवरण","worker_earnings":"कामगार कमाई","receipt_no":"रसीद नंबर","booking_id":"बुकिंग ID","generated":"तैयार किया गया","booking_status":"बुकिंग स्थिति","payment_status":"भुगतान स्थिति","service_type":"सेवा प्रकार","service_skill":"सेवा / कौशल","service_date":"सेवा तिथि","scheduled_time":"निर्धारित समय","actual_work":"वास्तविक कार्य समय","work_address":"कार्य पता","instructions":"निर्देश","hirer":"हायरर","hirer_contact":"हायरर संपर्क","worker":"कामगार","worker_contact":"कामगार संपर्क","worker_city":"कामगार शहर","payment_method":"भुगतान तरीका","final_amount":"अंतिम बुकिंग राशि","received":"प्राप्त राशि","diagnosis_fee":"जांच शुल्क","work_amount":"कार्य राशि","payment_id":"भुगतान ID","order_id":"ऑर्डर ID","cash_verified":"कैश OTP सत्यापित","gross":"कुल बुकिंग राशि","commission":"प्लेटफॉर्म शुल्क","worker_net":"कामगार की शुद्ध कमाई","settlement":"सेटलमेंट स्थिति","settlement_ref":"सेटलमेंट संदर्भ","support":"HIRE NOW - ग्राहक सहायता","system_note":"यह सिस्टम द्वारा बनाई गई रसीद है। हस्ताक्षर आवश्यक नहीं है।"},
+    "ar": {"payment_receipt":"إيصال الدفع","worker_receipt":"إيصال أرباح العامل","receipt_summary":"ملخص الإيصال","booking_service":"تفاصيل الحجز والخدمة","hirer_worker":"العميل والعامل","payment_details":"تفاصيل الدفع","worker_earnings":"أرباح العامل","receipt_no":"رقم الإيصال","booking_id":"رقم الحجز","generated":"تاريخ الإنشاء","booking_status":"حالة الحجز","payment_status":"حالة الدفع","service_type":"نوع الخدمة","service_skill":"الخدمة / المهارة","service_date":"تاريخ الخدمة","scheduled_time":"الوقت المحدد","actual_work":"وقت العمل الفعلي","work_address":"عنوان العمل","instructions":"التعليمات","hirer":"العميل","hirer_contact":"اتصال العميل","worker":"العامل","worker_contact":"اتصال العامل","worker_city":"مدينة العامل","payment_method":"طريقة الدفع","final_amount":"المبلغ النهائي","received":"المبلغ المستلم","diagnosis_fee":"رسوم الفحص","work_amount":"مبلغ العمل","payment_id":"رقم الدفع","order_id":"رقم الطلب","cash_verified":"تم تأكيد OTP النقدي","gross":"إجمالي مبلغ الحجز","commission":"عمولة المنصة","worker_net":"صافي أرباح العامل","settlement":"حالة التسوية","settlement_ref":"مرجع التسوية","support":"HIRE NOW - دعم العملاء","system_note":"هذا إيصال مُنشأ آليًا ولا يحتاج إلى توقيع."},
+    "ur": {"payment_receipt":"ادائیگی کی رسید","worker_receipt":"ورکر کمائی کی رسید","receipt_summary":"رسید کا خلاصہ","booking_service":"بکنگ اور سروس کی تفصیل","hirer_worker":"ہائرر اور ورکر","payment_details":"ادائیگی کی تفصیل","worker_earnings":"ورکر کی کمائی","receipt_no":"رسید نمبر","booking_id":"بکنگ ID","generated":"تیار ہونے کا وقت","booking_status":"بکنگ کی حالت","payment_status":"ادائیگی کی حالت","service_type":"سروس کی قسم","service_skill":"سروس / مہارت","service_date":"سروس کی تاریخ","scheduled_time":"مقررہ وقت","actual_work":"اصل کام کا وقت","work_address":"کام کا پتہ","instructions":"ہدایات","hirer":"ہائرر","hirer_contact":"ہائرر رابطہ","worker":"ورکر","worker_contact":"ورکر رابطہ","worker_city":"ورکر شہر","payment_method":"ادائیگی کا طریقہ","final_amount":"آخری بکنگ رقم","received":"موصول رقم","diagnosis_fee":"تشخیصی فیس","work_amount":"کام کی رقم","payment_id":"ادائیگی ID","order_id":"آرڈر ID","cash_verified":"کیش OTP تصدیق","gross":"کل بکنگ رقم","commission":"پلیٹ فارم فیس","worker_net":"ورکر خالص کمائی","settlement":"سیٹلمنٹ حالت","settlement_ref":"سیٹلمنٹ حوالہ","support":"HIRE NOW - کسٹمر سپورٹ","system_note":"یہ سسٹم سے تیار شدہ رسید ہے، دستخط کی ضرورت نہیں۔"}
+}
+
+
+RECEIPT_FONT_CONFIG = {
+    "hi": ("HN-Devanagari", "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"),
+    "mr": ("HN-Devanagari", "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"),
+    "bn": ("HN-Bengali", "/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansbengali/NotoSansBengali%5Bwdth%2Cwght%5D.ttf"),
+    "ta": ("HN-Tamil", "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstamil/NotoSansTamil%5Bwdth%2Cwght%5D.ttf"),
+    "te": ("HN-Telugu", "/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstelugu/NotoSansTelugu%5Bwdth%2Cwght%5D.ttf"),
+    "gu": ("HN-Gujarati", "/usr/share/fonts/truetype/noto/NotoSansGujarati-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansgujarati/NotoSansGujarati%5Bwdth%2Cwght%5D.ttf"),
+    "kn": ("HN-Kannada", "/usr/share/fonts/truetype/noto/NotoSansKannada-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskannada/NotoSansKannada%5Bwdth%2Cwght%5D.ttf"),
+    "ml": ("HN-Malayalam", "/usr/share/fonts/truetype/noto/NotoSansMalayalam-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmalayalam/NotoSansMalayalam%5Bwdth%2Cwght%5D.ttf"),
+    "pa": ("HN-Gurmukhi", "/usr/share/fonts/truetype/noto/NotoSansGurmukhi-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansgurmukhi/NotoSansGurmukhi%5Bwdth%2Cwght%5D.ttf"),
+    "ar": ("HN-Arabic", "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf"),
+    "ur": ("HN-Arabic", "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf"),
+}
+
+
+def receipt_text(lang, key):
+    lang = normalize_language(lang)
+    return RECEIPT_I18N.get(lang, RECEIPT_I18N["en"]).get(key, RECEIPT_I18N["en"].get(key, key))
+
+
+def receipt_font_for_language(lang):
+    lang = normalize_language(lang)
+    if lang == "en":
+        return "Helvetica"
+    config = RECEIPT_FONT_CONFIG.get(lang)
+    if not config:
+        return "Helvetica"
+    font_name, system_path, url = config
+    try:
+        pdfmetrics.getFont(font_name)
+        return font_name
+    except Exception:
+        pass
+    path = system_path
+    if not os.path.exists(path):
+        cache_dir = os.path.join("/tmp", "hirenow_receipt_fonts")
+        os.makedirs(cache_dir, exist_ok=True)
+        path = os.path.join(cache_dir, font_name + ".ttf")
+        if not os.path.exists(path):
+            try:
+                resp = _requests.get(url, timeout=15)
+                resp.raise_for_status()
+                with open(path, "wb") as font_file:
+                    font_file.write(resp.content)
+            except Exception as exc:
+                app.logger.warning("Receipt font download failed for %s: %s", lang, exc)
+                return "Helvetica"
+    try:
+        pdfmetrics.registerFont(TTFont(font_name, path, shapable=True))
+        return font_name
+    except Exception as exc:
+        app.logger.warning("Receipt font registration failed for %s: %s", lang, exc)
+        return "Helvetica"
+
+
+def receipt_visual_text(text, lang):
+    text = "-" if text is None or text == "" else str(text)
+    if normalize_language(lang) in ("ar", "ur"):
+        try:
+            return get_display(arabic_reshaper.reshape(text))
+        except Exception:
+            return text
+    return text
+
+
 def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
-    """Generate a professional branded Hire Now PDF receipt."""
+    """Generate a professional branded Hire Now PDF receipt in the user's selected language."""
+    lang = normalize_language((hirer["preferred_language"] if audience == "hirer" and hirer and "preferred_language" in hirer.keys() else None) or (worker["preferred_language"] if audience == "worker" and worker and "preferred_language" in worker.keys() else None) or "en")
+    label = lambda key: receipt_text(lang, key)
+    content_font = receipt_font_for_language(lang)
+    is_rtl = lang in ("ar", "ur")
+    shaping = content_font != "Helvetica" and not is_rtl
     buf = BytesIO()
     pdf = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
@@ -2087,7 +2167,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
     pdf.drawCentredString(
         center_x,
         height - 52 * mm,
-        "PAYMENT RECEIPT" if audience == "hirer" else "WORKER EARNINGS RECEIPT",
+        receipt_visual_text(label("payment_receipt") if audience == "hirer" else label("worker_receipt"), lang),
     )
     pdf.setFillColor(colors.white)
     pdf.setFont("Helvetica", 8.5)
@@ -2095,8 +2175,9 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
 
     y = height - 76 * mm
 
-    def fit_centered_text(text, font="Helvetica", size=9, max_width=None, leading=4.4 * mm, color=TEXT):
+    def fit_centered_text(text, font=None, size=9, max_width=None, leading=4.4 * mm, color=TEXT):
         nonlocal y
+        font = font or content_font
         max_width = max_width or (content_w - 14 * mm)
         raw = "-" if text is None or text == "" else str(text)
         words = raw.split()
@@ -2117,7 +2198,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         pdf.setFillColor(color)
         pdf.setFont(font, size)
         for line_text in lines:
-            pdf.drawCentredString(center_x, y, line_text)
+            pdf.drawCentredString(center_x, y, receipt_visual_text(line_text, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
             y -= leading
         return len(lines)
 
@@ -2129,7 +2210,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
             label_text = str(label)
             value_text = "-" if value is None or value == "" else str(value)
             pair = f"{label_text}: {value_text}"
-            font = "Helvetica-Bold" if emphasized else "Helvetica"
+            font = content_font
             size = 9.2 if emphasized else 8.6
             words = pair.split()
             line_list = []
@@ -2162,15 +2243,15 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         pdf.roundRect(left, top - box_h, content_w, box_h, 3 * mm, fill=1, stroke=1)
 
         pdf.setFillColor(NAVY)
-        pdf.setFont("Helvetica-Bold", 10.5)
-        pdf.drawCentredString(center_x, top - 6.5 * mm, title.upper())
+        pdf.setFont(content_font, 10.5)
+        pdf.drawCentredString(center_x, top - 6.5 * mm, receipt_visual_text(title, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
         y = top - 12 * mm
 
         for lines, font, size, emphasized in prepared:
             pdf.setFillColor(ORANGE if emphasized else TEXT)
             pdf.setFont(font, size)
             for line_text in lines:
-                pdf.drawCentredString(center_x, y, line_text)
+                pdf.drawCentredString(center_x, y, receipt_visual_text(line_text, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
                 y -= 4.7 * mm
         y = top - box_h - 5 * mm
 
@@ -2183,59 +2264,59 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
     payment_status = (booking["payment_status"] or "").replace("_", " ").title()
     booking_status = (booking["status"] or "").replace("_", " ").title()
 
-    section("Receipt Summary", [
-        ("Receipt No.", receipt_no, True),
-        ("Booking ID", f"#{booking['id']}", False),
-        ("Generated", generated, False),
-        ("Booking Status", booking_status, False),
-        ("Payment Status", payment_status, True),
+    section(label("receipt_summary"), [
+        (label("receipt_no"), receipt_no, True),
+        (label("booking_id"), f"#{booking['id']}", False),
+        (label("generated"), generated, False),
+        (label("booking_status"), booking_status, False),
+        (label("payment_status"), payment_status, True),
     ])
 
-    section("Booking & Service Details", [
-        ("Service Type", booking_type, False),
-        ("Service / Skill", worker["skill"] if worker and "skill" in worker.keys() else "-", False),
-        ("Service Date", booking["start_date"], False),
-        ("Scheduled Time", f"{start_time} - {end_time}", False),
-        ("Actual Work Time", f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
-        ("Work Address", booking["address"] or "-", False),
-        ("Instructions", booking["special_instructions"] or "-", False),
+    section(label("booking_service"), [
+        (label("service_type"), booking_type, False),
+        (label("service_skill"), worker["skill"] if worker and "skill" in worker.keys() else "-", False),
+        (label("service_date"), booking["start_date"], False),
+        (label("scheduled_time"), f"{start_time} - {end_time}", False),
+        (label("actual_work"), f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
+        (label("work_address"), booking["address"] or "-", False),
+        (label("instructions"), booking["special_instructions"] or "-", False),
     ])
 
-    section("Hirer & Worker", [
-        ("Hirer", hirer["name"] if hirer else "-", False),
-        ("Hirer Contact", hirer["phone"] if hirer and "phone" in hirer.keys() else "-", False),
-        ("Worker", worker["name"] if worker else "-", False),
-        ("Worker Contact", worker["phone"] if worker and "phone" in worker.keys() else "-", False),
-        ("Worker City", worker["city"] if worker and "city" in worker.keys() else "-", False),
+    section(label("hirer_worker"), [
+        (label("hirer"), hirer["name"] if hirer else "-", False),
+        (label("hirer_contact"), hirer["phone"] if hirer and "phone" in hirer.keys() else "-", False),
+        (label("worker"), worker["name"] if worker else "-", False),
+        (label("worker_contact"), worker["phone"] if worker and "phone" in worker.keys() else "-", False),
+        (label("worker_city"), worker["city"] if worker and "city" in worker.keys() else "-", False),
     ])
 
     payment_rows = [
-        ("Payment Method", payment_method, False),
-        ("Payment Status", payment_status, True),
-        ("Final Booking Amount", f"INR {int(booking['total_amount'] or 0)}", True),
-        ("Amount Received", f"INR {int(booking['paid_amount'] or 0)}", True),
+        (label("payment_method"), payment_method, False),
+        (label("payment_status"), payment_status, True),
+        (label("final_amount"), f"INR {int(booking['total_amount'] or 0)}", True),
+        (label("received"), f"INR {int(booking['paid_amount'] or 0)}", True),
     ]
     if int(booking["diagnosis_fee"] or 0):
-        payment_rows.append(("Diagnosis Fee", f"INR {int(booking['diagnosis_fee'] or 0)}", False))
+        payment_rows.append((label("diagnosis_fee"), f"INR {int(booking['diagnosis_fee'] or 0)}", False))
     if int(booking["work_amount"] or 0):
-        payment_rows.append(("Work Amount", f"INR {int(booking['work_amount'] or 0)}", False))
+        payment_rows.append((label("work_amount"), f"INR {int(booking['work_amount'] or 0)}", False))
     if booking["payment_id"]:
-        payment_rows.append(("Payment ID", booking["payment_id"], False))
+        payment_rows.append((label("payment_id"), booking["payment_id"], False))
     if booking["razorpay_order_id"]:
-        payment_rows.append(("Order ID", booking["razorpay_order_id"], False))
+        payment_rows.append((label("order_id"), booking["razorpay_order_id"], False))
     if booking["cash_verified_at"]:
-        payment_rows.append(("Cash OTP Verified", booking["cash_verified_at"], False))
-    section("Payment Details", payment_rows)
+        payment_rows.append((label("cash_verified"), booking["cash_verified_at"], False))
+    section(label("payment_details"), payment_rows)
 
     if audience == "worker":
         finance_rows = [
-            ("Gross Booking Amount", f"INR {int(finance['gross_amount'] or 0)}", False),
-            ("Platform Commission", f"INR {int(finance['platform_commission'] or 0)}", False),
-            ("Worker Net Earning", f"INR {int(finance['worker_net'] or 0)}", True),
-            ("Settlement Status", (finance["settlement_status"] or "not_ready").replace("_", " ").title(), True),
-            ("Settlement Reference", finance["settlement_reference"] or "-", False),
+            (label("gross"), f"INR {int(finance['gross_amount'] or 0)}", False),
+            (label("commission"), f"INR {int(finance['platform_commission'] or 0)}", False),
+            (label("worker_net"), f"INR {int(finance['worker_net'] or 0)}", True),
+            (label("settlement"), (finance["settlement_status"] or "not_ready").replace("_", " ").title(), True),
+            (label("settlement_ref"), finance["settlement_reference"] or "-", False),
         ]
-        section("Worker Earnings", finance_rows)
+        section(label("worker_earnings"), finance_rows)
 
     # Centered support/footer card.
     if y < 66 * mm:
@@ -2248,7 +2329,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
     footer_y = y - 8 * mm
     pdf.setFillColor(ORANGE)
     pdf.setFont("Helvetica-Bold", 10.5)
-    pdf.drawCentredString(center_x, footer_y, "HIRE NOW - CUSTOMER SUPPORT")
+    pdf.drawCentredString(center_x, footer_y, receipt_visual_text(label("support"), lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
     footer_y -= 6 * mm
 
     pdf.setFillColor(colors.white)
@@ -2266,7 +2347,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
     footer_y -= 1 * mm
     pdf.setFillColor(colors.HexColor("#DCE6F5"))
     pdf.setFont("Helvetica-Oblique", 7.5)
-    pdf.drawCentredString(center_x, footer_y, "This is a system-generated receipt. No signature is required.")
+    pdf.drawCentredString(center_x, footer_y, receipt_visual_text(label("system_note"), lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
 
     pdf.save()
     buf.seek(0)
