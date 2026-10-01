@@ -9,7 +9,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 SOURCE = os.environ.get("DATABASE_PATH", "").strip()
-TARGET = os.environ.get("DATABASE_URL", "").strip()
+TARGET = (os.environ.get("POSTGRES_MIGRATION_URL", "").strip()\n          or os.environ.get("DATABASE_URL", "").strip())
 TABLES = [
     "workers", "hirers", "bookings", "booking_events", "messages",
     "worker_availability", "worker_unavailable_dates", "in_app_notifications",
@@ -19,7 +19,7 @@ TABLES = [
 if not SOURCE or not os.path.exists(SOURCE):
     raise SystemExit("DATABASE_PATH must point to the existing SQLite database")
 if not TARGET:
-    raise SystemExit("DATABASE_URL is required")
+    raise SystemExit("POSTGRES_MIGRATION_URL (or DATABASE_URL fallback) is required")
 
 src = sqlite3.connect(SOURCE)
 src.row_factory = sqlite3.Row
