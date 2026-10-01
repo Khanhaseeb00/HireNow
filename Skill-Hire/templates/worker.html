@@ -827,11 +827,13 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
         var inner = i < idx ? "✓" : (i + 1);
         return '<div class="tl-step ' + cls + '"><div class="tl-line"></div><div class="tl-node">' + inner + '</div><div class="tl-label">' + (statusMap[st] || st) + '</div></div>';
       }).join("") : "";
-      var paymentText = b.payment_method === "cash"
-        ? (b.payment_status === "paid" ? "Cash verified" : "Cash after work")
-        : (b.payment_status === "paid" ? "Online paid" :
-           b.payment_status === "balance_due" ? "Balance payment pending" :
-           b.payment_status === "refund_pending" ? "Refund pending" : "Online payment pending");
+      var paymentText = (b.status === "cancelled" || b.status === "rejected")
+        ? (Number(b.paid_amount||0) > 0 ? "Refund pending" : "No payment due")
+        : (b.payment_method === "cash"
+          ? (b.payment_status === "paid" ? "Cash verified" : "Cash after work")
+          : (b.payment_status === "paid" ? "Online paid" :
+             b.payment_status === "balance_due" ? "Balance payment pending" :
+             b.payment_status === "refund_pending" ? "Refund pending" : "Online payment pending"));
 
       return (
         '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + b.hirer_name + '">' +
