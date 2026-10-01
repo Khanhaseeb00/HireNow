@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS workers (
     id_document_name TEXT,
     id_document_uploaded_at TEXT,
     is_online INTEGER NOT NULL DEFAULT 1,
+    rate_status TEXT NOT NULL DEFAULT 'approved',
+    rate_review_note TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
