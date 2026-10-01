@@ -12,19 +12,19 @@
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/static/brand/hirenow-mark.svg?v=5",
+      "src": "/static/brand/hirenow-mark.svg?v=6",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/static/brand/hirenow-mark.svg?v=5",
+      "src": "/static/brand/hirenow-mark.svg?v=6",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/static/brand/hirenow-mark.svg?v=5",
+      "src": "/static/brand/hirenow-mark.svg?v=6",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"
