@@ -856,7 +856,7 @@ def create_booking():
     worker_id = data.get("worker_id")
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
-    service_type = (data.get("service_type") or "regular").strip().lower()
+    booking_type = (data.get("booking_type") or "regular").strip().lower()
     payment_method = (data.get("payment_method") or "cash").strip().lower()
     special_instructions = (data.get("special_instructions") or "").strip() or None
     address = (data.get("address") or "").strip() or None
@@ -867,8 +867,8 @@ def create_booking():
         return jsonify({"error": "hours must be a number"}), 400
     if hours < 1 or hours > 12:
         return jsonify({"error": "hours must be between 1 and 12"}), 400
-    if service_type not in ("regular", "overtime"):
-        return jsonify({"error": "service_type must be regular or overtime"}), 400
+    if booking_type not in ("regular", "diagnosis"):
+        return jsonify({"error": "booking_type must be regular or diagnosis"}), 400
     if payment_method not in ("cash", "online"):
         return jsonify({"error": "payment_method must be cash or online"}), 400
     if not worker_id or not start_date:
@@ -911,18 +911,30 @@ def create_booking():
             "error": "This worker already has a booking that overlaps the selected date and time. Please choose another slot."
         }), 409
 
-    regular_rate = worker["hourly_wage"] or max(1, int(worker["daily_wage"] / 8))
-    overtime_rate = worker["overtime_wage"] or regular_rate
-    rate = overtime_rate if service_type == "overtime" else regular_rate
-    total = int(rate) * hours
+    rate = derived_hourly_rate(worker)
+    diagnosis_fee = 0
+    diagnosis_distance_km = None
+    if booking_type == "diagnosis":
+        try:
+            diagnosis_distance_km = float(data.get("distance_km"))
+        except (TypeError, ValueError):
+            conn.rollback(); conn.close()
+            return jsonify({"error": "distance_km is required for diagnosis bookings"}), 400
+        diagnosis_fee, _ = diagnosis_fee_for_distance(diagnosis_distance_km)
+        if diagnosis_fee is None:
+            conn.rollback(); conn.close()
+            return jsonify({"error": "Diagnosis address is outside the current service radius"}), 409
+        total = diagnosis_fee
+    else:
+        total = round(rate * hours)
 
     cur = conn.execute(
         """INSERT INTO bookings
-           (hirer_id, worker_id, start_date, start_time, days, hours, service_type,
-            special_instructions, address, payment_method, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
-        (current_hirer_id(), worker_id, start_date, start_time, hours, service_type,
-         special_instructions, address, payment_method, total),
+           (hirer_id, worker_id, start_date, start_time, days, hours, service_type, booking_type,
+            diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total_amount, status, payment_status)
+           VALUES (?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+        (current_hirer_id(), worker_id, start_date, start_time, hours, booking_type,
+         diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
     conn.execute(
@@ -948,7 +960,9 @@ def create_booking():
     return jsonify({
         "id": booking_id,
         "total_amount": total,
-        "hourly_rate": int(rate),
+        "derived_hourly_rate": rate,
+        "booking_type": booking_type,
+        "diagnosis_fee": diagnosis_fee,
         "hours": hours,
         "payment_method": payment_method,
         "status": "requested",
