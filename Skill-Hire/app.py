@@ -89,6 +89,13 @@ def ensure_schema_extensions():
             conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
 
     worker_columns = table_columns(conn, "workers")
+    for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+    hirer_columns = table_columns(conn, "hirers")
+    for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in hirer_columns:
+            conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
     if "is_online" not in worker_columns:
         conn.execute("ALTER TABLE workers ADD COLUMN is_online INTEGER NOT NULL DEFAULT 1")
     if "rate_status" not in worker_columns:
@@ -158,6 +165,13 @@ def ensure_schema_extensions():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON in_app_notifications(recipient_type, recipient_id, is_read, created_at)")
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS admin_account_actions (
+            id {id_column_sql()}, account_type TEXT NOT NULL, account_id {foreign_id_sql()} NOT NULL,
+            action TEXT NOT NULL, reason TEXT, admin_username TEXT,
+            created_at TEXT DEFAULT {text_timestamp_default()}
+        )
+    """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS admin_login_attempts (
             attempt_key TEXT PRIMARY KEY,
@@ -1887,6 +1901,47 @@ def admin_overview():
     }
     conn.close()
     return jsonify(stats)
+
+
+@app.get("/api/admin/accounts")
+def admin_accounts():
+    err = _check_admin_session()
+    if err: return err
+    conn = get_db()
+    workers = conn.execute("SELECT id, name, phone, 'worker' AS account_type, account_status, account_status_reason, created_at FROM workers WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
+    hirers = conn.execute("SELECT id, name, phone, 'hirer' AS account_type, account_status, account_status_reason, created_at FROM hirers WHERE deleted_at IS NULL ORDER BY id DESC").fetchall()
+    conn.close()
+    return jsonify(rows_to_list(workers) + rows_to_list(hirers))
+
+
+@app.post("/api/admin/accounts/<account_type>/<int:account_id>/moderate")
+def admin_moderate_account(account_type, account_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    if account_type not in ("worker", "hirer"):
+        return jsonify({"error": "Invalid account type"}), 400
+    data = request.get_json(force=True) or {}
+    action = (data.get("action") or "").strip().lower()
+    reason = (data.get("reason") or "").strip() or None
+    if action not in ("activate", "freeze", "delete"):
+        return jsonify({"error": "Action must be activate, freeze or delete"}), 400
+    if action in ("freeze", "delete") and not reason:
+        return jsonify({"error": "Reason is required"}), 400
+    table = "workers" if account_type == "worker" else "hirers"
+    conn = get_db()
+    row = conn.execute(f"SELECT id FROM {table} WHERE id = ? AND deleted_at IS NULL", (account_id,)).fetchone()
+    if not row:
+        conn.close(); return jsonify({"error": "Account not found"}), 404
+    if action == "delete":
+        conn.execute(f"UPDATE {table} SET account_status='deleted', account_status_reason=?, deleted_at=? WHERE id=?", (reason, datetime.utcnow().isoformat(), account_id))
+    else:
+        status = "active" if action == "activate" else "frozen"
+        conn.execute(f"UPDATE {table} SET account_status=?, account_status_reason=? WHERE id=?", (status, reason, account_id))
+    conn.execute("INSERT INTO admin_account_actions(account_type, account_id, action, reason, admin_username) VALUES (?, ?, ?, ?, ?)", (account_type, account_id, action, reason, session.get("admin_username")))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "action": action})
 
 
 @app.get("/api/admin/workers")
