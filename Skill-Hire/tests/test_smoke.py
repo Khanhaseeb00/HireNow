@@ -107,6 +107,7 @@ class HireNowSmokeTests(unittest.TestCase):
         worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000602",)).fetchone()["id"]
         worker = conn.execute("SELECT * FROM workers WHERE id=?", (worker_id,)).fetchone()
         quote, error = app.diagnosis_quote_for_worker(conn, worker, 28.6200, 77.2090)
+        conn.commit()
         conn.close()
         self.assertIsNone(error)
         self.assertLess(quote["distance_km"], 5)
