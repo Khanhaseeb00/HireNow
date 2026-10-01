@@ -323,7 +323,7 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
     if include_requested:
         blocked.add("requested")
     rows = conn.execute(
-        "SELECT id, start_date, start_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
+        "SELECT id, start_date, start_time, end_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
         (worker_id, start_date),
     ).fetchall()
     new_start = parse_booking_start(start_date, start_time) if start_time else None
@@ -339,7 +339,13 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
             old_start = parse_booking_start(row["start_date"], row["start_time"])
         except ValueError:
             return row
-        old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        if row["end_time"]:
+            try:
+                old_end = datetime.combine(old_start.date(), datetime.strptime(row["end_time"], "%H:%M").time())
+            except ValueError:
+                old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        else:
+            old_end = old_start + timedelta(hours=int(row["hours"] or 2))
         if new_start < old_end and old_start < new_end:
             return row
     return None
@@ -1157,7 +1163,7 @@ def list_bookings():
     conn = get_db()
     rows = conn.execute(
         """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
-                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage, w.distance_km
+                  w.rating AS worker_rating, w.daily_wage, w.distance_km
            FROM bookings b JOIN workers w ON w.id = b.worker_id
            WHERE b.hirer_id = ? ORDER BY b.created_at DESC""",
         (current_hirer_id(),),
@@ -1174,7 +1180,7 @@ def booking_detail(booking_id):
     conn = get_db()
     row = conn.execute(
         """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
-                  w.rating AS worker_rating, w.hourly_wage, w.overtime_wage,
+                  w.rating AS worker_rating, w.daily_wage,
                   w.verification_status, w.background_checked
            FROM bookings b JOIN workers w ON w.id = b.worker_id
            WHERE b.id = ? AND b.hirer_id = ?""",
@@ -1840,7 +1846,7 @@ def admin_workers():
         return err
     conn = get_db()
     rows = conn.execute(
-        """SELECT id, name, phone, skill, city, daily_wage, hourly_wage, rating,
+        """SELECT id, name, phone, skill, city, daily_wage, rating,
                   jobs_completed, verification_status, rate_status, rate_review_note, id_document_path, is_online, created_at
            FROM workers ORDER BY id DESC LIMIT 500"""
     ).fetchall()
@@ -1880,7 +1886,7 @@ def admin_bookings():
         return err
     conn = get_db()
     rows = conn.execute(
-        """SELECT b.id, b.start_date, b.start_time, b.hours, b.total_amount, b.status,
+        """SELECT b.id, b.start_date, b.start_time, b.end_time, b.hours, b.booking_type, b.diagnosis_fee, b.work_amount, b.actual_minutes, b.total_amount, b.status,
                   b.payment_status, b.payment_method, b.created_at,
                   h.name AS hirer_name, w.name AS worker_name, w.skill AS worker_skill
            FROM bookings b
