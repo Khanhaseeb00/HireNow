@@ -35,6 +35,12 @@ CREATE TABLE IF NOT EXISTS worker_payout_accounts (
     provider_account_id TEXT,
     provider_fund_account_id TEXT,
     verification_status TEXT NOT NULL DEFAULT 'pending',
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -45,6 +51,16 @@ CREATE TABLE IF NOT EXISTS hirers (
     phone          TEXT NOT NULL UNIQUE,
     password_hash  TEXT NOT NULL,
     created_at     TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS admin_account_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_type TEXT NOT NULL,
+    account_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    reason TEXT,
+    admin_username TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS bookings (
