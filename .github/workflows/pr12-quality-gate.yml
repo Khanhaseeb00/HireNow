@@ -1,0 +1,36 @@
+name: Hire Now backend quality gate
+
+on:
+  push:
+    branches:
+      - pr12-ci-gate
+      - daily-rate-diagnosis-timer-v1
+  pull_request:
+    branches:
+      - main
+      - daily-rate-diagnosis-timer-v1
+  workflow_dispatch:
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Skill-Hire
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: Skill-Hire/requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Compile backend
+        run: python -m py_compile app.py access_control.py db.py payments.py notifications.py
+      - name: Run smoke tests
+        env:
+          FLASK_ENV: development
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
