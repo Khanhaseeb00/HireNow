@@ -383,6 +383,61 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertEqual(data["adjustment"]["adjustment_type"], "balance_due")
         self.assertEqual(data["adjustment"]["amount"], 200)
 
+    def test_provider_reconciliation_repairs_stale_paid_booking(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Pay Hirer", "9000000701", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000701",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Pay Worker", "9000000702", "x", "Plumber", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000702",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, status, payment_status, razorpay_order_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-06", 2, "online", 500, 0, "confirmed", "pending", "order_test_1"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        booking = conn.execute("SELECT * FROM bookings WHERE id=?", (booking_id,)).fetchone()
+
+        with patch.object(app.payments, "fetch_order", return_value={"id":"order_test_1","status":"paid","amount_paid":50000}), \
+             patch.object(app.payments, "fetch_order_payments", return_value=[{"id":"pay_test_1","status":"captured","amount":50000,"created_at":1}]):
+            result = app.reconcile_online_booking_payment(conn, booking, notify_users=False)
+        conn.commit()
+        refreshed = conn.execute("SELECT payment_status, paid_amount, payment_id FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        conn.close()
+
+        self.assertTrue(result["changed"])
+        self.assertEqual(refreshed["payment_status"], "paid")
+        self.assertEqual(refreshed["paid_amount"], 500)
+        self.assertEqual(refreshed["payment_id"], "pay_test_1")
+
+    def test_hirer_and_worker_pdf_receipts_after_payment(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Receipt Hirer", "9000000711", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000711",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Receipt Worker", "9000000712", "x", "Electrician", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000712",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status, payment_id, razorpay_order_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-07", 2, "online", 500, 500, 500, "completed", "paid", "pay_receipt_1", "order_receipt_1"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        app.sync_booking_financials(conn, booking_id)
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["hirer_id"] = hirer_id
+        hirer_pdf = self.client.get(f"/api/bookings/{booking_id}/receipt.pdf")
+        self.assertEqual(hirer_pdf.status_code, 200)
+        self.assertEqual(hirer_pdf.mimetype, "application/pdf")
+        self.assertTrue(hirer_pdf.data.startswith(b"%PDF"))
+
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["worker_id"] = worker_id
+        worker_pdf = self.client.get(f"/api/worker/bookings/{booking_id}/receipt.pdf")
+        self.assertEqual(worker_pdf.status_code, 200)
+        self.assertEqual(worker_pdf.mimetype, "application/pdf")
+        self.assertTrue(worker_pdf.data.startswith(b"%PDF"))
+
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:
             sess.clear()

@@ -23,7 +23,7 @@ in an offline sandbox — see notifications.py):
   - SMS notifications via Twilio. Every notify() call is wrapped so a
     missing/failed SMS never breaks the booking/payment/status flow itself.
 """
-from flask import Flask, request, jsonify, session, render_template_string, render_template, Response
+from flask import Flask, request, jsonify, session, render_template_string, render_template, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
@@ -31,6 +31,10 @@ import secrets
 import re
 import math
 import requests as _requests
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import mm
+from reportlab.pdfgen import canvas
 
 from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
 import payments
@@ -1017,6 +1021,72 @@ def get_commission_percent(conn):
         return 10.0
 
 
+def reconcile_online_booking_payment(conn, booking, notify_users=False):
+    """Reconcile a booking against Razorpay's provider-side order/payment state.
+
+    This is idempotent and only trusts captured/provider-paid amounts.
+    """
+    if not booking or booking["payment_method"] != "online" or not booking["razorpay_order_id"]:
+        return {"changed": False, "payment_status": booking["payment_status"] if booking else None}
+
+    try:
+        order = payments.fetch_order(booking["razorpay_order_id"])
+        provider_payments = payments.fetch_order_payments(booking["razorpay_order_id"])
+    except (payments.RazorpayConfigError, payments.RazorpayAPIError) as exc:
+        return {"changed": False, "error": str(exc), "payment_status": booking["payment_status"]}
+
+    captured = [p for p in provider_payments if (p.get("status") or "").lower() == "captured"]
+    captured_paise = sum(int(p.get("amount") or 0) for p in captured)
+    if captured_paise <= 0 and (order.get("status") or "").lower() == "paid":
+        captured_paise = int(order.get("amount_paid") or 0)
+    provider_paid = int(round(captured_paise / 100.0))
+    if provider_paid <= 0:
+        return {"changed": False, "payment_status": booking["payment_status"], "provider_paid_amount": 0}
+
+    total = int(booking["total_amount"] or 0)
+    if booking["status"] == "completed":
+        payment_status = "paid" if provider_paid == total else ("balance_due" if provider_paid < total else "refund_pending")
+    else:
+        payment_status = "paid"
+
+    payment_id = None
+    if captured:
+        captured.sort(key=lambda p: int(p.get("created_at") or 0))
+        payment_id = captured[-1].get("id")
+    payment_id = payment_id or booking["payment_id"]
+
+    old_status = booking["payment_status"]
+    old_paid = int(booking["paid_amount"] or 0)
+    changed = old_status != payment_status or old_paid != provider_paid or (payment_id and booking["payment_id"] != payment_id)
+    if changed:
+        conn.execute(
+            "UPDATE bookings SET payment_status=?, payment_id=?, paid_amount=? WHERE id=?",
+            (payment_status, payment_id, provider_paid, booking["id"]),
+        )
+        conn.execute(
+            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, ?, ?)",
+            (booking["id"], booking["status"], f"Payment reconciled with provider: ₹{provider_paid} received; status {payment_status}."),
+        )
+        sync_booking_financials(conn, booking["id"])
+        if notify_users and old_status != payment_status and payment_status == "paid":
+            add_in_app_notification(
+                conn, "hirer", booking["hirer_id"], "payment_paid", "Payment successful",
+                f"Payment for booking #{booking['id']} was confirmed. Your PDF receipt is available in booking details.",
+                booking["id"],
+            )
+            add_in_app_notification(
+                conn, "worker", booking["worker_id"], "payment_paid", "Payment received",
+                f"Payment for booking #{booking['id']} was confirmed. Your payment receipt is available.",
+                booking["id"],
+            )
+    return {
+        "changed": changed,
+        "payment_status": payment_status,
+        "provider_paid_amount": provider_paid,
+        "payment_id": payment_id,
+    }
+
+
 def sync_payment_adjustment(conn, booking_id):
     booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
     if not booking:
@@ -1633,6 +1703,153 @@ def create_razorpay_order(booking_id):
     })
 
 
+def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
+    """Generate a compact PDF payment/earning receipt for hirer or worker."""
+    buf = BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+    x = 20 * mm
+    y = height - 20 * mm
+
+    pdf.setTitle(f"HireNow Receipt #{booking['id']}")
+    pdf.setFont("Helvetica-Bold", 20)
+    pdf.drawString(x, y, "HireNow")
+    pdf.setFont("Helvetica", 10)
+    pdf.drawRightString(width - x, y + 2, f"Receipt #{booking['id']}")
+    y -= 12 * mm
+
+    pdf.setFont("Helvetica-Bold", 13)
+    pdf.drawString(x, y, "Payment Receipt" if audience == "hirer" else "Worker Earnings Receipt")
+    y -= 8 * mm
+
+    def line(label, value, bold=False):
+        nonlocal y
+        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10)
+        pdf.drawString(x, y, f"{label}:")
+        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10)
+        pdf.drawRightString(width - x, y, str(value))
+        y -= 6 * mm
+
+    line("Booking", f"#{booking['id']}")
+    line("Date", booking["start_date"])
+    line("Worker", worker["name"] if worker else "-")
+    line("Hirer", hirer["name"] if hirer else "-")
+    line("Payment method", (booking["payment_method"] or "").title())
+    line("Payment status", (booking["payment_status"] or "").replace("_", " ").title())
+    if booking["payment_id"]:
+        line("Payment ID", booking["payment_id"])
+    if booking["razorpay_order_id"]:
+        line("Order ID", booking["razorpay_order_id"])
+    y -= 2 * mm
+    pdf.line(x, y, width - x, y)
+    y -= 8 * mm
+
+    total = int(booking["total_amount"] or 0)
+    paid = int(booking["paid_amount"] or 0)
+    line("Final booking amount", f"INR {total}", True)
+    line("Amount received", f"INR {paid}", True)
+    if int(booking["diagnosis_fee"] or 0):
+        line("Diagnosis fee", f"INR {int(booking['diagnosis_fee'] or 0)}")
+    if int(booking["work_amount"] or 0):
+        line("Work amount", f"INR {int(booking['work_amount'] or 0)}")
+    if int(booking["actual_minutes"] or 0):
+        line("Actual work time", f"{int(booking['actual_minutes'] or 0)} minutes")
+
+    if audience == "worker":
+        y -= 2 * mm
+        pdf.line(x, y, width - x, y)
+        y -= 8 * mm
+        line("Gross amount", f"INR {int(finance['gross_amount'] or 0)}")
+        line("Platform commission", f"INR {int(finance['platform_commission'] or 0)}")
+        line("Worker net", f"INR {int(finance['worker_net'] or 0)}", True)
+        line("Settlement status", (finance["settlement_status"] or "not ready").replace("_", " ").title())
+
+    y -= 8 * mm
+    pdf.setFont("Helvetica", 8)
+    pdf.drawString(x, y, "This receipt is generated electronically by HireNow.")
+    y -= 5 * mm
+    pdf.drawString(x, y, f"Generated at {datetime.utcnow().isoformat()} UTC")
+    pdf.save()
+    buf.seek(0)
+    return buf
+
+
+@app.post("/api/bookings/<int:booking_id>/sync-payment")
+def sync_booking_payment(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    result = reconcile_online_booking_payment(conn, booking, notify_users=True)
+    if result.get("error"):
+        conn.close()
+        return jsonify({"error": result["error"]}), 502
+    conn.commit()
+    refreshed = conn.execute("SELECT payment_status, paid_amount, payment_id, total_amount FROM bookings WHERE id=?", (booking_id,)).fetchone()
+    conn.close()
+    return jsonify({
+        "ok": True,
+        "payment_status": refreshed["payment_status"],
+        "paid_amount": int(refreshed["paid_amount"] or 0),
+        "total_amount": int(refreshed["total_amount"] or 0),
+        "payment_id": refreshed["payment_id"],
+        "changed": result.get("changed", False),
+    })
+
+
+@app.get("/api/bookings/<int:booking_id>/receipt.pdf")
+def hirer_payment_receipt(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute("SELECT * FROM bookings WHERE id=? AND hirer_id=?", (booking_id, current_hirer_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
+        conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
+    hirer = conn.execute("SELECT name FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+    if not finance:
+        sync_booking_financials(conn, booking_id)
+        finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.commit()
+    buf = build_payment_receipt_pdf(booking, hirer, worker, finance, "hirer")
+    conn.close()
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"HireNow_Receipt_{booking_id}.pdf")
+
+
+@app.get("/api/worker/bookings/<int:booking_id>/receipt.pdf")
+def worker_payment_receipt(booking_id):
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute("SELECT * FROM bookings WHERE id=? AND worker_id=?", (booking_id, current_worker_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
+        conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
+    hirer = conn.execute("SELECT name FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+    if not finance:
+        sync_booking_financials(conn, booking_id)
+        finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.commit()
+    buf = build_payment_receipt_pdf(booking, hirer, worker, finance, "worker")
+    conn.close()
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=f"HireNow_Worker_Receipt_{booking_id}.pdf")
+
+
 @app.get("/api/bookings/<int:booking_id>/payment-summary")
 def booking_payment_summary(booking_id):
     auth_error = require_login()
@@ -1806,9 +2023,9 @@ def verify_payment():
     if booking["payment_method"] != "online":
         conn.close()
         return jsonify({"error": "This booking is not an online-payment booking"}), 400
-    if booking["status"] != "confirmed":
+    if booking["status"] not in ("confirmed", "en_route", "checked_in", "in_progress", "completed"):
         conn.close()
-        return jsonify({"error": "Worker must accept the booking before payment"}), 400
+        return jsonify({"error": "Booking is not ready for payment verification"}), 400
 
     try:
         valid = payments.verify_checkout_signature(order_id, payment_id, signature)
@@ -1841,7 +2058,13 @@ def verify_payment():
     if hirer and hirer["phone"]:
         notify(hirer["phone"], f"HireNow: Aapka payment safal raha, booking #{booking['id']} confirm ho gayi.")
 
-    return jsonify({"status": "confirmed", "payment_status": "paid"})
+    return jsonify({
+        "status": booking["status"],
+        "payment_status": "paid",
+        "paid_amount": int(booking["total_amount"] or 0),
+        "payment_id": payment_id,
+        "receipt_url": f"/api/bookings/{booking['id']}/receipt.pdf",
+    })
 
 
 @app.post("/api/payments/webhook")
@@ -1898,7 +2121,7 @@ def razorpay_webhook():
             conn.commit()
         else:
             booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-            if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
+            if booking and booking["payment_method"] == "online" and booking["payment_status"] != "paid":
                 conn.execute(
                     "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
                     (payment_id, booking["id"]),
@@ -1924,6 +2147,17 @@ def list_bookings():
         return auth_error
 
     conn = get_db()
+    rows = conn.execute(
+        """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
+                  w.rating AS worker_rating, w.daily_wage, w.distance_km
+           FROM bookings b JOIN workers w ON w.id = b.worker_id
+           WHERE b.hirer_id = ? ORDER BY b.created_at DESC""",
+        (current_hirer_id(),),
+    ).fetchall()
+    for booking in rows:
+        if booking["payment_method"] == "online" and booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "balance_due"):
+            reconcile_online_booking_payment(conn, booking, notify_users=False)
+    conn.commit()
     rows = conn.execute(
         """SELECT b.*, w.name AS worker_name, w.skill AS worker_skill, w.city AS worker_city,
                   w.rating AS worker_rating, w.daily_wage, w.distance_km
@@ -2044,6 +2278,16 @@ def worker_bookings():
         return auth_error
 
     conn = get_db()
+    rows = conn.execute(
+        """SELECT b.*, h.name AS hirer_name, h.phone AS hirer_phone
+           FROM bookings b JOIN hirers h ON h.id = b.hirer_id
+           WHERE b.worker_id = ? ORDER BY b.created_at DESC""",
+        (current_worker_id(),),
+    ).fetchall()
+    for booking in rows:
+        if booking["payment_method"] == "online" and booking["razorpay_order_id"] and booking["payment_status"] in ("pending", "balance_due"):
+            reconcile_online_booking_payment(conn, booking, notify_users=False)
+    conn.commit()
     rows = conn.execute(
         """SELECT b.*, h.name AS hirer_name, h.phone AS hirer_phone
            FROM bookings b JOIN hirers h ON h.id = b.hirer_id
@@ -2786,6 +3030,19 @@ def worker_earnings_summary():
     err = require_worker_login()
     if err: return err
     conn = get_db()
+    stale = conn.execute(
+        "SELECT * FROM bookings WHERE worker_id=? AND payment_method='online' AND razorpay_order_id IS NOT NULL AND payment_status IN ('pending','balance_due')",
+        (current_worker_id(),),
+    ).fetchall()
+    for booking in stale:
+        reconcile_online_booking_payment(conn, booking, notify_users=False)
+    completed_paid = conn.execute(
+        "SELECT id FROM bookings WHERE worker_id=? AND status='completed' AND payment_status='paid'",
+        (current_worker_id(),),
+    ).fetchall()
+    for row in completed_paid:
+        sync_booking_financials(conn, row["id"])
+    conn.commit()
     rows = conn.execute("""SELECT bf.*, b.start_date, b.booking_type, b.payment_status
                            FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
                            WHERE bf.worker_id=? ORDER BY bf.booking_id DESC""", (current_worker_id(),)).fetchall()
@@ -2799,6 +3056,45 @@ def worker_earnings_summary():
         "pending": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] == "pending"),
         "settled": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] == "settled"),
     })
+
+
+@app.post("/api/admin/finance/<int:booking_id>/settle")
+def admin_record_worker_settlement(booking_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    reference = (data.get("reference") or "").strip()
+    if not reference:
+        return jsonify({"error": "Settlement reference is required"}), 400
+    conn = get_db()
+    finance = conn.execute(
+        """SELECT bf.*, b.status AS booking_status, b.payment_status, b.worker_id
+           FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
+           WHERE bf.booking_id=?""",
+        (booking_id,),
+    ).fetchone()
+    if not finance:
+        conn.close(); return jsonify({"error": "Finance record not found"}), 404
+    if finance["booking_status"] != "completed" or finance["payment_status"] != "paid":
+        conn.close(); return jsonify({"error": "Only completed and fully paid bookings can be settled"}), 409
+    if finance["settlement_status"] == "held":
+        conn.close(); return jsonify({"error": "Settlement is held until the worker payout account is verified"}), 409
+    if finance["settlement_status"] == "settled":
+        conn.close(); return jsonify({"ok": True, "settlement_status": "settled", "reference": finance["settlement_reference"]})
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE booking_financials SET settlement_status='settled', settlement_reference=?, updated_at=? WHERE booking_id=?",
+        (reference, now, booking_id),
+    )
+    add_in_app_notification(
+        conn, "worker", finance["worker_id"], "settlement_paid", "Earnings settled",
+        f"Your net earnings for booking #{booking_id} were marked settled. Reference: {reference}",
+        booking_id,
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "settlement_status": "settled", "reference": reference})
 
 
 @app.get("/api/admin/finance")
