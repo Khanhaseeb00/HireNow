@@ -3058,6 +3058,45 @@ def worker_earnings_summary():
     })
 
 
+@app.post("/api/admin/finance/<int:booking_id>/settle")
+def admin_record_worker_settlement(booking_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    reference = (data.get("reference") or "").strip()
+    if not reference:
+        return jsonify({"error": "Settlement reference is required"}), 400
+    conn = get_db()
+    finance = conn.execute(
+        """SELECT bf.*, b.status AS booking_status, b.payment_status, b.worker_id
+           FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
+           WHERE bf.booking_id=?""",
+        (booking_id,),
+    ).fetchone()
+    if not finance:
+        conn.close(); return jsonify({"error": "Finance record not found"}), 404
+    if finance["booking_status"] != "completed" or finance["payment_status"] != "paid":
+        conn.close(); return jsonify({"error": "Only completed and fully paid bookings can be settled"}), 409
+    if finance["settlement_status"] == "held":
+        conn.close(); return jsonify({"error": "Settlement is held until the worker payout account is verified"}), 409
+    if finance["settlement_status"] == "settled":
+        conn.close(); return jsonify({"ok": True, "settlement_status": "settled", "reference": finance["settlement_reference"]})
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE booking_financials SET settlement_status='settled', settlement_reference=?, updated_at=? WHERE booking_id=?",
+        (reference, now, booking_id),
+    )
+    add_in_app_notification(
+        conn, "worker", finance["worker_id"], "settlement_paid", "Earnings settled",
+        f"Your net earnings for booking #{booking_id} were marked settled. Reference: {reference}",
+        booking_id,
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "settlement_status": "settled", "reference": reference})
+
+
 @app.get("/api/admin/finance")
 def admin_finance():
     err = _check_admin_session()
