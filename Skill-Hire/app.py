@@ -49,6 +49,9 @@ ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "")
 ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
+STANDARD_WORKDAY_HOURS = 8
+# V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
+DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
 
 
 def ensure_schema_extensions():
@@ -70,6 +73,16 @@ def ensure_schema_extensions():
         "cash_verified_at": "TEXT",
         "cancelled_at": "TEXT",
         "cancellation_reason": "TEXT",
+        "end_time": "TEXT",
+        "booking_type": "TEXT NOT NULL DEFAULT 'regular'",
+        "diagnosis_fee": "INTEGER NOT NULL DEFAULT 0",
+        "diagnosis_distance_km": "REAL",
+        "diagnosis_notes": "TEXT",
+        "work_approved_at": "TEXT",
+        "work_started_at": "TEXT",
+        "work_ended_at": "TEXT",
+        "actual_minutes": "INTEGER NOT NULL DEFAULT 0",
+        "work_amount": "INTEGER NOT NULL DEFAULT 0",
     }
     for column, definition in additions.items():
         if column not in existing:
@@ -732,6 +745,104 @@ def get_worker(worker_id):
     result.pop("phone", None)
     result.pop("id_document_path", None)
     return jsonify(result)
+
+
+def derived_hourly_rate(worker):
+    """Display/billing rate derived from the admin-reviewable daily wage."""
+    return round(float(worker["daily_wage"]) / STANDARD_WORKDAY_HOURS, 2)
+
+
+def diagnosis_fee_for_distance(distance_km):
+    distance = max(0.0, float(distance_km or 0))
+    for max_km, fee in DIAGNOSIS_DISTANCE_SLABS:
+        if distance <= max_km:
+            return fee, max_km
+    return None, None
+
+
+@app.get("/api/pricing/diagnosis")
+def diagnosis_pricing():
+    """Transparent public policy: same slabs are shown to hirer and worker."""
+    return jsonify({
+        "currency": "INR",
+        "slabs": [{"up_to_km": km, "fee": fee} for km, fee in DIAGNOSIS_DISTANCE_SLABS],
+        "note": "Diagnosis/inspection only. Repair work starts only after hirer approval."
+    })
+
+
+@app.post("/api/bookings/<int:booking_id>/diagnosis")
+def submit_diagnosis(booking_id):
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(force=True) or {}
+    notes = (data.get("notes") or "").strip()
+    if not notes:
+        return jsonify({"error": "Diagnosis notes are required"}), 400
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] != "diagnosis" or booking["status"] not in ("confirmed", "checked_in"):
+        conn.close(); return jsonify({"error": "Diagnosis can be submitted only for an active diagnosis booking"}), 400
+    conn.execute("UPDATE bookings SET diagnosis_notes = ? WHERE id = ?", (notes, booking_id))
+    add_in_app_notification(conn, "hirer", booking["hirer_id"], "diagnosis_ready", "Diagnosis ready", f"Worker submitted diagnosis for booking #{booking_id}. Review it before starting paid work.", booking_id)
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "diagnosis_notes": notes})
+
+
+@app.post("/api/bookings/<int:booking_id>/approve-work")
+def approve_diagnosed_work(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"), (booking_id, current_hirer_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] != "diagnosis" or not booking["diagnosis_notes"]:
+        conn.close(); return jsonify({"error": "Worker diagnosis is required before approval"}), 400
+    approved_at = datetime.utcnow().isoformat()
+    conn.execute("UPDATE bookings SET work_approved_at = ? WHERE id = ?", (approved_at, booking_id))
+    add_in_app_notification(conn, "worker", booking["worker_id"], "work_approved", "Work approved", f"Hirer approved paid work for booking #{booking_id}. Start the timer when work begins.", booking_id)
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "work_approved_at": approved_at})
+
+
+@app.post("/api/worker/bookings/<int:booking_id>/work-timer")
+def worker_work_timer(booking_id):
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    action = ((request.get_json(force=True) or {}).get("action") or "").lower()
+    if action not in ("start", "stop"):
+        return jsonify({"error": "action must be start or stop"}), 400
+    conn = get_db()
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["booking_type"] == "diagnosis" and not booking["work_approved_at"]:
+        conn.close(); return jsonify({"error": "Hirer must approve diagnosed work before timer starts"}), 409
+    now = datetime.utcnow()
+    if action == "start":
+        if booking["work_started_at"]:
+            conn.close(); return jsonify({"error": "Work timer already started"}), 409
+        conn.execute("UPDATE bookings SET work_started_at = ?, status = 'in_progress' WHERE id = ?", (now.isoformat(), booking_id))
+        conn.commit(); conn.close()
+        return jsonify({"status": "in_progress", "work_started_at": now.isoformat()})
+    if not booking["work_started_at"]:
+        conn.close(); return jsonify({"error": "Work timer has not started"}), 409
+    started = datetime.fromisoformat(booking["work_started_at"])
+    minutes = max(1, int((now - started).total_seconds() // 60))
+    worker = conn.execute("SELECT daily_wage FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+    hourly = derived_hourly_rate(worker)
+    work_amount = round(hourly * minutes / 60)
+    total = int(booking["diagnosis_fee"] or 0) + int(work_amount)
+    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed' WHERE id = ?""",
+                 (now.isoformat(), minutes, work_amount, total, booking_id))
+    conn.commit(); conn.close()
+    return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total})
+
 
 
 # ----------------------------------------------------------- booking routes
