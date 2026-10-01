@@ -265,6 +265,60 @@ def ensure_schema_extensions():
             locked_until TEXT
         )
     """)
+
+    # Repair legacy payment rows created before paid_amount / settlement semantics existed.
+    # A booking already marked paid is authoritative evidence that checkout/OTP verification succeeded.
+    legacy_paid = conn.execute(
+        """SELECT id, total_amount, paid_amount, payment_method, payment_status, status, cash_verified_at
+           FROM bookings
+           WHERE payment_status='paid' AND COALESCE(paid_amount, 0)=0"""
+    ).fetchall()
+    for booking in legacy_paid:
+        conn.execute(
+            "UPDATE bookings SET paid_amount=total_amount WHERE id=?",
+            (booking["id"],),
+        )
+
+    # Unpaid cancelled/rejected jobs have no payment lifecycle; do not label them pending.
+    conn.execute(
+        """UPDATE bookings
+           SET payment_status='cancelled'
+           WHERE status IN ('cancelled','rejected')
+             AND COALESCE(paid_amount,0)=0
+             AND payment_status IN ('pending','cash_pending','balance_due')"""
+    )
+
+    # Old false balance-due rows must not survive for cash jobs, paid jobs or unpaid cancellations.
+    now_repair = datetime.utcnow().isoformat()
+    conn.execute(
+        """UPDATE payment_adjustments
+           SET status='resolved', note=COALESCE(note,'Auto-resolved by payment state repair'), updated_at=?
+           WHERE status='pending'
+             AND booking_id IN (
+                 SELECT id FROM bookings
+                 WHERE payment_method='cash'
+                    OR payment_status='paid'
+                    OR (status IN ('cancelled','rejected') AND COALESCE(paid_amount,0)=0)
+             )""",
+        (now_repair,),
+    )
+
+    # Cash is paid directly to the worker. Once OTP verification says paid, there is no platform payout due.
+    cash_paid = conn.execute(
+        """SELECT id, total_amount FROM bookings
+           WHERE status='completed' AND payment_method='cash' AND payment_status='paid'"""
+    ).fetchall()
+    for booking in cash_paid:
+        conn.execute(
+            """UPDATE booking_financials
+               SET payment_collected=?, adjustment_amount=0,
+                   settlement_status='settled',
+                   settlement_reference=COALESCE(settlement_reference,'cash_otp'),
+                   updated_at=?
+               WHERE booking_id=?""",
+            (int(booking["total_amount"] or 0), now_repair, booking["id"]),
+        )
+
     conn.commit()
     conn.close()
 
@@ -1093,8 +1147,37 @@ def sync_payment_adjustment(conn, booking_id):
         return None
     paid = int(booking["paid_amount"] or 0)
     total = int(booking["total_amount"] or 0)
-    diff = total - paid
     now = datetime.utcnow().isoformat()
+
+    # Cash never creates a platform balance/refund queue: OTP means the worker was paid directly.
+    if booking["payment_method"] == "cash":
+        conn.execute(
+            "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND status='pending'",
+            (now, booking_id),
+        )
+        return None
+
+    # An unpaid cancelled/rejected booking has no payment pending.
+    if booking["status"] in ("cancelled", "rejected") and paid <= 0:
+        conn.execute(
+            "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND status='pending'",
+            (now, booking_id),
+        )
+        return None
+
+    # A paid cancelled online booking is a refund case.
+    if booking["status"] in ("cancelled", "rejected") and paid > 0:
+        diff = -paid
+    elif booking["status"] != "completed":
+        # Before completion the original online payment can match the estimate; do not create final-bill adjustments yet.
+        conn.execute(
+            "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND status='pending'",
+            (now, booking_id),
+        )
+        return None
+    else:
+        diff = total - paid
+
     if diff == 0:
         conn.execute(
             "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND status='pending'",
@@ -1145,7 +1228,11 @@ def sync_booking_financials(conn, booking_id):
     adjustment = paid_amount - gross
     payout = conn.execute("SELECT verification_status FROM worker_payout_accounts WHERE worker_id = ?", (booking["worker_id"],)).fetchone()
     if booking["status"] == "completed" and booking["payment_status"] == "paid":
-        settlement_status = "pending" if payout and payout["verification_status"] == "verified" else "held"
+        if booking["payment_method"] == "cash":
+            # Cash is handed directly to the worker; OTP verification is the settlement event.
+            settlement_status = "settled"
+        else:
+            settlement_status = "pending" if payout and payout["verification_status"] == "verified" else "held"
     elif booking["status"] == "completed" and booking["payment_status"] in ("balance_due", "refund_pending"):
         settlement_status = "held"
     else:
@@ -1172,6 +1259,20 @@ def sync_booking_financials(conn, booking_id):
           updated_at=excluded.updated_at
     """, (booking_id, booking["worker_id"], gross, diagnosis_fee, work_amount, commission,
           worker_net, paid_amount, adjustment, settlement_status, now, now))
+    if booking["status"] == "completed" and booking["payment_method"] == "cash" and booking["payment_status"] == "paid":
+        conn.execute(
+            """UPDATE booking_financials
+               SET settlement_status='settled',
+                   settlement_reference=COALESCE(settlement_reference,'cash_otp'),
+                   payment_collected=?,
+                   adjustment_amount=0,
+                   updated_at=?
+               WHERE booking_id=?""",
+            (gross, now, booking_id),
+        )
+        settlement_status = "settled"
+        paid_amount = gross
+        adjustment = 0
     return {
         "gross_amount": gross,
         "platform_commission": commission,
@@ -2207,7 +2308,8 @@ def cancel_booking(booking_id):
     if booking["status"] in ("in_progress", "completed", "cancelled", "rejected"):
         conn.close()
         return jsonify({"error": "This booking can no longer be cancelled"}), 400
-    payment_status = "refund_pending" if booking["payment_status"] == "paid" else booking["payment_status"]
+    paid_amount = int(booking["paid_amount"] or 0)
+    payment_status = "refund_pending" if booking["payment_status"] == "paid" or paid_amount > 0 else "cancelled"
     conn.execute(
         "UPDATE bookings SET status = 'cancelled', payment_status = ?, cancelled_at = ?, cancellation_reason = ? WHERE id = ?",
         (payment_status, datetime.now().isoformat(), reason, booking_id),
@@ -2216,6 +2318,10 @@ def cancel_booking(booking_id):
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'cancelled', ?)",
         (booking_id, reason),
     )
+    if paid_amount > 0:
+        sync_booking_financials(conn, booking_id)
+    else:
+        sync_payment_adjustment(conn, booking_id)
     conn.commit()
     conn.close()
     return jsonify({"status": "cancelled", "payment_status": payment_status})
@@ -3102,6 +3208,12 @@ def admin_finance():
     err = _check_admin_session()
     if err: return err
     conn = get_db()
+    completed_paid = conn.execute(
+        "SELECT id FROM bookings WHERE status='completed' AND payment_status='paid'"
+    ).fetchall()
+    for row in completed_paid:
+        sync_booking_financials(conn, row["id"])
+    conn.commit()
     rows = conn.execute("""SELECT bf.*, b.payment_status, b.status AS booking_status,
                                   w.name AS worker_name, h.name AS hirer_name
                            FROM booking_financials bf
@@ -3117,7 +3229,10 @@ def admin_finance():
            JOIN bookings b ON b.id=pa.booking_id
            JOIN hirers h ON h.id=b.hirer_id
            JOIN workers w ON w.id=b.worker_id
-           WHERE pa.status='pending' ORDER BY pa.id DESC"""
+           WHERE pa.status='pending'
+             AND b.payment_method='online'
+             AND NOT (b.status IN ('cancelled','rejected') AND COALESCE(b.paid_amount,0)=0)
+           ORDER BY pa.id DESC"""
     ).fetchall())
     response = {
         "commission_percent": commission,
