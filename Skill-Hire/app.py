@@ -35,7 +35,9 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -60,6 +62,33 @@ STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress"
 STANDARD_WORKDAY_HOURS = 8
 # V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
 DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
+
+SUPPORTED_LANGUAGES = {"en", "hi", "ar", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "ur"}
+SUPPORTED_THEMES = {"light", "dark"}
+
+
+def normalize_language(value):
+    value = (value or "en").strip().lower()
+    return value if value in SUPPORTED_LANGUAGES else "en"
+
+
+def normalize_theme(value):
+    value = (value or "light").strip().lower()
+    return value if value in SUPPORTED_THEMES else "light"
+
+
+def parse_optional_coordinates(latitude, longitude):
+    if latitude in (None, "") and longitude in (None, ""):
+        return None, None
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        raise ValueError("Valid latitude and longitude are required")
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Latitude or longitude is outside the valid range")
+    return latitude, longitude
+
 
 
 def ensure_schema_extensions():
@@ -113,8 +142,27 @@ def ensure_schema_extensions():
     }.items():
         if column not in worker_columns:
             conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+    for column, definition in {
+        "preferred_language": "TEXT NOT NULL DEFAULT 'en'",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "notifications_enabled": "INTEGER NOT NULL DEFAULT 1",
+    }.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
     hirer_columns = table_columns(conn, "hirers")
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in hirer_columns:
+            conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
+    for column, definition in {
+        "preferred_language": "TEXT NOT NULL DEFAULT 'en'",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "notifications_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "home_address": "TEXT",
+        "home_city": "TEXT",
+        "home_latitude": "REAL",
+        "home_longitude": "REAL",
+        "location_updated_at": "TEXT",
+    }.items():
         if column not in hirer_columns:
             conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
     if "is_online" not in worker_columns:
@@ -682,6 +730,14 @@ def register():
     name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()
     password = data.get("password") or ""
+    preferred_language = normalize_language(data.get("preferred_language"))
+    preferred_theme = normalize_theme(data.get("preferred_theme"))
+    home_address = (data.get("address") or "").strip() or None
+    home_city = (data.get("city") or "").strip() or None
+    try:
+        home_latitude, home_longitude = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not (name and phone and password):
         return jsonify({"error": "name, phone and password are required"}), 400
     if len(name) < 2:
@@ -698,15 +754,22 @@ def register():
         return jsonify({"error": "Phone already registered"}), 409
 
     cur = conn.execute(
-        "INSERT INTO hirers (name, phone, password_hash) VALUES (?, ?, ?)",
-        (name, phone, generate_password_hash(password)),
+        """INSERT INTO hirers
+           (name, phone, password_hash, preferred_language, preferred_theme,
+            home_address, home_city, home_latitude, home_longitude, location_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            name, phone, generate_password_hash(password), preferred_language, preferred_theme,
+            home_address, home_city, home_latitude, home_longitude,
+            datetime.utcnow().isoformat() if home_latitude is not None else None,
+        ),
     )
     conn.commit()
     hirer_id = cur.lastrowid
     conn.close()
 
     session["hirer_id"] = hirer_id
-    return jsonify({"id": hirer_id, "name": name, "phone": phone}), 201
+    return jsonify({"id": hirer_id, "name": name, "phone": phone, "preferred_language": preferred_language, "preferred_theme": preferred_theme, "home_address": home_address, "home_city": home_city, "home_latitude": home_latitude, "home_longitude": home_longitude}), 201
 
 
 @app.post("/api/auth/login")
@@ -743,7 +806,7 @@ def me():
     if not hirer_id:
         return jsonify({"logged_in": False})
     conn = get_db()
-    hirer = conn.execute("SELECT id, name, phone FROM hirers WHERE id = ?", (hirer_id,)).fetchone()
+    hirer = conn.execute("SELECT id, name, phone, preferred_language, preferred_theme, notifications_enabled, home_address, home_city, home_latitude, home_longitude, location_updated_at FROM hirers WHERE id = ?", (hirer_id,)).fetchone()
     conn.close()
     if not hirer:
         session.pop("hirer_id", None)
@@ -814,13 +877,112 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online, service_latitude, service_longitude, service_location_updated_at FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online, service_latitude, service_longitude, service_location_updated_at, preferred_language, preferred_theme, notifications_enabled FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/hirer/preferences")
+def hirer_preferences():
+    err = require_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        """SELECT preferred_language, preferred_theme, notifications_enabled,
+                  home_address, home_city, home_latitude, home_longitude, location_updated_at
+           FROM hirers WHERE id=?""",
+        (current_hirer_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/hirer/preferences")
+def update_hirer_preferences():
+    err = require_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    language = normalize_language(data.get("preferred_language"))
+    theme = normalize_theme(data.get("preferred_theme"))
+    notifications_enabled = 1 if data.get("notifications_enabled", True) else 0
+    conn = get_db()
+    conn.execute(
+        "UPDATE hirers SET preferred_language=?, preferred_theme=?, notifications_enabled=? WHERE id=?",
+        (language, theme, notifications_enabled, current_hirer_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"preferred_language": language, "preferred_theme": theme, "notifications_enabled": bool(notifications_enabled)})
+
+
+@app.get("/api/hirer/location")
+def hirer_location():
+    err = require_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        "SELECT home_address, home_city, home_latitude, home_longitude, location_updated_at FROM hirers WHERE id=?",
+        (current_hirer_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/hirer/location")
+def update_hirer_location():
+    err = require_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    address = (data.get("address") or "").strip() or None
+    city = (data.get("city") or "").strip() or None
+    try:
+        latitude, longitude = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not address and latitude is None:
+        return jsonify({"error": "Enter an address or choose a location on the map"}), 400
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    conn.execute(
+        """UPDATE hirers SET home_address=?, home_city=?, home_latitude=?, home_longitude=?,
+           location_updated_at=? WHERE id=?""",
+        (address, city, latitude, longitude, now, current_hirer_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "home_address": address, "home_city": city, "home_latitude": latitude, "home_longitude": longitude, "location_updated_at": now})
+
+
+@app.get("/api/worker/preferences")
+def worker_preferences():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        "SELECT preferred_language, preferred_theme, notifications_enabled FROM workers WHERE id=?",
+        (current_worker_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/worker/preferences")
+def update_worker_preferences():
+    err = require_worker_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    language = normalize_language(data.get("preferred_language"))
+    theme = normalize_theme(data.get("preferred_theme"))
+    notifications_enabled = 1 if data.get("notifications_enabled", True) else 0
+    conn = get_db()
+    conn.execute(
+        "UPDATE workers SET preferred_language=?, preferred_theme=?, notifications_enabled=? WHERE id=?",
+        (language, theme, notifications_enabled, current_worker_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"preferred_language": language, "preferred_theme": theme, "notifications_enabled": bool(notifications_enabled)})
 
 
 @app.get("/api/worker/service-location")
@@ -2149,8 +2311,8 @@ def hirer_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone, preferred_language FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city, preferred_language FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
@@ -2172,8 +2334,8 @@ def worker_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone, preferred_language FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city, preferred_language FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
@@ -2566,7 +2728,7 @@ def hirer_profile():
     if auth_error:
         return auth_error
     conn = get_db()
-    hirer = conn.execute("SELECT id, name, phone, created_at FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
+    hirer = conn.execute("SELECT id, name, phone, preferred_language, preferred_theme, notifications_enabled, home_address, home_city, home_latitude, home_longitude, location_updated_at, created_at FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
     counts = conn.execute(
         "SELECT COUNT(*) AS bookings, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed FROM bookings WHERE hirer_id = ?",
         (current_hirer_id(),),
