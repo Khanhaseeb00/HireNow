@@ -816,7 +816,9 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       }).join("") : "";
       var paymentText = b.payment_method === "cash"
         ? (b.payment_status === "paid" ? "Cash verified" : "Cash after work")
-        : (b.payment_status === "paid" ? "Online paid" : "Online payment pending");
+        : (b.payment_status === "paid" ? "Online paid" :
+           b.payment_status === "balance_due" ? "Balance payment pending" :
+           b.payment_status === "refund_pending" ? "Refund pending" : "Online payment pending");
 
       return (
         '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + b.hirer_name + '">' +

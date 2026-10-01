@@ -205,6 +205,23 @@ def ensure_schema_extensions():
             FOREIGN KEY(worker_id) REFERENCES workers(id)
         )
     """)
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS payment_adjustments (
+            id {id_column_sql()},
+            booking_id {foreign_id_sql()} NOT NULL,
+            adjustment_type TEXT NOT NULL CHECK(adjustment_type IN ('balance_due','refund')),
+            amount INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            provider_order_id TEXT,
+            provider_payment_id TEXT,
+            provider_refund_id TEXT,
+            note TEXT,
+            created_at TEXT DEFAULT {text_timestamp_default()},
+            updated_at TEXT DEFAULT {text_timestamp_default()},
+            FOREIGN KEY(booking_id) REFERENCES bookings(id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_payment_adjustments_booking ON payment_adjustments(booking_id, adjustment_type, status)")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS admin_login_attempts (
             attempt_key TEXT PRIMARY KEY,
@@ -919,6 +936,50 @@ def get_commission_percent(conn):
         return 10.0
 
 
+def sync_payment_adjustment(conn, booking_id):
+    booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+    if not booking:
+        return None
+    paid = int(booking["paid_amount"] or 0)
+    total = int(booking["total_amount"] or 0)
+    diff = total - paid
+    now = datetime.utcnow().isoformat()
+    if diff == 0:
+        conn.execute(
+            "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND status='pending'",
+            (now, booking_id),
+        )
+        return None
+    adjustment_type = "balance_due" if diff > 0 else "refund"
+    amount = abs(diff)
+    existing = conn.execute(
+        """SELECT * FROM payment_adjustments
+           WHERE booking_id=? AND adjustment_type=? AND status='pending'
+           ORDER BY id DESC LIMIT 1""",
+        (booking_id, adjustment_type),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE payment_adjustments SET amount=?, updated_at=? WHERE id=?",
+            (amount, now, existing["id"]),
+        )
+        adjustment_id = existing["id"]
+    else:
+        cur = conn.execute(
+            """INSERT INTO payment_adjustments
+               (booking_id, adjustment_type, amount, status, created_at, updated_at)
+               VALUES (?, ?, ?, 'pending', ?, ?)""",
+            (booking_id, adjustment_type, amount, now, now),
+        )
+        adjustment_id = cur.lastrowid
+    opposite = "refund" if adjustment_type == "balance_due" else "balance_due"
+    conn.execute(
+        "UPDATE payment_adjustments SET status='resolved', updated_at=? WHERE booking_id=? AND adjustment_type=? AND status='pending'",
+        (now, booking_id, opposite),
+    )
+    return {"id": adjustment_id, "type": adjustment_type, "amount": amount, "status": "pending"}
+
+
 def sync_booking_financials(conn, booking_id):
     booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
     if not booking:
@@ -939,6 +1000,7 @@ def sync_booking_financials(conn, booking_id):
     else:
         settlement_status = "not_ready"
     now = datetime.utcnow().isoformat()
+    sync_payment_adjustment(conn, booking_id)
     conn.execute("""
         INSERT INTO booking_financials
         (booking_id, worker_id, gross_amount, diagnosis_fee, work_amount, platform_commission,
@@ -1335,9 +1397,9 @@ def create_razorpay_order(booking_id):
     if booking["status"] != "confirmed":
         conn.close()
         return jsonify({"error": "Worker must accept the booking before online payment"}), 400
-    if booking["payment_status"] == "paid":
+    if booking["payment_status"] in ("paid", "balance_due", "refund_pending"):
         conn.close()
-        return jsonify({"error": "Booking already paid"}), 400
+        return jsonify({"error": "Use the reconciliation payment flow for this booking"}), 400
 
     try:
         order = payments.create_order(
@@ -1364,6 +1426,150 @@ def create_razorpay_order(booking_id):
         "currency": order["currency"],
         "key_id": payments.RAZORPAY_KEY_ID,
     })
+
+
+@app.get("/api/bookings/<int:booking_id>/payment-summary")
+def booking_payment_summary(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    adjustment = conn.execute(
+        """SELECT id, adjustment_type, amount, status, provider_order_id, provider_payment_id,
+                  provider_refund_id, note, created_at, updated_at
+           FROM payment_adjustments
+           WHERE booking_id=? AND status!='cancelled'
+           ORDER BY id DESC LIMIT 1""",
+        (booking_id,),
+    ).fetchone()
+    result = {
+        "booking_id": booking_id,
+        "total_amount": int(booking["total_amount"] or 0),
+        "paid_amount": int(booking["paid_amount"] or 0),
+        "payment_status": booking["payment_status"],
+        "payment_method": booking["payment_method"],
+        "adjustment": row_to_dict(adjustment) if adjustment else None,
+    }
+    conn.close()
+    return jsonify(result)
+
+
+@app.post("/api/bookings/<int:booking_id>/create-balance-order")
+def create_balance_order(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    booking = conn.execute(
+        "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
+        (booking_id, current_hirer_id()),
+    ).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    if booking["payment_method"] != "online" or booking["status"] != "completed":
+        conn.close()
+        return jsonify({"error": "Balance payment is available only for completed online bookings"}), 400
+    if booking["payment_status"] != "balance_due":
+        conn.close()
+        return jsonify({"error": "This booking has no outstanding balance"}), 400
+    due = int(booking["total_amount"] or 0) - int(booking["paid_amount"] or 0)
+    if due <= 0:
+        conn.close()
+        return jsonify({"error": "No outstanding balance remains"}), 400
+    adjustment = sync_payment_adjustment(conn, booking_id)
+    conn.commit()
+    try:
+        order = payments.create_order(
+            amount_rupees=due,
+            receipt=f"balance_{booking_id}_{adjustment['id']}",
+            notes={"booking_id": str(booking_id), "adjustment_id": str(adjustment["id"]), "type": "balance_due"},
+        )
+    except payments.RazorpayConfigError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    except payments.RazorpayAPIError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 502
+    conn.execute(
+        "UPDATE payment_adjustments SET provider_order_id=?, updated_at=? WHERE id=?",
+        (order["id"], datetime.utcnow().isoformat(), adjustment["id"]),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({
+        "adjustment_id": adjustment["id"],
+        "order_id": order["id"],
+        "amount": order["amount"],
+        "currency": order["currency"],
+        "key_id": payments.RAZORPAY_KEY_ID,
+        "balance_due": due,
+    })
+
+
+@app.post("/api/payments/verify-balance")
+def verify_balance_payment():
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(force=True) or {}
+    order_id = data.get("razorpay_order_id")
+    payment_id = data.get("razorpay_payment_id")
+    signature = data.get("razorpay_signature")
+    if not (order_id and payment_id and signature):
+        return jsonify({"error": "razorpay_order_id, razorpay_payment_id and razorpay_signature are required"}), 400
+    conn = get_db()
+    row = conn.execute(
+        """SELECT pa.*, b.hirer_id, b.worker_id, b.total_amount, b.paid_amount, b.status, b.payment_status
+           FROM payment_adjustments pa JOIN bookings b ON b.id=pa.booking_id
+           WHERE pa.provider_order_id=? AND b.hirer_id=? AND pa.adjustment_type='balance_due'""",
+        (order_id, current_hirer_id()),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "No balance adjustment matches this order"}), 404
+    if row["status"] == "resolved":
+        conn.close()
+        return jsonify({"ok": True, "payment_status": "paid", "paid_amount": int(row["total_amount"] or 0)})
+    try:
+        valid = payments.verify_checkout_signature(order_id, payment_id, signature)
+    except payments.RazorpayConfigError as e:
+        conn.close()
+        return jsonify({"error": str(e)}), 500
+    if not valid:
+        conn.close()
+        return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
+    new_paid = int(row["paid_amount"] or 0) + int(row["amount"] or 0)
+    total = int(row["total_amount"] or 0)
+    payment_status = "paid" if new_paid == total else ("balance_due" if new_paid < total else "refund_pending")
+    now = datetime.utcnow().isoformat()
+    conn.execute(
+        "UPDATE payment_adjustments SET status='resolved', provider_payment_id=?, updated_at=? WHERE id=?",
+        (payment_id, now, row["id"]),
+    )
+    conn.execute(
+        "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
+        (new_paid, payment_status, row["booking_id"]),
+    )
+    conn.execute(
+        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
+        (row["booking_id"], f"Outstanding balance ₹{row['amount']} paid online."),
+    )
+    add_in_app_notification(
+        conn, "worker", row["worker_id"], "balance_paid", "Balance payment received",
+        f"Outstanding balance for booking #{row['booking_id']} has been paid.", row["booking_id"]
+    )
+    sync_booking_financials(conn, row["booking_id"])
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "payment_status": payment_status, "paid_amount": new_paid, "total_amount": total})
 
 
 @app.post("/api/payments/verify")
@@ -1460,21 +1666,47 @@ def razorpay_webhook():
         payment_id = payment_entity.get("id")
 
         conn = get_db()
-        booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-        if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
+        adjustment = conn.execute(
+            """SELECT pa.*, b.worker_id, b.total_amount, b.paid_amount
+               FROM payment_adjustments pa JOIN bookings b ON b.id=pa.booking_id
+               WHERE pa.provider_order_id=? AND pa.adjustment_type='balance_due'""",
+            (order_id,),
+        ).fetchone()
+        if adjustment and adjustment["status"] != "resolved":
+            new_paid = int(adjustment["paid_amount"] or 0) + int(adjustment["amount"] or 0)
+            total = int(adjustment["total_amount"] or 0)
+            payment_status = "paid" if new_paid == total else ("balance_due" if new_paid < total else "refund_pending")
+            now = datetime.utcnow().isoformat()
             conn.execute(
-                "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
-                (payment_id, booking["id"]),
+                "UPDATE payment_adjustments SET status='resolved', provider_payment_id=?, updated_at=? WHERE id=?",
+                (payment_id, now, adjustment["id"]),
             )
             conn.execute(
-                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
-                (booking["id"],),
+                "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
+                (new_paid, payment_status, adjustment["booking_id"]),
             )
-            worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
-            sync_booking_financials(conn, booking["id"])
+            conn.execute(
+                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
+                (adjustment["booking_id"], f"Outstanding balance ₹{adjustment['amount']} confirmed via payment webhook."),
+            )
+            sync_booking_financials(conn, adjustment["booking_id"])
             conn.commit()
-            if worker and worker["phone"]:
-                notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
+        else:
+            booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
+            if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
+                conn.execute(
+                    "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
+                    (payment_id, booking["id"]),
+                )
+                conn.execute(
+                    "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
+                    (booking["id"],),
+                )
+                worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+                sync_booking_financials(conn, booking["id"])
+                conn.commit()
+                if worker and worker["phone"]:
+                    notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
         conn.close()
 
     return jsonify({"ok": True})
@@ -2286,13 +2518,80 @@ def admin_finance():
                            ORDER BY bf.booking_id DESC LIMIT 500""").fetchall()
     commission = get_commission_percent(conn)
     items = rows_to_list(rows)
-    conn.close()
-    return jsonify({
+    pending_adjustments = rows_to_list(conn.execute(
+        """SELECT pa.*, b.payment_status, h.name AS hirer_name, w.name AS worker_name
+           FROM payment_adjustments pa
+           JOIN bookings b ON b.id=pa.booking_id
+           JOIN hirers h ON h.id=b.hirer_id
+           JOIN workers w ON w.id=b.worker_id
+           WHERE pa.status='pending' ORDER BY pa.id DESC"""
+    ).fetchall())
+    response = {
         "commission_percent": commission,
         "items": items,
         "platform_revenue": sum(int(x["platform_commission"] or 0) for x in items if x["booking_status"]=="completed"),
         "worker_payable": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] in ("pending","held")),
-    })
+        "pending_balance_due": sum(int(x["amount"] or 0) for x in pending_adjustments if x["adjustment_type"]=="balance_due"),
+        "pending_refunds": sum(int(x["amount"] or 0) for x in pending_adjustments if x["adjustment_type"]=="refund"),
+        "adjustments": pending_adjustments,
+    }
+    conn.close()
+    return jsonify(response)
+
+
+@app.post("/api/admin/payment-adjustments/<int:adjustment_id>/resolve")
+def admin_resolve_payment_adjustment(adjustment_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(silent=True) or {}
+    reference = (data.get("reference") or "").strip()
+    note = (data.get("note") or "").strip() or None
+    if not reference:
+        return jsonify({"error": "A payment/refund reference is required"}), 400
+    conn = get_db()
+    adjustment = conn.execute(
+        "SELECT * FROM payment_adjustments WHERE id=?",
+        (adjustment_id,),
+    ).fetchone()
+    if not adjustment:
+        conn.close()
+        return jsonify({"error": "Adjustment not found"}), 404
+    if adjustment["status"] == "resolved":
+        conn.close()
+        return jsonify({"error": "Adjustment is already resolved"}), 409
+    booking = conn.execute("SELECT * FROM bookings WHERE id=?", (adjustment["booking_id"],)).fetchone()
+    if not booking:
+        conn.close()
+        return jsonify({"error": "Booking not found"}), 404
+    now = datetime.utcnow().isoformat()
+    if adjustment["adjustment_type"] == "refund":
+        new_paid = max(0, int(booking["paid_amount"] or 0) - int(adjustment["amount"] or 0))
+        new_status = "paid" if new_paid == int(booking["total_amount"] or 0) else "refund_pending"
+        conn.execute(
+            "UPDATE payment_adjustments SET status='resolved', provider_refund_id=?, note=?, updated_at=? WHERE id=?",
+            (reference, note, now, adjustment_id),
+        )
+        conn.execute(
+            "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
+            (new_paid, new_status, booking["id"]),
+        )
+        conn.execute(
+            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, ?, ?)",
+            (booking["id"], booking["status"], f"Refund ₹{adjustment['amount']} recorded. Reference: {reference}"),
+        )
+        add_in_app_notification(
+            conn, "hirer", booking["hirer_id"], "refund_processed", "Refund processed",
+            f"Refund of ₹{adjustment['amount']} for booking #{booking['id']} was processed.", booking["id"]
+        )
+    else:
+        conn.close()
+        return jsonify({"error": "Balance due must be paid by the hirer through checkout"}), 400
+    sync_booking_financials(conn, booking["id"])
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "adjustment_id": adjustment_id, "status": "resolved", "payment_status": new_status})
 
 
 @app.put("/api/admin/finance/commission")

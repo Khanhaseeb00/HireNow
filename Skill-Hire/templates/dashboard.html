@@ -1603,7 +1603,11 @@
             '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.booking_type||"regular")+'</div></div>' + (b.diagnosis_notes?'<div class="ref-detail-row"><div class="k">Diagnosis</div><div class="v">'+b.diagnosis_notes+'</div></div>':'') + (b.booking_type==='diagnosis'&&b.diagnosis_notes&&!b.work_approved_at&&!b.work_declined_at&&b.status==='checked_in'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0"><button class="btn btn-safety" onclick="approveDiagnosisWork('+b.id+')">Approve Paid Work</button><button class="btn btn-outline" onclick="declineDiagnosisWork('+b.id+')">Diagnosis Only</button></div>':'') + (b.work_declined_at?'<div class="pay-note">Repair work declined after diagnosis. Final bill is diagnosis fee only.</div>':'') +
             '<div class="ref-detail-row"><div class="k">Address</div><div class="v">'+(b.address||"Not provided")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Special Instructions</div><div class="v">'+(b.special_instructions||"None")+'</div></div>' +
-            '<div class="ref-detail-row"><div class="k">Total Amount</div><div class="v" style="font-size:18px;">'+fmtMoney(b.total_amount)+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Final Amount</div><div class="v" style="font-size:18px;">'+fmtMoney(b.total_amount)+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Paid Amount</div><div class="v">'+fmtMoney(b.paid_amount||0)+'</div></div>' +
+            (b.actual_minutes?'<div class="ref-detail-row"><div class="k">Actual Work</div><div class="v">'+b.actual_minutes+' min · '+fmtMoney(b.work_amount||0)+'</div></div>':'') +
+            (b.diagnosis_fee?'<div class="ref-detail-row"><div class="k">Diagnosis Fee</div><div class="v">'+fmtMoney(b.diagnosis_fee)+'</div></div>':'') +
+            '<div class="ref-detail-row"><div class="k">Payment</div><div class="v"><span class="ref-status">'+String(b.payment_status||"pending").replaceAll("_"," ")+'</span></div></div>' +
             '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+statusLabel(b.status)+'</span></div></div>' +
           '</div>' +
           '<div class="ref-detail-actions">' +
@@ -1611,6 +1615,9 @@
             '<button class="btn btn-primary" id="refContactWorker">Contact Worker</button>' +
           '</div>' +
           ((b.payment_method==="online" && b.status==="confirmed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refPayOnline" style="margin-top:10px;">Pay Online Now</button>' : '') +
+          ((b.payment_method==="online" && b.status==="completed" && b.payment_status==="balance_due") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Additional payment required</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.total_amount||0)-Number(b.paid_amount||0)))+'</div><div class="accept-note">Actual work amount final estimate se zyada hai. Remaining balance pay karke booking fully settled karein.</div></div><button class="btn btn-safety btn-block" id="refPayBalance" style="margin-top:8px;">Pay Remaining Balance</button>' : '') +
+          ((b.payment_method==="online" && b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
+          ((b.payment_method==="online" && b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
           ((b.payment_method==="cash" && b.status==="completed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refCashOtp" style="margin-top:10px;">Generate Cash Payment OTP</button><div id="refOtpBox"></div>' : '');
         var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
         var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
@@ -1639,6 +1646,31 @@
                 });
               }
             });
+            rzp.open();
+          });
+        });
+        var payBalance=stackBody.querySelector("#refPayBalance"); if(payBalance)payBalance.addEventListener("click",function(){
+          payBalance.disabled=true; payBalance.textContent="Opening balance payment...";
+          api("/api/bookings/"+b.id+"/create-balance-order",{method:"POST"}).then(function(orderRes){
+            if(!orderRes.ok){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";window.alert(orderRes.data.error||"Balance payment start nahi hua");return;}
+            var order=orderRes.data;
+            var rzp=new Razorpay({
+              key:order.key_id, amount:order.amount, currency:order.currency, order_id:order.order_id,
+              name:"HireNow", description:"Balance for booking #"+b.id, theme:{color:"#F5A623"},
+              handler:function(response){
+                api("/api/payments/verify-balance",{method:"POST",body:JSON.stringify({
+                  razorpay_order_id:response.razorpay_order_id,
+                  razorpay_payment_id:response.razorpay_payment_id,
+                  razorpay_signature:response.razorpay_signature
+                })}).then(function(vr){
+                  if(!vr.ok){window.alert(vr.data.error||"Balance payment verify nahi hua");return;}
+                  window.alert("Remaining balance paid successfully.");
+                  loadBookings(); openBookingDetailsScreen(b.id);
+                });
+              },
+              modal:{ondismiss:function(){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";}}
+            });
+            rzp.on("payment.failed",function(resp){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";window.alert("Payment failed: "+(resp.error&&resp.error.description||"Unknown error"));});
             rzp.open();
           });
         });
