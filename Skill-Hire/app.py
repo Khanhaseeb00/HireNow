@@ -107,6 +107,23 @@ def ensure_schema_extensions():
             conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
 
     conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS worker_payout_accounts (
+            worker_id {foreign_id_sql()} PRIMARY KEY,
+            account_holder_name TEXT NOT NULL,
+            account_number_last4 TEXT NOT NULL,
+            account_number_encrypted TEXT,
+            ifsc TEXT NOT NULL,
+            bank_name TEXT,
+            upi_id TEXT,
+            provider_account_id TEXT,
+            provider_fund_account_id TEXT,
+            verification_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT DEFAULT {text_timestamp_default()},
+            updated_at TEXT DEFAULT {text_timestamp_default()},
+            FOREIGN KEY(worker_id) REFERENCES workers(id)
+        )
+    """)
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS worker_availability (
             id {id_column_sql()},
             worker_id {foreign_id_sql()} NOT NULL,
@@ -591,6 +608,39 @@ def worker_me():
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/worker/payout-account")
+def get_worker_payout_account():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute("SELECT account_holder_name, account_number_last4, ifsc, bank_name, upi_id, verification_status FROM worker_payout_accounts WHERE worker_id = ?", (current_worker_id(),)).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/worker/payout-account")
+def save_worker_payout_account():
+    err = require_worker_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    holder = (data.get("account_holder_name") or "").strip()
+    account = re.sub(r"\s+", "", str(data.get("account_number") or ""))
+    ifsc = (data.get("ifsc") or "").strip().upper()
+    bank = (data.get("bank_name") or "").strip() or None
+    upi = (data.get("upi_id") or "").strip() or None
+    if not holder or not account.isdigit() or len(account) < 6 or not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
+        return jsonify({"error": "Valid account holder, account number and IFSC are required"}), 400
+    # V1 intentionally does not return the full account number. Provider tokenization/encryption is required before production payouts.
+    conn = get_db()
+    existing = conn.execute("SELECT worker_id FROM worker_payout_accounts WHERE worker_id = ?", (current_worker_id(),)).fetchone()
+    if existing:
+        conn.execute("UPDATE worker_payout_accounts SET account_holder_name=?, account_number_last4=?, account_number_encrypted=NULL, ifsc=?, bank_name=?, upi_id=?, verification_status='pending', updated_at=? WHERE worker_id=?", (holder, account[-4:], ifsc, bank, upi, datetime.utcnow().isoformat(), current_worker_id()))
+    else:
+        conn.execute("INSERT INTO worker_payout_accounts (worker_id, account_holder_name, account_number_last4, ifsc, bank_name, upi_id) VALUES (?, ?, ?, ?, ?, ?)", (current_worker_id(), holder, account[-4:], ifsc, bank, upi))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "account_number_last4": account[-4:], "verification_status": "pending"})
 
 
 @app.get("/api/worker/availability")
