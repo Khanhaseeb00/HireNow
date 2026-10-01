@@ -31,7 +31,7 @@ import secrets
 import re
 import requests as _requests
 
-from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql
+from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
 import payments
 import notifications
 
@@ -137,6 +137,23 @@ def ensure_schema_extensions():
 
 
 ensure_schema_extensions()
+
+
+@app.get("/api/health/database")
+def database_health():
+    """Non-secret diagnostic: reports active DB engine and connectivity only."""
+    conn = None
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT 1 AS ok").fetchone()
+        ok = bool(row and row["ok"] == 1)
+        return jsonify({"ok": ok, "engine": "postgresql" if is_postgres() else "sqlite"})
+    except Exception:
+        app.logger.exception("Database health check failed")
+        return jsonify({"ok": False, "engine": "postgresql" if is_postgres() else "sqlite"}), 503
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def notify(phone, body):
