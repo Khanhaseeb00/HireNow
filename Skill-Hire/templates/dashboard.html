@@ -1487,7 +1487,8 @@
             })
           }).then(function (vr) {
             if (!vr.ok) { payMsg.innerHTML = '<div class="pay-note">Verify fail: ' + vr.data.error + '</div>'; return; }
-            modalBody.innerHTML = '<div class="stamp-wrap"><div class="stamp">CONFIRM HO GAYI</div><div class="stamp-sub">Booking #' + bookingId + ' — payment safal</div></div>';
+            window.open(vr.data.receipt_url||("/api/bookings/"+bookingId+"/receipt.pdf"),"_blank");
+            modalBody.innerHTML = '<div class="stamp-wrap"><div class="stamp">CONFIRM HO GAYI</div><div class="stamp-sub">Booking #' + bookingId + ' — payment safal · PDF receipt ready</div></div>';
             setTimeout(function () {
               closeModal();
               loadBookings();
@@ -1633,9 +1634,11 @@
             '<button class="btn btn-primary" id="refContactWorker">Contact Worker</button>' +
           '</div>' +
           ((b.payment_method==="online" && b.status==="confirmed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refPayOnline" style="margin-top:10px;">Pay Online Now</button>' : '') +
+          ((b.payment_method==="online" && b.razorpay_order_id && b.payment_status==="pending") ? '<button class="btn btn-outline btn-block" id="refSyncPayment" style="margin-top:8px;">Check Payment Status</button>' : '') +
           ((b.payment_method==="online" && b.status==="completed" && b.payment_status==="balance_due") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Additional payment required</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.total_amount||0)-Number(b.paid_amount||0)))+'</div><div class="accept-note">Actual work amount final estimate se zyada hai. Remaining balance pay karke booking fully settled karein.</div></div><button class="btn btn-safety btn-block" id="refPayBalance" style="margin-top:8px;">Pay Remaining Balance</button>' : '') +
           ((b.payment_method==="online" && b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
           ((b.payment_method==="online" && b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
+          ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '') +
           ((b.payment_method==="cash" && b.status==="completed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refCashOtp" style="margin-top:10px;">Generate Cash Payment OTP</button><div id="refOtpBox"></div>' : '');
         var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
         var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
@@ -1645,6 +1648,15 @@
             loadBookings(); goBack();
           });
         });
+        var syncPayment=stackBody.querySelector("#refSyncPayment"); if(syncPayment)syncPayment.addEventListener("click",function(){
+          syncPayment.disabled=true;syncPayment.textContent="Checking provider...";
+          api("/api/bookings/"+b.id+"/sync-payment",{method:"POST",body:"{}"}).then(function(r){
+            syncPayment.disabled=false;syncPayment.textContent="Check Payment Status";
+            if(!r.ok){window.alert(r.data.error||"Payment status check failed");return;}
+            loadBookings();openBookingDetailsScreen(b.id);
+          });
+        });
+        var receiptBtn=stackBody.querySelector("#refReceipt"); if(receiptBtn)receiptBtn.addEventListener("click",function(){window.open("/api/bookings/"+b.id+"/receipt.pdf","_blank");});
         var payOnline=stackBody.querySelector("#refPayOnline"); if(payOnline)payOnline.addEventListener("click",function(){
           payOnline.disabled=true; payOnline.textContent="Opening payment...";
           api("/api/bookings/"+b.id+"/create-order",{method:"POST"}).then(function(orderRes){
@@ -1660,7 +1672,7 @@
                   razorpay_signature:response.razorpay_signature
                 })}).then(function(vr){
                   if(!vr.ok){window.alert(vr.data.error||"Payment verify nahi hua");return;}
-                  loadBookings(); openBookingDetailsScreen(b.id);
+                  loadBookings(); window.open(vr.data.receipt_url||("/api/bookings/"+b.id+"/receipt.pdf"),"_blank"); openBookingDetailsScreen(b.id);
                 });
               }
             });
