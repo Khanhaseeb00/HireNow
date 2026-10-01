@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS workers (
     account_status      TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at          TEXT,
+    service_latitude    REAL,
+    service_longitude   REAL,
+    service_location_updated_at TEXT,
     created_at          TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -41,6 +44,9 @@ CREATE TABLE IF NOT EXISTS worker_payout_accounts (
     account_status TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at TEXT,
+    service_latitude REAL,
+    service_longitude REAL,
+    service_location_updated_at TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
@@ -66,6 +72,17 @@ CREATE TABLE IF NOT EXISTS admin_account_actions (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS diagnosis_pricing_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    city TEXT,
+    skill TEXT,
+    max_km REAL NOT NULL,
+    fee INTEGER NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS platform_settings (
     setting_key TEXT PRIMARY KEY,
     setting_value TEXT NOT NULL,
@@ -78,9 +95,25 @@ CREATE TABLE IF NOT EXISTS bookings (
     worker_id            INTEGER NOT NULL,
     start_date           TEXT NOT NULL,
     start_time           TEXT,
+    end_time             TEXT,
     days                 INTEGER NOT NULL DEFAULT 1,
     hours                INTEGER NOT NULL DEFAULT 2,
     service_type         TEXT NOT NULL DEFAULT 'regular',
+    booking_type         TEXT NOT NULL DEFAULT 'regular',
+    diagnosis_fee        INTEGER NOT NULL DEFAULT 0,
+    diagnosis_distance_km REAL,
+    service_latitude     REAL,
+    service_longitude    REAL,
+    diagnosis_pricing_rule_id INTEGER,
+    diagnosis_notes      TEXT,
+    work_approved_at     TEXT,
+    work_declined_at     TEXT,
+    work_decline_reason  TEXT,
+    work_started_at      TEXT,
+    work_ended_at        TEXT,
+    actual_minutes       INTEGER NOT NULL DEFAULT 0,
+    work_amount          INTEGER NOT NULL DEFAULT 0,
+    paid_amount          INTEGER NOT NULL DEFAULT 0,
     special_instructions TEXT,
     address              TEXT,
     payment_method       TEXT NOT NULL DEFAULT 'online',
