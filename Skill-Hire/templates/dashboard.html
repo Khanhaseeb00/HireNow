@@ -1381,12 +1381,17 @@
     if (!w) return;
     var hourly = Number(w.daily_wage || 0) / 8;
     var now = new Date(), today = now.toISOString().slice(0,10), tomorrowDate = new Date(now.getTime()+86400000).toISOString().slice(0,10);
-    var selectedDate=today, selectedTime="", selectedEnd="", selectedType="regular", selectedPayment="cash", diagnosisDistance="", diagnosisFee=0, availableSlots=[], slotsLoading=true, slotError="", diagnosisSlabs=[];
-    api("/api/pricing/diagnosis").then(function(r){if(r.ok) diagnosisSlabs=r.data.slabs||[];});
+    var selectedDate=today, selectedTime="", selectedEnd="", selectedType="regular", selectedPayment="cash",
+        diagnosisDistance=null, diagnosisFee=null, diagnosisLat=null, diagnosisLng=null, diagnosisQuoteError="",
+        bookingAddress="", bookingNotes="", availableSlots=[], slotsLoading=true, slotError="", diagnosisSlabs=[];
+    api("/api/pricing/diagnosis?worker_id="+encodeURIComponent(w.id)).then(function(r){
+      if(r.ok){diagnosisSlabs=r.data.slabs||[];if(r.data.worker_location_configured===false)diagnosisQuoteError="Worker service location is not configured yet.";}
+      else diagnosisQuoteError=r.data.error||"Diagnosis pricing unavailable";
+      renderBooking();
+    });
     openStack("booking", "Book Worker", renderBooking, {});
     function time24(label){var m=String(label||"").match(/(\d+):(\d+)\s*(AM|PM)/i);if(!m)return label;var h=Number(m[1]),min=m[2],ap=m[3].toUpperCase();if(ap==="PM"&&h<12)h+=12;if(ap==="AM"&&h===12)h=0;return String(h).padStart(2,"0")+":"+min;}
     function calcHours(){if(!selectedTime||!selectedEnd)return 0;var a=time24(selectedTime).split(":"),b=selectedEnd.split(":");var mins=(+b[0]*60 + +b[1])-(+a[0]*60 + +a[1]);return mins>0?mins/60:0;}
-    function feeFor(km){km=Number(km);for(var i=0;i<diagnosisSlabs.length;i++){if(km<=Number(diagnosisSlabs[i].up_to_km))return Number(diagnosisSlabs[i].fee);}return null;}
     function renderBooking(){
       var hrs=calcHours(), estimate=Math.round(hourly*hrs), isDiagnosis=selectedType==="diagnosis";
       stackBody.innerHTML='<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(w.id)+'">'+initials(w.name)+'</div><div class="body"><div class="name">'+w.name+'</div><div class="sub">'+w.skill+' · '+w.city+'</div><div class="sub"><b>'+fmtMoney(w.daily_wage)+'/day</b> · '+fmtMoney(hourly)+'/hr derived from 8-hour day</div></div></div>'+
@@ -1394,17 +1399,30 @@
       '<div class="ref-label">Date</div><div class="ref-date-tabs"><button class="ref-date-btn '+(selectedDate===today?'active':'')+'" data-date="'+today+'">Today</button><button class="ref-date-btn '+(selectedDate===tomorrowDate?'active':'')+'" data-date="'+tomorrowDate+'">Tomorrow</button><input type="date" id="bookDate" min="'+today+'" value="'+selectedDate+'"></div>'+
       '<div class="ref-label">Start Time</div><div class="ref-time-grid">'+(slotsLoading?'Checking available times...':availableSlots.map(function(t){return '<button class="ref-time-btn '+(selectedTime===t?'active':'')+'" data-start="'+t+'">'+time24(t)+'</button>';}).join('')||'<div class="slot-state unavailable">'+(slotError||'No slots available')+'</div>')+'</div>'+
       '<div class="ref-label">End Time (24-hour)</div><input class="ref-address" type="time" id="endTime" value="'+selectedEnd+'">'+
-      (isDiagnosis?'<div class="ref-label">Estimated travel distance (km)</div><input class="ref-address" type="number" min="0" step="0.1" id="diagKm" value="'+diagnosisDistance+'" placeholder="Distance in km"><div class="accept-note">Diagnosis fee is fixed by distance policy and shown before booking. Repair/work charge starts only after you approve the diagnosis.</div>':'')+
-      '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="Service address"><div class="ref-label">Payment Method</div><div class="pay-choice-grid"><button class="pay-choice '+(selectedPayment==='cash'?'active':'')+'" data-pay="cash">Cash after Work</button><button class="pay-choice '+(selectedPayment==='online'?'active':'')+'" data-pay="online">Online Payment</button></div><div class="ref-label">Instructions</div><textarea class="ref-notes" id="refNotes"></textarea>'+
-      '<div class="ref-total"><span>'+(isDiagnosis?'Diagnosis / visit fee':'Estimated '+hrs.toFixed(1)+' hr work')+'</span><span class="amt">'+(isDiagnosis?(diagnosisFee===null?'Outside service radius':fmtMoney(diagnosisFee)):fmtMoney(estimate))+'</span></div><button class="btn btn-safety btn-block" id="refProceed" '+(!selectedTime||!selectedEnd||hrs<=0||(isDiagnosis&&(diagnosisFee===null||diagnosisDistance===''))?'disabled':'')+'>Send Booking Request</button><div id="refBookingMsg"></div></div>';
+      (isDiagnosis?'<div class="ref-label">Diagnosis Service Location</div><button class="btn btn-outline btn-block" id="diagLocateBtn">📍 Use Current Service Location</button><div class="accept-note" id="diagQuoteNote">'+(diagnosisQuoteError?diagnosisQuoteError:(diagnosisDistance!=null?'Server distance: '+diagnosisDistance+' km · fee calculated automatically':'Your GPS is used only for the diagnosis quote. Worker exact base coordinates are not shown.'))+'</div><div class="accept-note">Pricing is server-controlled. You cannot enter or change the distance manually.</div>':'')+
+      '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="Service address" value="'+String(bookingAddress).replace(/"/g,'&quot;')+'"><div class="ref-label">Payment Method</div><div class="pay-choice-grid"><button class="pay-choice '+(selectedPayment==='cash'?'active':'')+'" data-pay="cash">Cash after Work</button><button class="pay-choice '+(selectedPayment==='online'?'active':'')+'" data-pay="online">Online Payment</button></div><div class="ref-label">Instructions</div><textarea class="ref-notes" id="refNotes">'+bookingNotes+'</textarea>'+
+      '<div class="ref-total"><span>'+(isDiagnosis?'Diagnosis / visit fee':'Estimated '+hrs.toFixed(1)+' hr work')+'</span><span class="amt">'+(isDiagnosis?(diagnosisFee==null?'Location required':fmtMoney(diagnosisFee)):fmtMoney(estimate))+'</span></div><button class="btn btn-safety btn-block" id="refProceed" '+(!selectedTime||!selectedEnd||hrs<=0||(isDiagnosis&&(diagnosisFee==null||diagnosisLat==null||diagnosisLng==null))?'disabled':'')+'>Send Booking Request</button><div id="refBookingMsg"></div></div>';
       stackBody.querySelectorAll('[data-date]').forEach(function(b){b.onclick=function(){selectedDate=b.dataset.date;selectedTime='';loadSlots();};});
       stackBody.querySelector('#bookDate').onchange=function(){selectedDate=this.value;selectedTime='';loadSlots();};
       stackBody.querySelectorAll('[data-start]').forEach(function(b){b.onclick=function(){selectedTime=b.dataset.start;renderBooking();};});
       stackBody.querySelector('#endTime').onchange=function(){selectedEnd=this.value;renderBooking();};
-      stackBody.querySelectorAll('[data-type]').forEach(function(b){b.onclick=function(){selectedType=b.dataset.type;renderBooking();};});
-      stackBody.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=function(){selectedPayment=b.dataset.pay;renderBooking();};});
-      var km=stackBody.querySelector('#diagKm');if(km)km.onchange=function(){diagnosisDistance=this.value;diagnosisFee=feeFor(this.value);renderBooking();};
-      stackBody.querySelector('#refProceed').onclick=function(){var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),hrs2=calcHours();if(!address){stackBody.querySelector('#refBookingMsg').innerHTML='<div class="pay-note">Work address enter karein.</div>';return;}createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(hrs2),booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,distance_km:isDiagnosis?Number(diagnosisDistance):undefined});};
+      stackBody.querySelectorAll('[data-type]').forEach(function(b){b.onclick=function(){bookingAddress=(stackBody.querySelector('#refAddress')||{}).value||bookingAddress;bookingNotes=(stackBody.querySelector('#refNotes')||{}).value||bookingNotes;selectedType=b.dataset.type;if(selectedType!=="diagnosis"){diagnosisDistance=null;diagnosisFee=null;diagnosisLat=null;diagnosisLng=null;diagnosisQuoteError="";}renderBooking();};});
+      stackBody.querySelectorAll('[data-pay]').forEach(function(b){b.onclick=function(){bookingAddress=(stackBody.querySelector('#refAddress')||{}).value||bookingAddress;bookingNotes=(stackBody.querySelector('#refNotes')||{}).value||bookingNotes;selectedPayment=b.dataset.pay;renderBooking();};});
+      var addressInput=stackBody.querySelector('#refAddress');if(addressInput)addressInput.oninput=function(){bookingAddress=this.value;};
+      var notesInput=stackBody.querySelector('#refNotes');if(notesInput)notesInput.oninput=function(){bookingNotes=this.value;};
+      var locateBtn=stackBody.querySelector('#diagLocateBtn');if(locateBtn)locateBtn.onclick=function(){
+        var note=stackBody.querySelector('#diagQuoteNote');
+        if(!navigator.geolocation){diagnosisQuoteError="Location is not supported in this browser.";renderBooking();return;}
+        locateBtn.disabled=true;locateBtn.textContent="Getting GPS location...";
+        navigator.geolocation.getCurrentPosition(function(p){
+          diagnosisLat=p.coords.latitude;diagnosisLng=p.coords.longitude;
+          api("/api/pricing/diagnosis?worker_id="+encodeURIComponent(w.id)+"&latitude="+encodeURIComponent(diagnosisLat)+"&longitude="+encodeURIComponent(diagnosisLng)).then(function(q){
+            if(!q.ok){diagnosisFee=null;diagnosisDistance=null;diagnosisQuoteError=q.data.error||"Unable to calculate diagnosis fee";renderBooking();return;}
+            diagnosisSlabs=q.data.slabs||diagnosisSlabs;diagnosisFee=Number(q.data.quote.fee);diagnosisDistance=Number(q.data.quote.distance_km);diagnosisQuoteError="";renderBooking();
+          });
+        },function(err){diagnosisFee=null;diagnosisDistance=null;diagnosisLat=null;diagnosisLng=null;diagnosisQuoteError="Location permission failed: "+err.message;renderBooking();},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
+      };
+      stackBody.querySelector('#refProceed').onclick=function(){var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),hrs2=calcHours();bookingAddress=address;bookingNotes=notes;if(!address){stackBody.querySelector('#refBookingMsg').innerHTML='<div class="pay-note">Work address enter karein.</div>';return;}createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(hrs2),booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,service_latitude:isDiagnosis?diagnosisLat:undefined,service_longitude:isDiagnosis?diagnosisLng:undefined});};
     }
     function loadSlots(){slotsLoading=true;availableSlots=[];renderBooking();api('/api/workers/'+w.id+'/available-slots?date='+encodeURIComponent(selectedDate)+'&hours=1').then(function(r){slotsLoading=false;if(r.ok)availableSlots=r.data.slots||[];else slotError=r.data.error||'Availability unavailable';renderBooking();});}
     loadSlots();
