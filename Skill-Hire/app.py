@@ -860,6 +860,7 @@ def create_booking():
     worker_id = data.get("worker_id")
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
+    end_time = (data.get("end_time") or "").strip() or None
     booking_type = (data.get("booking_type") or "regular").strip().lower()
     payment_method = (data.get("payment_method") or "cash").strip().lower()
     special_instructions = (data.get("special_instructions") or "").strip() or None
@@ -890,6 +891,16 @@ def create_booking():
             return jsonify({"error": str(e)}), 400
         if booking_start <= datetime.now():
             return jsonify({"error": "Please choose a future booking time"}), 400
+        if end_time:
+            try:
+                end_clock = datetime.strptime(end_time, "%H:%M").time()
+                booking_end = datetime.combine(booking_date, end_clock)
+            except ValueError:
+                return jsonify({"error": "end_time must use 24-hour HH:MM format"}), 400
+            if booking_end <= booking_start:
+                return jsonify({"error": "End time must be after start time"}), 400
+            minutes = int((booking_end - booking_start).total_seconds() // 60)
+            hours = max(1, int((minutes + 59) // 60))
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
@@ -934,10 +945,10 @@ def create_booking():
 
     cur = conn.execute(
         """INSERT INTO bookings
-           (hirer_id, worker_id, start_date, start_time, days, hours, service_type, booking_type,
+           (hirer_id, worker_id, start_date, start_time, end_time, days, hours, service_type, booking_type,
             diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total_amount, status, payment_status)
-           VALUES (?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
-        (current_hirer_id(), worker_id, start_date, start_time, hours, booking_type,
+           VALUES (?, ?, ?, ?, ?, 1, ?, 'regular', ?, ?, ?, ?, ?, ?, ?, 'requested', 'pending')""",
+        (current_hirer_id(), worker_id, start_date, start_time, end_time, hours, booking_type,
          diagnosis_fee, diagnosis_distance_km, special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
