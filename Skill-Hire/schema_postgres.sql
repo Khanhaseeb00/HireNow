@@ -33,6 +33,9 @@ CREATE TABLE IF NOT EXISTS workers (
     service_latitude REAL,
     service_longitude REAL,
     service_location_updated_at TEXT,
+    preferred_language TEXT NOT NULL DEFAULT 'en',
+    preferred_theme TEXT NOT NULL DEFAULT 'light',
+    notifications_enabled INTEGER NOT NULL DEFAULT 1,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
@@ -59,6 +62,14 @@ CREATE TABLE IF NOT EXISTS hirers (
     account_status TEXT NOT NULL DEFAULT 'active',
     account_status_reason TEXT,
     deleted_at TEXT,
+    preferred_language TEXT NOT NULL DEFAULT 'en',
+    preferred_theme TEXT NOT NULL DEFAULT 'light',
+    notifications_enabled INTEGER NOT NULL DEFAULT 1,
+    home_address TEXT,
+    home_city TEXT,
+    home_latitude REAL,
+    home_longitude REAL,
+    location_updated_at TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 

@@ -297,7 +297,7 @@
 .profile-main{min-width:0;flex:1}.profile-name-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.profile-name-line #profileName{font-family:'Archivo';font-size:20px;font-weight:800}.profile-online-dot{background:#20b978;color:#fff;font-size:9px;font-weight:800;padding:4px 7px;border-radius:10px}.profile-phone-line{font-size:12px;opacity:.72;margin-top:3px}.profile-skill-chip{display:inline-block;margin-top:8px;padding:5px 9px;border-radius:10px;background:rgba(255,255,255,.12);font-size:11px;font-weight:700}
 #panel-profile .profile-grid{grid-template-columns:repeat(2,1fr);padding:0;overflow:hidden}#panel-profile .profile-field{padding:15px 8px;border-right:1px solid #edf1f5;border-bottom:1px solid #edf1f5}#panel-profile .profile-field:nth-child(even){border-right:0}#panel-profile .profile-field:nth-last-child(-n+2){border-bottom:0}
 #openSettingsBtn{height:50px;border-radius:14px;font-weight:800;background:#fff}
-#panel-settings .settings-block{padding:16px;margin-bottom:12px}#panel-settings .settings-block h3{font-size:16px;margin-bottom:2px}#panel-settings .choice-row{gap:8px;margin-top:12px}#panel-settings .choice-btn{min-height:42px}
+#panel-settings .settings-block{padding:16px;margin-bottom:12px}#panel-settings .settings-block h3{font-size:16px;margin-bottom:2px}#panel-settings .choice-row{gap:8px;margin-top:12px}#panel-settings .choice-btn{min-height:42px}.worker-settings-list{display:flex;flex-direction:column;gap:9px}.worker-settings-row{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;background:#fff;border:1px solid var(--app-border);border-radius:14px;color:var(--app-text);text-align:left}.worker-settings-row .meta{font-size:10px;color:var(--app-muted);margin-top:2px}.worker-settings-row .chev{font-size:20px;color:var(--app-muted)}.worker-lang-list{display:flex;flex-direction:column;gap:8px}.worker-lang-list .choice-btn{width:100%;justify-content:space-between;border-radius:12px;background:#fff;border:1px solid var(--app-border);color:var(--app-text)}.worker-lang-list .choice-btn.selected{background:#fff4e2;border-color:var(--app-orange)}.worker-global-back{display:none;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.13);color:#fff;font-size:20px;align-items:center;justify-content:center}.worker-global-back.show{display:flex}
 #panel-settings .settings-block:nth-of-type(2) .choice-row{display:grid;grid-template-columns:repeat(2,1fr)}
 #panel-settings .settings-block:nth-of-type(2) .choice-btn{justify-content:flex-start;text-align:left}
 nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;transform:translateX(-50%);width:18px;height:3px;border-radius:3px;background:var(--app-orange)}
@@ -356,6 +356,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
 <div id="appScreen" style="display:none;">
   <header class="topbar">
+    <button type="button" class="worker-global-back" id="workerGlobalBack" aria-label="Back">←</button>
     <div class="brand">
       <span class="mark"><svg class="canonical-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="workerHnO" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD321"/><stop offset="1" stop-color="#FF8A00"/></linearGradient></defs><path d="M18 20Q18 15 23 15H34Q39 15 39 20V42Q39 47 44 47H49L38 58V78Q38 84 32 84H23Q18 84 18 79Z" fill="#fff"/><path d="M82 80Q82 85 77 85H67Q62 85 62 80V58L51 47H57Q62 47 62 42V28H54L72 10L90 28H82Z" fill="url(#workerHnO)"/><path d="M37 53L48 43Q52 40 56 43L65 51Q68 54 65 57L60 62Q57 65 54 62L50 58L47 61Q44 64 41 61L36 57Q34 55 37 53Z" fill="#071B3A"/><path d="M43 48L48 44Q51 42 54 44L63 52" fill="none" stroke="#FFAE0B" stroke-width="4" stroke-linecap="round"/><path d="M44 57L51 64M49 53L56 60M54 50L61 56" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M38 56L43 61M35 59L40 64M40 53L46 58" stroke="#FFAE0B" stroke-width="5" stroke-linecap="round"/></svg></span>
       <h1>Hire<span class="now">Now</span></h1>
@@ -518,12 +519,23 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 <script>
 (function () {
   "use strict";
-  var state = { worker: null, bookings: [], lang: "hi", theme: "dark", chatBookingId: null };
+  var state = { worker: null, bookings: [], lang: "en", theme: "light", notificationsEnabled:true, chatBookingId: null };
 
   var W_LANG = {
-    hi: { subtitle: "Mera Kaam — apne jobs aur bookings yahan dekhein", bookings_heading: "Meri bookings", no_bookings: "Abhi tak koi booking assign nahi hui.", chat_title: "Message", chat_send: "Bhejein", chat_ph: "Message likhein...", chat_toggle: "Message bhejein", nav_work: "Mera Kaam", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "Mera Profile", lbl_skill: "Skill", lbl_city: "Shahar", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs poore hue", lbl_verify: "ID Verification" },
-    en: { subtitle: "My Work — see your jobs and bookings here", bookings_heading: "My bookings", no_bookings: "No bookings assigned yet.", chat_title: "Message", chat_send: "Send", chat_ph: "Type a message...", chat_toggle: "Message", nav_work: "My Work", nav_profile: "Profile", nav_settings: "Settings", profile_heading: "My Profile", lbl_skill: "Skill", lbl_city: "City", lbl_wage: "Daily wage", lbl_rating: "Rating", lbl_jobs: "Jobs completed", lbl_verify: "ID Verification" }
+    en:{subtitle:"My Work — see your jobs and bookings here",bookings_heading:"My bookings",no_bookings:"No bookings assigned yet.",chat_title:"Message",chat_send:"Send",chat_ph:"Type a message...",chat_toggle:"Message",nav_work:"Home",nav_profile:"Profile",nav_jobs:"My Jobs",nav_earnings:"Earnings",nav_messages:"Messages",settings:"Settings",settings_sub:"Personalize your HireNow experience",theme:"Theme",theme_meta:"Light / Dark appearance",language:"Language",language_meta:"Choose app language",notifications:"Notifications",notifications_meta:"Booking, payment and message alerts",service_location:"Service Location",availability:"Availability",payout:"Bank & Payout",logout:"Logout",light:"Light",dark:"Dark",on:"On",off:"Off",profile_heading:"My Profile",lbl_skill:"Skill",lbl_city:"City",lbl_wage:"Daily wage",lbl_rating:"Rating",lbl_jobs:"Jobs completed",lbl_verify:"ID Verification"},
+    hi:{subtitle:"मेरा काम — अपने जॉब और बुकिंग यहाँ देखें",bookings_heading:"मेरी बुकिंग",no_bookings:"अभी तक कोई बुकिंग नहीं मिली।",chat_title:"संदेश",chat_send:"भेजें",chat_ph:"संदेश लिखें...",chat_toggle:"संदेश",nav_work:"होम",nav_profile:"प्रोफ़ाइल",nav_jobs:"मेरे जॉब",nav_earnings:"कमाई",nav_messages:"संदेश",settings:"सेटिंग्स",settings_sub:"HireNow को अपनी पसंद के अनुसार सेट करें",theme:"थीम",theme_meta:"लाइट / डार्क रूप",language:"भाषा",language_meta:"ऐप की भाषा चुनें",notifications:"सूचनाएँ",notifications_meta:"बुकिंग, भुगतान और संदेश अलर्ट",service_location:"सर्विस लोकेशन",availability:"उपलब्धता",payout:"बैंक और पेआउट",logout:"लॉग आउट",light:"लाइट",dark:"डार्क",on:"चालू",off:"बंद",profile_heading:"मेरी प्रोफ़ाइल",lbl_skill:"कौशल",lbl_city:"शहर",lbl_wage:"दैनिक मजदूरी",lbl_rating:"रेटिंग",lbl_jobs:"पूरे जॉब",lbl_verify:"ID सत्यापन"},
+    ar:{subtitle:"عملي — اعرض الوظائف والحجوزات هنا",bookings_heading:"حجوزاتي",no_bookings:"لا توجد حجوزات حتى الآن.",chat_title:"رسالة",chat_send:"إرسال",chat_ph:"اكتب رسالة...",chat_toggle:"رسالة",nav_work:"الرئيسية",nav_profile:"الملف الشخصي",nav_jobs:"وظائفي",nav_earnings:"الأرباح",nav_messages:"الرسائل",settings:"الإعدادات",settings_sub:"خصص تجربة HireNow",theme:"المظهر",theme_meta:"فاتح / داكن",language:"اللغة",language_meta:"اختر لغة التطبيق",notifications:"الإشعارات",notifications_meta:"تنبيهات الحجز والدفع والرسائل",service_location:"موقع الخدمة",availability:"التوفر",payout:"البنك والدفع",logout:"تسجيل الخروج",light:"فاتح",dark:"داكن",on:"تشغيل",off:"إيقاف",profile_heading:"ملفي الشخصي",lbl_skill:"المهارة",lbl_city:"المدينة",lbl_wage:"الأجر اليومي",lbl_rating:"التقييم",lbl_jobs:"الوظائف المكتملة",lbl_verify:"توثيق الهوية"},
+    bn:{subtitle:"আমার কাজ — কাজ ও বুকিং এখানে দেখুন",bookings_heading:"আমার বুকিং",no_bookings:"এখনও কোনো বুকিং নেই।",chat_title:"বার্তা",chat_send:"পাঠান",chat_ph:"বার্তা লিখুন...",chat_toggle:"বার্তা",nav_work:"হোম",nav_profile:"প্রোফাইল",nav_jobs:"আমার কাজ",nav_earnings:"আয়",nav_messages:"বার্তা",settings:"সেটিংস",theme:"থিম",language:"ভাষা",notifications:"নোটিফিকেশন",service_location:"সার্ভিস লোকেশন",availability:"উপলব্ধতা",payout:"ব্যাংক ও পেআউট",logout:"লগ আউট",light:"লাইট",dark:"ডার্ক",on:"চালু",off:"বন্ধ",profile_heading:"আমার প্রোফাইল",lbl_skill:"দক্ষতা",lbl_city:"শহর",lbl_wage:"দৈনিক মজুরি",lbl_rating:"রেটিং",lbl_jobs:"সম্পন্ন কাজ",lbl_verify:"ID যাচাই"},
+    ta:{nav_work:"முகப்பு",nav_profile:"சுயவிவரம்",nav_jobs:"என் வேலைகள்",nav_earnings:"வருமானம்",nav_messages:"செய்திகள்",settings:"அமைப்புகள்",theme:"தீம்",language:"மொழி",notifications:"அறிவிப்புகள்",service_location:"சேவை இடம்",availability:"கிடைக்கும் நேரம்",payout:"வங்கி & பணம்",logout:"வெளியேறு",light:"ஒளி",dark:"இருள்",on:"ஆன்",off:"ஆஃப்",profile_heading:"என் சுயவிவரம்",lbl_skill:"திறன்",lbl_city:"நகரம்",lbl_wage:"தினசரி கூலி",lbl_rating:"மதிப்பீடு",lbl_jobs:"முடிந்த வேலைகள்",lbl_verify:"ID சரிபார்ப்பு"},
+    te:{nav_work:"హోమ్",nav_profile:"ప్రొఫైల్",nav_jobs:"నా పనులు",nav_earnings:"ఆదాయం",nav_messages:"సందేశాలు",settings:"సెట్టింగ్స్",theme:"థీమ్",language:"భాష",notifications:"నోటిఫికేషన్లు",service_location:"సర్వీస్ లొకేషన్",availability:"అందుబాటు",payout:"బ్యాంక్ & పేఔట్",logout:"లాగ్ అవుట్",light:"లైట్",dark:"డార్క్",on:"ఆన్",off:"ఆఫ్",profile_heading:"నా ప్రొఫైల్",lbl_skill:"నైపుణ్యం",lbl_city:"నగరం",lbl_wage:"రోజువారీ వేతనం",lbl_rating:"రేటింగ్",lbl_jobs:"పూర్తి పనులు",lbl_verify:"ID ధృవీకరణ"},
+    mr:{nav_work:"होम",nav_profile:"प्रोफाइल",nav_jobs:"माझी कामे",nav_earnings:"कमाई",nav_messages:"संदेश",settings:"सेटिंग्ज",theme:"थीम",language:"भाषा",notifications:"सूचना",service_location:"सेवा स्थान",availability:"उपलब्धता",payout:"बँक आणि पेआउट",logout:"लॉग आउट",light:"लाइट",dark:"डार्क",on:"चालू",off:"बंद",profile_heading:"माझे प्रोफाइल",lbl_skill:"कौशल्य",lbl_city:"शहर",lbl_wage:"दैनिक वेतन",lbl_rating:"रेटिंग",lbl_jobs:"पूर्ण कामे",lbl_verify:"ID पडताळणी"},
+    gu:{nav_work:"હોમ",nav_profile:"પ્રોફાઇલ",nav_jobs:"મારા કામ",nav_earnings:"કમાણી",nav_messages:"સંદેશા",settings:"સેટિંગ્સ",theme:"થીમ",language:"ભાષા",notifications:"સૂચનાઓ",service_location:"સેવા સ્થાન",availability:"ઉપલબ્ધતા",payout:"બેંક અને પેઆઉટ",logout:"લૉગ આઉટ",light:"લાઇટ",dark:"ડાર્ક",on:"ચાલુ",off:"બંધ",profile_heading:"મારી પ્રોફાઇલ",lbl_skill:"કૌશલ્ય",lbl_city:"શહેર",lbl_wage:"દૈનિક વેતન",lbl_rating:"રેટિંગ",lbl_jobs:"પૂર્ણ કામ",lbl_verify:"ID ચકાસણી"},
+    kn:{nav_work:"ಮುಖಪುಟ",nav_profile:"ಪ್ರೊಫೈಲ್",nav_jobs:"ನನ್ನ ಕೆಲಸಗಳು",nav_earnings:"ಆದಾಯ",nav_messages:"ಸಂದೇಶಗಳು",settings:"ಸೆಟ್ಟಿಂಗ್‌ಗಳು",theme:"ಥೀಮ್",language:"ಭಾಷೆ",notifications:"ಅಧಿಸೂಚನೆಗಳು",service_location:"ಸೇವಾ ಸ್ಥಳ",availability:"ಲಭ್ಯತೆ",payout:"ಬ್ಯಾಂಕ್ & ಪೇಔಟ್",logout:"ಲಾಗ್ ಔಟ್",light:"ಲೈಟ್",dark:"ಡಾರ್ಕ್",on:"ಆನ್",off:"ಆಫ್",profile_heading:"ನನ್ನ ಪ್ರೊಫೈಲ್",lbl_skill:"ಕೌಶಲ್ಯ",lbl_city:"ನಗರ",lbl_wage:"ದೈನಂದಿನ ವೇತನ",lbl_rating:"ರೇಟಿಂಗ್",lbl_jobs:"ಪೂರ್ಣಗೊಂಡ ಕೆಲಸಗಳು",lbl_verify:"ID ಪರಿಶೀಲನೆ"},
+    ml:{nav_work:"ഹോം",nav_profile:"പ്രൊഫൈൽ",nav_jobs:"എന്റെ ജോലികൾ",nav_earnings:"വരുമാനം",nav_messages:"സന്ദേശങ്ങൾ",settings:"ക്രമീകരണങ്ങൾ",theme:"തീം",language:"ഭാഷ",notifications:"അറിയിപ്പുകൾ",service_location:"സേവന സ്ഥലം",availability:"ലഭ്യത",payout:"ബാങ്ക് & പേഔട്ട്",logout:"ലോഗ് ഔട്ട്",light:"ലൈറ്റ്",dark:"ഡാർക്ക്",on:"ഓൺ",off:"ഓഫ്",profile_heading:"എന്റെ പ്രൊഫൈൽ",lbl_skill:"കൗശലം",lbl_city:"നഗരം",lbl_wage:"ദൈനംദിന വേതനം",lbl_rating:"റേറ്റിംഗ്",lbl_jobs:"പൂർത്തിയായ ജോലികൾ",lbl_verify:"ID പരിശോധന"},
+    pa:{nav_work:"ਹੋਮ",nav_profile:"ਪ੍ਰੋਫਾਈਲ",nav_jobs:"ਮੇਰੇ ਕੰਮ",nav_earnings:"ਕਮਾਈ",nav_messages:"ਸੁਨੇਹੇ",settings:"ਸੈਟਿੰਗਾਂ",theme:"ਥੀਮ",language:"ਭਾਸ਼ਾ",notifications:"ਸੂਚਨਾਵਾਂ",service_location:"ਸੇਵਾ ਸਥਾਨ",availability:"ਉਪਲਬਧਤਾ",payout:"ਬੈਂਕ ਅਤੇ ਪੇਆਉਟ",logout:"ਲਾਗ ਆਉਟ",light:"ਲਾਈਟ",dark:"ਡਾਰਕ",on:"ਚਾਲੂ",off:"ਬੰਦ",profile_heading:"ਮੇਰੀ ਪ੍ਰੋਫਾਈਲ",lbl_skill:"ਕੁਸ਼ਲਤਾ",lbl_city:"ਸ਼ਹਿਰ",lbl_wage:"ਰੋਜ਼ਾਨਾ ਮਜ਼ਦੂਰੀ",lbl_rating:"ਰੇਟਿੰਗ",lbl_jobs:"ਪੂਰੇ ਕੰਮ",lbl_verify:"ID ਤਸਦੀਕ"},
+    ur:{nav_work:"ہوم",nav_profile:"پروفائل",nav_jobs:"میرے کام",nav_earnings:"کمائی",nav_messages:"پیغامات",settings:"ترتیبات",theme:"تھیم",language:"زبان",notifications:"اطلاعات",service_location:"سروس لوکیشن",availability:"دستیابی",payout:"بینک اور ادائیگی",logout:"لاگ آؤٹ",light:"لائٹ",dark:"ڈارک",on:"آن",off:"آف",profile_heading:"میری پروفائل",lbl_skill:"مہارت",lbl_city:"شہر",lbl_wage:"روزانہ اجرت",lbl_rating:"ریٹنگ",lbl_jobs:"مکمل کام",lbl_verify:"ID تصدیق"}
   };
+  var workerLanguageNames={en:"English",hi:"हिन्दी",ar:"العربية",bn:"বাংলা",ta:"தமிழ்",te:"తెలుగు",mr:"मराठी",gu:"ગુજરાતી",kn:"ಕನ್ನಡ",ml:"മലയാളം",pa:"ਪੰਜਾਬੀ",ur:"اردو"};
   function wt(key) { return (W_LANG[state.lang] && W_LANG[state.lang][key]) || (W_LANG.en && W_LANG.en[key]) || key; }
   function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
   function applyWorkerI18n() {
@@ -531,6 +543,20 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     document.querySelector("#panel-work .section-title").textContent = wt("bookings_heading");
     document.getElementById("navWork").textContent = wt("nav_work");
     document.getElementById("navProfile").textContent = wt("nav_profile");
+    document.getElementById("navJobs").textContent = wt("nav_jobs");
+    document.getElementById("navEarnings").textContent = wt("nav_earnings");
+    document.getElementById("navMessages").textContent = wt("nav_messages");
+    var st=document.getElementById("settingsTitle");if(st)st.textContent=wt("settings");
+    var wtl=document.getElementById("workerThemeLabel");if(wtl)wtl.textContent=wt("theme");
+    var wll=document.getElementById("workerLanguageLabel");if(wll)wll.textContent=wt("language");
+    var wnl=document.getElementById("workerNotifLabel");if(wnl)wnl.textContent=wt("notifications");
+    var wloc=document.getElementById("workerLocationLabel");if(wloc)wloc.textContent=wt("service_location");
+    var wav=document.getElementById("workerAvailabilityLabel");if(wav)wav.textContent=wt("availability");
+    var wp=document.getElementById("workerPayoutLabel");if(wp)wp.textContent=wt("payout");
+    var wo=document.getElementById("workerLogoutLabel");if(wo)wo.textContent=wt("logout");
+    var lv=document.getElementById("workerLanguageValue");if(lv)lv.textContent=(workerLanguageNames[state.lang]||"English")+" ›";
+    var tv=document.getElementById("workerThemeValue");if(tv)tv.textContent=wt(state.theme)+" ›";
+    var nv=document.getElementById("workerNotificationsValue");if(nv)nv.textContent=wt(state.notificationsEnabled?"on":"off")+" ›";
 
     document.getElementById("profileHeading").textContent = wt("profile_heading");
     document.getElementById("profLabelSkill").textContent = wt("lbl_skill");
@@ -548,17 +574,22 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     renderBookings();
     renderProfile();
   }
+  function syncWorkerPreferences(){
+    if(!state.worker)return;
+    api("/api/worker/preferences",{method:"PUT",body:JSON.stringify({preferred_language:state.lang,preferred_theme:state.theme,notifications_enabled:state.notificationsEnabled})});
+  }
   function setWorkerLanguage(lang) {
     state.lang = lang;
     try { localStorage.setItem("hirenow_worker_lang", lang); } catch (e) {}
     document.documentElement.lang=lang;
     document.documentElement.dir=(lang==="ar"||lang==="ur")?"rtl":"ltr";
-    applyWorkerI18n();
+    applyWorkerI18n(); syncWorkerPreferences();
   }
   function setWorkerTheme(theme) {
     state.theme = theme;
     document.documentElement.setAttribute("data-theme", theme);
     try { localStorage.setItem("hirenow_worker_theme", theme); } catch (e) {}
+    syncWorkerPreferences();
     document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
       btn.classList.toggle("selected", btn.dataset.themeChoice === theme);
     });
@@ -571,29 +602,40 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     document.documentElement.setAttribute("data-theme", savedTheme);
   })();
   document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
-    btn.addEventListener("click", function () { setWorkerTheme(btn.dataset.themeChoice); });
+    btn.addEventListener("click", function () { setWorkerTheme(btn.dataset.themeChoice);document.querySelectorAll("[data-theme-check]").forEach(function(x){x.textContent=x.dataset.themeCheck===state.theme?"✓":"";});applyWorkerI18n(); });
   });
   document.querySelectorAll("[data-lang-choice]").forEach(function (btn) {
-    btn.addEventListener("click", function () { setWorkerLanguage(btn.dataset.langChoice); });
+    btn.addEventListener("click", function () { setWorkerLanguage(btn.dataset.langChoice); applyWorkerI18n(); });
   });
-  function showWorkerPanel(tab) {
+  var workerPanelHistory=["work"], currentWorkerPanel="work";
+  var workerTopPanels={work:true,jobs:true,earnings:true,messages:true,profile:true};
+  function updateWorkerBackButton(){var b=document.getElementById("workerGlobalBack");if(b)b.classList.toggle("show",workerPanelHistory.length>1);}
+  function showWorkerPanel(tab,opts) {
+    opts=opts||{};
+    if(!opts.noHistory && tab!==currentWorkerPanel){workerPanelHistory.push(tab);}
+    currentWorkerPanel=tab;
     document.querySelectorAll("section.panel").forEach(function(p){p.classList.remove("active");});
     var target=document.getElementById("panel-"+tab); if(target) target.classList.add("active");
     document.querySelectorAll("nav.tabs button").forEach(function(b){b.classList.toggle("active",b.dataset.tab===tab);});
+    updateWorkerBackButton();
     window.scrollTo({top:0,behavior:"smooth"});
     if(tab==="jobs") renderJobsScreen();
     if(tab==="earnings") renderEarningsScreen();
     if(tab==="messages") renderMessagesScreen();
+    if(tab==="settings") applyWorkerI18n();
   }
-  document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.tab);});});
-  document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",function(){showWorkerPanel(btn.dataset.backTab);});});
+  function workerGoBack(){if(workerPanelHistory.length>1)workerPanelHistory.pop();var target=workerPanelHistory[workerPanelHistory.length-1]||"work";showWorkerPanel(target,{noHistory:true});}
+  document.getElementById("workerGlobalBack").addEventListener("click",workerGoBack);
+  document.querySelectorAll("nav.tabs button").forEach(function(btn){btn.addEventListener("click",function(){workerPanelHistory=[btn.dataset.tab];showWorkerPanel(btn.dataset.tab,{noHistory:true});});});
+  document.querySelectorAll("[data-back-tab]").forEach(function(btn){btn.addEventListener("click",workerGoBack);});
+  document.querySelectorAll("[data-worker-back]").forEach(function(btn){btn.addEventListener("click",workerGoBack);});
   function loadServiceLocation(){return api("/api/worker/service-location").then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to load service location");var el=document.getElementById("serviceLocationStatus");if(r.data.configured){el.textContent="Configured · updated "+(r.data.updated_at||"recently");}else{el.textContent="Not configured yet. Diagnosis bookings will stay unavailable until you set it.";}});}
   document.getElementById("openServiceLocationBtn").addEventListener("click",function(){showWorkerPanel("service-location");loadServiceLocation().catch(function(e){document.getElementById("serviceLocationStatus").textContent=e.message;});});
-  document.getElementById("serviceLocationBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("serviceLocationBackBtn").addEventListener("click",function(){workerGoBack();});
   document.getElementById("captureServiceLocationBtn").addEventListener("click",function(){var btn=this,el=document.getElementById("serviceLocationStatus");if(!navigator.geolocation){el.textContent="Location is not supported in this browser.";return;}btn.disabled=true;btn.textContent="Getting location...";navigator.geolocation.getCurrentPosition(function(p){api("/api/worker/service-location",{method:"PUT",body:JSON.stringify({latitude:p.coords.latitude,longitude:p.coords.longitude})}).then(function(r){btn.disabled=false;btn.textContent="Use My Current Location";if(!r.ok){el.textContent=r.data.error||"Unable to save location";return;}el.textContent="Service location saved successfully.";api("/api/worker-auth/me").then(function(me){if(me.ok&&me.data.logged_in){state.worker=me.data;renderProfile();}});});},function(err){btn.disabled=false;btn.textContent="Use My Current Location";el.textContent="Location permission failed: "+err.message;},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});});
   function loadPayout(){return api("/api/worker/payout-account").then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to load payout account");var d=r.data||{};document.getElementById("payoutHolder").value=d.account_holder_name||"";document.getElementById("payoutIfsc").value=d.ifsc||"";document.getElementById("payoutBank").value=d.bank_name||"";document.getElementById("payoutUpi").value=d.upi_id||"";document.getElementById("payoutAccount").value="";document.getElementById("payoutAccount").placeholder=d.account_number_last4?"Saved account ••••"+d.account_number_last4:"Enter account number";document.getElementById("payoutSaved").textContent=d.verification_status?"Verification: "+d.verification_status:"No payout account saved";});}
   document.getElementById("openPayoutBtn").addEventListener("click",function(){showWorkerPanel("payout");loadPayout().catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
-  document.getElementById("payoutBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("payoutBackBtn").addEventListener("click",function(){workerGoBack();});
   document.getElementById("savePayoutBtn").addEventListener("click",function(){var payload={account_holder_name:document.getElementById("payoutHolder").value,account_number:document.getElementById("payoutAccount").value,ifsc:document.getElementById("payoutIfsc").value,bank_name:document.getElementById("payoutBank").value,upi_id:document.getElementById("payoutUpi").value};api("/api/worker/payout-account",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to save payout account");document.getElementById("payoutMessage").textContent="Saved. Pending admin verification.";loadPayout();}).catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
   var availabilityState={days:[],unavailable_dates:[],is_online:true};
   var dayNames=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -608,11 +650,18 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
   function loadAvailability(){return api("/api/worker/availability").then(function(res){availabilityState=res;renderAvailability();});}
   document.getElementById("openAvailabilityBtn").addEventListener("click",function(){showWorkerPanel("availability");loadAvailability().catch(function(e){document.getElementById("availabilityMessage").textContent=e.message;});});
-  document.getElementById("availabilityBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("availabilityBackBtn").addEventListener("click",function(){workerGoBack();});
   document.getElementById("addUnavailableDate").addEventListener("click",function(){var input=document.getElementById("availabilityDate"),value=input.value;if(!value)return;if(availabilityState.unavailable_dates.indexOf(value)<0)availabilityState.unavailable_dates.push(value);input.value="";renderAvailability();});
   document.getElementById("saveAvailabilityBtn").addEventListener("click",function(){var days=Array.from(document.querySelectorAll("[data-availability-day]")).map(function(row){return {weekday:Number(row.dataset.availabilityDay),enabled:row.querySelector("[data-day-enabled]").checked,start_time:row.querySelector("[data-day-start]").value,end_time:row.querySelector("[data-day-end]").value};});api("/api/worker/availability",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({is_online:document.getElementById("availabilityOnline").checked,days:days,unavailable_dates:availabilityState.unavailable_dates})}).then(function(){document.getElementById("availabilityMessage").textContent="Availability saved.";loadAvailability();}).catch(function(e){document.getElementById("availabilityMessage").textContent=e.message;});});
   document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
-  document.getElementById("settingsBackBtn").addEventListener("click",function(){showWorkerPanel("profile");});
+  document.getElementById("settingsBackBtn").addEventListener("click",function(){workerGoBack();});
+  document.getElementById("workerThemeRow").addEventListener("click",function(){showWorkerPanel("worker-theme");applyWorkerI18n();document.querySelectorAll("[data-theme-check]").forEach(function(x){x.textContent=x.dataset.themeCheck===state.theme?"✓":"";});});
+  document.getElementById("workerLanguageRow").addEventListener("click",function(){showWorkerPanel("worker-language");applyWorkerI18n();});
+  document.getElementById("workerNotificationsRow").addEventListener("click",function(){state.notificationsEnabled=!state.notificationsEnabled;syncWorkerPreferences();applyWorkerI18n();});
+  document.getElementById("workerLocationRow").addEventListener("click",function(){showWorkerPanel("service-location");loadServiceLocation();});
+  document.getElementById("workerAvailabilityRow").addEventListener("click",function(){showWorkerPanel("availability");loadAvailability();});
+  document.getElementById("workerPayoutRow").addEventListener("click",function(){showWorkerPanel("payout");loadPayout();});
+  document.getElementById("workerLogoutRow").addEventListener("click",function(){document.getElementById("logoutBtn").click();});
 
   function loadWorkerNotifications(renderList){
     return api("/api/worker/notifications").then(function(res){
@@ -626,7 +675,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     });
   }
   document.getElementById("workerNotifBtn").addEventListener("click",function(){showWorkerPanel("notifications");loadWorkerNotifications(true).then(function(){return api("/api/worker/notifications/read",{method:"POST",body:JSON.stringify({})});}).then(function(){loadWorkerNotifications(false);});});
-  document.getElementById("workerNotifBack").addEventListener("click",function(){showWorkerPanel("work");});
+  document.getElementById("workerNotifBack").addEventListener("click",function(){workerGoBack();});
   loadWorkerNotifications(false);
   setInterval(function(){loadWorkerNotifications(false);},60000);
   var viewJobsBtn=document.getElementById("viewJobsBtn");
@@ -718,6 +767,12 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
   function startApp(worker) {
     state.worker = worker;
+    if(worker.preferred_language)state.lang=worker.preferred_language;
+    if(worker.preferred_theme)state.theme=worker.preferred_theme;
+    if(worker.notifications_enabled!=null)state.notificationsEnabled=!!worker.notifications_enabled;
+    document.documentElement.setAttribute("data-theme",state.theme);
+    document.documentElement.lang=state.lang;
+    document.documentElement.dir=(state.lang==="ar"||state.lang==="ur")?"rtl":"ltr";
     authScreen.style.display = "none";
     appScreen.style.display = "block";
     requestAnimationFrame(function () { appScreen.classList.add("enter"); });
@@ -731,7 +786,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     loadBookings();
     // login/register responses are minimal (id, name, phone) — refresh full profile fields
     api("/api/worker-auth/me").then(function (res) {
-      if (res.data && res.data.logged_in) { state.worker = res.data; renderVerifyBox(); renderProfile(); }
+      if (res.data && res.data.logged_in) { state.worker = res.data;if(res.data.preferred_language)state.lang=res.data.preferred_language;if(res.data.preferred_theme)state.theme=res.data.preferred_theme;if(res.data.notifications_enabled!=null)state.notificationsEnabled=!!res.data.notifications_enabled;document.documentElement.setAttribute("data-theme",state.theme);applyWorkerI18n();renderVerifyBox();renderProfile(); }
     });
   }
 

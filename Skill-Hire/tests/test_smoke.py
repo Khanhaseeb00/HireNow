@@ -60,8 +60,10 @@ class HireNowSmokeTests(unittest.TestCase):
         conn.close()
         for name in ("booking_type", "diagnosis_fee", "diagnosis_distance_km", "service_latitude", "service_longitude", "diagnosis_pricing_rule_id", "diagnosis_notes", "work_approved_at", "work_declined_at", "work_decline_reason", "work_started_at", "work_ended_at", "actual_minutes", "work_amount", "paid_amount"):
             self.assertIn(name, booking_cols)
-        for name in ("service_latitude", "service_longitude", "service_location_updated_at"):
+        for name in ("service_latitude", "service_longitude", "service_location_updated_at", "preferred_language", "preferred_theme", "notifications_enabled"):
             self.assertIn(name, worker_cols)
+        for name in ("preferred_language", "preferred_theme", "notifications_enabled", "home_address", "home_city", "home_latitude", "home_longitude", "location_updated_at"):
+            self.assertIn(name, hirer_cols)
         for cols in (worker_cols, hirer_cols):
             self.assertIn("account_status", cols)
             self.assertIn("account_status_reason", cols)
@@ -609,6 +611,30 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertEqual(booking["paid_amount"], 500)
         self.assertEqual(booking["payment_id"], "pay_switch_verify")
 
+    def test_receipt_uses_selected_language(self):
+        conn = get_db()
+        conn.execute("""INSERT INTO hirers(name, phone, password_hash, preferred_language)
+                        VALUES (?,?,?,?)""", ("Hindi Hirer", "9000001011", "x", "hi"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000001011",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status, preferred_language)
+                        VALUES (?,?,?,?,?,?,?,?)""", ("Hindi Worker", "9000001012", "x", "Electrician", "Balrampur", 800, "approved", "hi"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000001012",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-21", 2, "cash", 500, 500, 500, "completed", "paid"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        app.sync_booking_financials(conn, booking_id)
+        booking = conn.execute("SELECT * FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        hirer = conn.execute("SELECT name, phone, preferred_language FROM hirers WHERE id=?", (hirer_id,)).fetchone()
+        worker = conn.execute("SELECT name, phone, skill, city, preferred_language FROM workers WHERE id=?", (worker_id,)).fetchone()
+        finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.close()
+        with patch.object(app, "receipt_font_for_language", return_value="Helvetica"):
+            pdf_buffer = app.build_payment_receipt_pdf(booking, hirer, worker, finance, "hirer")
+        self.assertTrue(pdf_buffer.getvalue().startswith(b"%PDF"))
+        self.assertEqual(app.receipt_text("hi", "payment_receipt"), "भुगतान रसीद")
+
     def test_branded_receipt_contains_professional_contact_details(self):
         conn = get_db()
         conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Brand Hirer", "9000000991", "x"))
@@ -635,6 +661,64 @@ class HireNowSmokeTests(unittest.TestCase):
         pdf_bytes = pdf_buffer.getvalue()
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
         self.assertGreater(len(pdf_bytes), 5000)
+
+    def test_hirer_registration_saves_map_location_and_preferences(self):
+        with self.client.session_transaction() as sess:
+            sess.clear()
+        response = self.client.post("/api/auth/register", json={
+            "name": "Map Hirer",
+            "phone": "9000001001",
+            "password": "secret1",
+            "address": "Jarwa Road, Tulsipur",
+            "city": "Balrampur",
+            "latitude": 27.533,
+            "longitude": 82.417,
+            "preferred_language": "hi",
+            "preferred_theme": "dark",
+        })
+        self.assertEqual(response.status_code, 201, response.get_json())
+        data = response.get_json()
+        self.assertEqual(data["preferred_language"], "hi")
+        self.assertEqual(data["preferred_theme"], "dark")
+        self.assertAlmostEqual(data["home_latitude"], 27.533, places=3)
+
+        me = self.client.get("/api/auth/me")
+        self.assertEqual(me.status_code, 200)
+        me_data = me.get_json()
+        self.assertEqual(me_data["home_city"], "Balrampur")
+        self.assertEqual(me_data["preferred_language"], "hi")
+
+    def test_hirer_location_and_preferences_can_be_updated(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Prefs Hirer", "9000001002", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000001002",)).fetchone()["id"]
+        conn.commit(); conn.close()
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["hirer_id"] = hirer_id
+
+        pref = self.client.put("/api/hirer/preferences", json={"preferred_language":"ur","preferred_theme":"dark","notifications_enabled":False})
+        self.assertEqual(pref.status_code, 200)
+        self.assertEqual(pref.get_json()["preferred_language"], "ur")
+        loc = self.client.put("/api/hirer/location", json={"address":"Test Area","city":"Lucknow","latitude":26.8467,"longitude":80.9462})
+        self.assertEqual(loc.status_code, 200)
+        self.assertAlmostEqual(loc.get_json()["home_longitude"], 80.9462, places=4)
+
+    def test_worker_preferences_are_persisted(self):
+        conn = get_db()
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Prefs Worker", "9000001003", "x", "Plumber", "Balrampur", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000001003",)).fetchone()["id"]
+        conn.commit(); conn.close()
+        with self.client.session_transaction() as sess:
+            sess.clear(); sess["worker_id"] = worker_id
+
+        response = self.client.put("/api/worker/preferences", json={"preferred_language":"bn","preferred_theme":"dark","notifications_enabled":False})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["preferred_language"], "bn")
+        me = self.client.get("/api/worker-auth/me")
+        self.assertEqual(me.status_code, 200)
+        self.assertEqual(me.get_json()["preferred_theme"], "dark")
+        self.assertFalse(bool(me.get_json()["notifications_enabled"]))
 
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:

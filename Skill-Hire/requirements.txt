@@ -4,3 +4,7 @@ gunicorn==23.0.0
 psycopg[binary]==3.2.10
 
 reportlab==4.4.4
+
+uharfbuzz>=0.48,<1
+python-bidi>=0.6,<1
+arabic-reshaper>=3.0,<4

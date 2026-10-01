@@ -35,9 +35,13 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.pdfmetrics import stringWidth
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
+from bidi.algorithm import get_display
+import arabic_reshaper
 
 from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
 import payments
@@ -60,6 +64,33 @@ STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress"
 STANDARD_WORKDAY_HOURS = 8
 # V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
 DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
+
+SUPPORTED_LANGUAGES = {"en", "hi", "ar", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "ur"}
+SUPPORTED_THEMES = {"light", "dark"}
+
+
+def normalize_language(value):
+    value = (value or "en").strip().lower()
+    return value if value in SUPPORTED_LANGUAGES else "en"
+
+
+def normalize_theme(value):
+    value = (value or "light").strip().lower()
+    return value if value in SUPPORTED_THEMES else "light"
+
+
+def parse_optional_coordinates(latitude, longitude):
+    if latitude in (None, "") and longitude in (None, ""):
+        return None, None
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        raise ValueError("Valid latitude and longitude are required")
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Latitude or longitude is outside the valid range")
+    return latitude, longitude
+
 
 
 def ensure_schema_extensions():
@@ -113,8 +144,27 @@ def ensure_schema_extensions():
     }.items():
         if column not in worker_columns:
             conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
+    for column, definition in {
+        "preferred_language": "TEXT NOT NULL DEFAULT 'en'",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "notifications_enabled": "INTEGER NOT NULL DEFAULT 1",
+    }.items():
+        if column not in worker_columns:
+            conn.execute(f"ALTER TABLE workers ADD COLUMN {column} {definition}")
     hirer_columns = table_columns(conn, "hirers")
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
+        if column not in hirer_columns:
+            conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
+    for column, definition in {
+        "preferred_language": "TEXT NOT NULL DEFAULT 'en'",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "notifications_enabled": "INTEGER NOT NULL DEFAULT 1",
+        "home_address": "TEXT",
+        "home_city": "TEXT",
+        "home_latitude": "REAL",
+        "home_longitude": "REAL",
+        "location_updated_at": "TEXT",
+    }.items():
         if column not in hirer_columns:
             conn.execute(f"ALTER TABLE hirers ADD COLUMN {column} {definition}")
     if "is_online" not in worker_columns:
@@ -682,6 +732,14 @@ def register():
     name = (data.get("name") or "").strip()
     phone = (data.get("phone") or "").strip()
     password = data.get("password") or ""
+    preferred_language = normalize_language(data.get("preferred_language"))
+    preferred_theme = normalize_theme(data.get("preferred_theme"))
+    home_address = (data.get("address") or "").strip() or None
+    home_city = (data.get("city") or "").strip() or None
+    try:
+        home_latitude, home_longitude = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not (name and phone and password):
         return jsonify({"error": "name, phone and password are required"}), 400
     if len(name) < 2:
@@ -698,15 +756,22 @@ def register():
         return jsonify({"error": "Phone already registered"}), 409
 
     cur = conn.execute(
-        "INSERT INTO hirers (name, phone, password_hash) VALUES (?, ?, ?)",
-        (name, phone, generate_password_hash(password)),
+        """INSERT INTO hirers
+           (name, phone, password_hash, preferred_language, preferred_theme,
+            home_address, home_city, home_latitude, home_longitude, location_updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            name, phone, generate_password_hash(password), preferred_language, preferred_theme,
+            home_address, home_city, home_latitude, home_longitude,
+            datetime.utcnow().isoformat() if home_latitude is not None else None,
+        ),
     )
     conn.commit()
     hirer_id = cur.lastrowid
     conn.close()
 
     session["hirer_id"] = hirer_id
-    return jsonify({"id": hirer_id, "name": name, "phone": phone}), 201
+    return jsonify({"id": hirer_id, "name": name, "phone": phone, "preferred_language": preferred_language, "preferred_theme": preferred_theme, "home_address": home_address, "home_city": home_city, "home_latitude": home_latitude, "home_longitude": home_longitude}), 201
 
 
 @app.post("/api/auth/login")
@@ -727,7 +792,16 @@ def login():
         return _moderated_account_response(hirer)
 
     session["hirer_id"] = hirer["id"]
-    return jsonify({"id": hirer["id"], "name": hirer["name"], "phone": hirer["phone"]})
+    return jsonify({
+        "id": hirer["id"], "name": hirer["name"], "phone": hirer["phone"],
+        "preferred_language": hirer["preferred_language"] if "preferred_language" in hirer.keys() else "en",
+        "preferred_theme": hirer["preferred_theme"] if "preferred_theme" in hirer.keys() else "light",
+        "notifications_enabled": bool(hirer["notifications_enabled"]) if "notifications_enabled" in hirer.keys() else True,
+        "home_address": hirer["home_address"] if "home_address" in hirer.keys() else None,
+        "home_city": hirer["home_city"] if "home_city" in hirer.keys() else None,
+        "home_latitude": hirer["home_latitude"] if "home_latitude" in hirer.keys() else None,
+        "home_longitude": hirer["home_longitude"] if "home_longitude" in hirer.keys() else None,
+    })
 
 
 @app.post("/api/auth/logout")
@@ -743,7 +817,7 @@ def me():
     if not hirer_id:
         return jsonify({"logged_in": False})
     conn = get_db()
-    hirer = conn.execute("SELECT id, name, phone FROM hirers WHERE id = ?", (hirer_id,)).fetchone()
+    hirer = conn.execute("SELECT id, name, phone, preferred_language, preferred_theme, notifications_enabled, home_address, home_city, home_latitude, home_longitude, location_updated_at FROM hirers WHERE id = ?", (hirer_id,)).fetchone()
     conn.close()
     if not hirer:
         session.pop("hirer_id", None)
@@ -798,7 +872,12 @@ def worker_login():
         return _moderated_account_response(worker)
 
     session["worker_id"] = worker["id"]
-    return jsonify({"id": worker["id"], "name": worker["name"], "phone": worker["phone"]})
+    return jsonify({
+        "id": worker["id"], "name": worker["name"], "phone": worker["phone"],
+        "preferred_language": worker["preferred_language"] if "preferred_language" in worker.keys() else "en",
+        "preferred_theme": worker["preferred_theme"] if "preferred_theme" in worker.keys() else "light",
+        "notifications_enabled": bool(worker["notifications_enabled"]) if "notifications_enabled" in worker.keys() else True,
+    })
 
 
 @app.post("/api/worker-auth/logout")
@@ -814,13 +893,112 @@ def worker_me():
         return jsonify({"logged_in": False})
     conn = get_db()
     worker = conn.execute(
-        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online, service_latitude, service_longitude, service_location_updated_at FROM workers WHERE id = ?", (worker_id,)
+        "SELECT id, name, phone, skill, city, daily_wage, verification_status, rate_status, rate_review_note, rating, jobs_completed, is_online, service_latitude, service_longitude, service_location_updated_at, preferred_language, preferred_theme, notifications_enabled FROM workers WHERE id = ?", (worker_id,)
     ).fetchone()
     conn.close()
     if not worker:
         session.pop("worker_id", None)
         return jsonify({"logged_in": False})
     return jsonify({"logged_in": True, **row_to_dict(worker)})
+
+
+@app.get("/api/hirer/preferences")
+def hirer_preferences():
+    err = require_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        """SELECT preferred_language, preferred_theme, notifications_enabled,
+                  home_address, home_city, home_latitude, home_longitude, location_updated_at
+           FROM hirers WHERE id=?""",
+        (current_hirer_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/hirer/preferences")
+def update_hirer_preferences():
+    err = require_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    language = normalize_language(data.get("preferred_language"))
+    theme = normalize_theme(data.get("preferred_theme"))
+    notifications_enabled = 1 if data.get("notifications_enabled", True) else 0
+    conn = get_db()
+    conn.execute(
+        "UPDATE hirers SET preferred_language=?, preferred_theme=?, notifications_enabled=? WHERE id=?",
+        (language, theme, notifications_enabled, current_hirer_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"preferred_language": language, "preferred_theme": theme, "notifications_enabled": bool(notifications_enabled)})
+
+
+@app.get("/api/hirer/location")
+def hirer_location():
+    err = require_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        "SELECT home_address, home_city, home_latitude, home_longitude, location_updated_at FROM hirers WHERE id=?",
+        (current_hirer_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/hirer/location")
+def update_hirer_location():
+    err = require_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    address = (data.get("address") or "").strip() or None
+    city = (data.get("city") or "").strip() or None
+    try:
+        latitude, longitude = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not address and latitude is None:
+        return jsonify({"error": "Enter an address or choose a location on the map"}), 400
+    now = datetime.utcnow().isoformat()
+    conn = get_db()
+    conn.execute(
+        """UPDATE hirers SET home_address=?, home_city=?, home_latitude=?, home_longitude=?,
+           location_updated_at=? WHERE id=?""",
+        (address, city, latitude, longitude, now, current_hirer_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "home_address": address, "home_city": city, "home_latitude": latitude, "home_longitude": longitude, "location_updated_at": now})
+
+
+@app.get("/api/worker/preferences")
+def worker_preferences():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    row = conn.execute(
+        "SELECT preferred_language, preferred_theme, notifications_enabled FROM workers WHERE id=?",
+        (current_worker_id(),),
+    ).fetchone()
+    conn.close()
+    return jsonify(row_to_dict(row) if row else {})
+
+
+@app.put("/api/worker/preferences")
+def update_worker_preferences():
+    err = require_worker_login()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    language = normalize_language(data.get("preferred_language"))
+    theme = normalize_theme(data.get("preferred_theme"))
+    notifications_enabled = 1 if data.get("notifications_enabled", True) else 0
+    conn = get_db()
+    conn.execute(
+        "UPDATE workers SET preferred_language=?, preferred_theme=?, notifications_enabled=? WHERE id=?",
+        (language, theme, notifications_enabled, current_worker_id()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"preferred_language": language, "preferred_theme": theme, "notifications_enabled": bool(notifications_enabled)})
 
 
 @app.get("/api/worker/service-location")
@@ -1707,8 +1885,11 @@ def create_booking():
         service_longitude = float(service_longitude)
         total = diagnosis_fee
     else:
-        service_latitude = None
-        service_longitude = None
+        try:
+            service_latitude, service_longitude = parse_optional_coordinates(service_latitude, service_longitude)
+        except ValueError as exc:
+            conn.rollback(); conn.close()
+            return jsonify({"error": str(exc)}), 400
         total = round(rate * hours)
 
     cur = conn.execute(
@@ -1846,8 +2027,94 @@ def create_razorpay_order(booking_id):
     })
 
 
+RECEIPT_I18N = {
+    "en": {"payment_receipt":"PAYMENT RECEIPT","worker_receipt":"WORKER EARNINGS RECEIPT","receipt_summary":"Receipt Summary","booking_service":"Booking & Service Details","hirer_worker":"Hirer & Worker","payment_details":"Payment Details","worker_earnings":"Worker Earnings","receipt_no":"Receipt No.","booking_id":"Booking ID","generated":"Generated","booking_status":"Booking Status","payment_status":"Payment Status","service_type":"Service Type","service_skill":"Service / Skill","service_date":"Service Date","scheduled_time":"Scheduled Time","actual_work":"Actual Work Time","work_address":"Work Address","instructions":"Instructions","hirer":"Hirer","hirer_contact":"Hirer Contact","worker":"Worker","worker_contact":"Worker Contact","worker_city":"Worker City","payment_method":"Payment Method","final_amount":"Final Booking Amount","received":"Amount Received","diagnosis_fee":"Diagnosis Fee","work_amount":"Work Amount","payment_id":"Payment ID","order_id":"Order ID","cash_verified":"Cash OTP Verified","gross":"Gross Booking Amount","commission":"Platform Commission","worker_net":"Worker Net Earning","settlement":"Settlement Status","settlement_ref":"Settlement Reference","support":"HIRE NOW - CUSTOMER SUPPORT","system_note":"This is a system-generated receipt. No signature is required."},
+    "hi": {"payment_receipt":"भुगतान रसीद","worker_receipt":"कामगार कमाई रसीद","receipt_summary":"रसीद सारांश","booking_service":"बुकिंग और सेवा विवरण","hirer_worker":"हायरर और कामगार","payment_details":"भुगतान विवरण","worker_earnings":"कामगार कमाई","receipt_no":"रसीद नंबर","booking_id":"बुकिंग ID","generated":"तैयार किया गया","booking_status":"बुकिंग स्थिति","payment_status":"भुगतान स्थिति","service_type":"सेवा प्रकार","service_skill":"सेवा / कौशल","service_date":"सेवा तिथि","scheduled_time":"निर्धारित समय","actual_work":"वास्तविक कार्य समय","work_address":"कार्य पता","instructions":"निर्देश","hirer":"हायरर","hirer_contact":"हायरर संपर्क","worker":"कामगार","worker_contact":"कामगार संपर्क","worker_city":"कामगार शहर","payment_method":"भुगतान तरीका","final_amount":"अंतिम बुकिंग राशि","received":"प्राप्त राशि","diagnosis_fee":"जांच शुल्क","work_amount":"कार्य राशि","payment_id":"भुगतान ID","order_id":"ऑर्डर ID","cash_verified":"कैश OTP सत्यापित","gross":"कुल बुकिंग राशि","commission":"प्लेटफॉर्म शुल्क","worker_net":"कामगार की शुद्ध कमाई","settlement":"सेटलमेंट स्थिति","settlement_ref":"सेटलमेंट संदर्भ","support":"HIRE NOW - ग्राहक सहायता","system_note":"यह सिस्टम द्वारा बनाई गई रसीद है। हस्ताक्षर आवश्यक नहीं है।"},
+    "ar": {"payment_receipt":"إيصال الدفع","worker_receipt":"إيصال أرباح العامل","receipt_summary":"ملخص الإيصال","booking_service":"تفاصيل الحجز والخدمة","hirer_worker":"العميل والعامل","payment_details":"تفاصيل الدفع","worker_earnings":"أرباح العامل","receipt_no":"رقم الإيصال","booking_id":"رقم الحجز","generated":"تاريخ الإنشاء","booking_status":"حالة الحجز","payment_status":"حالة الدفع","service_type":"نوع الخدمة","service_skill":"الخدمة / المهارة","service_date":"تاريخ الخدمة","scheduled_time":"الوقت المحدد","actual_work":"وقت العمل الفعلي","work_address":"عنوان العمل","instructions":"التعليمات","hirer":"العميل","hirer_contact":"اتصال العميل","worker":"العامل","worker_contact":"اتصال العامل","worker_city":"مدينة العامل","payment_method":"طريقة الدفع","final_amount":"المبلغ النهائي","received":"المبلغ المستلم","diagnosis_fee":"رسوم الفحص","work_amount":"مبلغ العمل","payment_id":"رقم الدفع","order_id":"رقم الطلب","cash_verified":"تم تأكيد OTP النقدي","gross":"إجمالي مبلغ الحجز","commission":"عمولة المنصة","worker_net":"صافي أرباح العامل","settlement":"حالة التسوية","settlement_ref":"مرجع التسوية","support":"HIRE NOW - دعم العملاء","system_note":"هذا إيصال مُنشأ آليًا ولا يحتاج إلى توقيع."},
+    "ur": {"payment_receipt":"ادائیگی کی رسید","worker_receipt":"ورکر کمائی کی رسید","receipt_summary":"رسید کا خلاصہ","booking_service":"بکنگ اور سروس کی تفصیل","hirer_worker":"ہائرر اور ورکر","payment_details":"ادائیگی کی تفصیل","worker_earnings":"ورکر کی کمائی","receipt_no":"رسید نمبر","booking_id":"بکنگ ID","generated":"تیار ہونے کا وقت","booking_status":"بکنگ کی حالت","payment_status":"ادائیگی کی حالت","service_type":"سروس کی قسم","service_skill":"سروس / مہارت","service_date":"سروس کی تاریخ","scheduled_time":"مقررہ وقت","actual_work":"اصل کام کا وقت","work_address":"کام کا پتہ","instructions":"ہدایات","hirer":"ہائرر","hirer_contact":"ہائرر رابطہ","worker":"ورکر","worker_contact":"ورکر رابطہ","worker_city":"ورکر شہر","payment_method":"ادائیگی کا طریقہ","final_amount":"آخری بکنگ رقم","received":"موصول رقم","diagnosis_fee":"تشخیصی فیس","work_amount":"کام کی رقم","payment_id":"ادائیگی ID","order_id":"آرڈر ID","cash_verified":"کیش OTP تصدیق","gross":"کل بکنگ رقم","commission":"پلیٹ فارم فیس","worker_net":"ورکر خالص کمائی","settlement":"سیٹلمنٹ حالت","settlement_ref":"سیٹلمنٹ حوالہ","support":"HIRE NOW - کسٹمر سپورٹ","system_note":"یہ سسٹم سے تیار شدہ رسید ہے، دستخط کی ضرورت نہیں۔"},
+    "bn": {"payment_receipt":"পেমেন্ট রসিদ","worker_receipt":"কর্মীর আয়ের রসিদ","receipt_summary":"রসিদের সারাংশ","booking_service":"বুকিং ও সেবার বিবরণ","hirer_worker":"হায়ারার ও কর্মী","payment_details":"পেমেন্ট বিবরণ","worker_earnings":"কর্মীর আয়","receipt_no":"রসিদ নম্বর","booking_id":"বুকিং ID","generated":"তৈরির সময়","booking_status":"বুকিং অবস্থা","payment_status":"পেমেন্ট অবস্থা","service_type":"সেবার ধরন","service_skill":"সেবা / দক্ষতা","service_date":"সেবার তারিখ","scheduled_time":"নির্ধারিত সময়","actual_work":"বাস্তব কাজের সময়","work_address":"কাজের ঠিকানা","instructions":"নির্দেশনা","hirer":"হায়ারার","hirer_contact":"হায়ারার যোগাযোগ","worker":"কর্মী","worker_contact":"কর্মী যোগাযোগ","worker_city":"কর্মীর শহর","payment_method":"পেমেন্ট পদ্ধতি","final_amount":"চূড়ান্ত বুকিং পরিমাণ","received":"প্রাপ্ত পরিমাণ","diagnosis_fee":"পরিদর্শন ফি","work_amount":"কাজের পরিমাণ","payment_id":"পেমেন্ট ID","order_id":"অর্ডার ID","cash_verified":"ক্যাশ OTP যাচাই","gross":"মোট বুকিং পরিমাণ","commission":"প্ল্যাটফর্ম ফি","worker_net":"কর্মীর নিট আয়","settlement":"সেটেলমেন্ট অবস্থা","settlement_ref":"সেটেলমেন্ট রেফারেন্স","support":"HIRE NOW - কাস্টমার সাপোর্ট","system_note":"এটি সিস্টেম-জেনারেটেড রসিদ। স্বাক্ষর প্রয়োজন নেই।"},
+    "ta": {"payment_receipt":"பணம் செலுத்திய ரசீது","worker_receipt":"பணியாளர் வருமான ரசீது","receipt_summary":"ரசீது சுருக்கம்","booking_service":"முன்பதிவு மற்றும் சேவை விவரங்கள்","hirer_worker":"வாடிக்கையாளர் மற்றும் பணியாளர்","payment_details":"பணம் செலுத்திய விவரங்கள்","worker_earnings":"பணியாளர் வருமானம்","receipt_no":"ரசீது எண்","booking_id":"முன்பதிவு ID","generated":"உருவாக்கிய நேரம்","booking_status":"முன்பதிவு நிலை","payment_status":"பணம் நிலை","service_type":"சேவை வகை","service_skill":"சேவை / திறன்","service_date":"சேவை தேதி","scheduled_time":"திட்டமிட்ட நேரம்","actual_work":"உண்மையான வேலை நேரம்","work_address":"வேலை முகவரி","instructions":"வழிமுறைகள்","hirer":"வாடிக்கையாளர்","hirer_contact":"வாடிக்கையாளர் தொடர்பு","worker":"பணியாளர்","worker_contact":"பணியாளர் தொடர்பு","worker_city":"பணியாளர் நகரம்","payment_method":"பணம் செலுத்தும் முறை","final_amount":"இறுதி முன்பதிவு தொகை","received":"பெற்ற தொகை","diagnosis_fee":"ஆய்வு கட்டணம்","work_amount":"வேலை தொகை","payment_id":"பணம் ID","order_id":"ஆர்டர் ID","cash_verified":"பண OTP சரிபார்ப்பு","gross":"மொத்த முன்பதிவு தொகை","commission":"பிளாட்ஃபார்ம் கட்டணம்","worker_net":"பணியாளர் நிகர வருமானம்","settlement":"செட்டில்மெண்ட் நிலை","settlement_ref":"செட்டில்மெண்ட் குறிப்பு","support":"HIRE NOW - வாடிக்கையாளர் உதவி","system_note":"இது மின்னணு முறையில் உருவாக்கப்பட்ட ரசீது. கையொப்பம் தேவையில்லை."},
+    "te": {"payment_receipt":"చెల్లింపు రసీదు","worker_receipt":"కార్మికుడి ఆదాయ రసీదు","receipt_summary":"రసీదు సారాంశం","booking_service":"బుకింగ్ మరియు సేవ వివరాలు","hirer_worker":"హైరర్ మరియు కార్మికుడు","payment_details":"చెల్లింపు వివరాలు","worker_earnings":"కార్మికుడి ఆదాయం","receipt_no":"రసీదు నంబర్","booking_id":"బుకింగ్ ID","generated":"తయారు చేసిన సమయం","booking_status":"బుకింగ్ స్థితి","payment_status":"చెల్లింపు స్థితి","service_type":"సేవ రకం","service_skill":"సేవ / నైపుణ్యం","service_date":"సేవ తేదీ","scheduled_time":"నిర్దేశిత సమయం","actual_work":"అసలు పని సమయం","work_address":"పని చిరునామా","instructions":"సూచనలు","hirer":"హైరర్","hirer_contact":"హైరర్ సంప్రదింపు","worker":"కార్మికుడు","worker_contact":"కార్మికుడి సంప్రదింపు","worker_city":"కార్మికుడి నగరం","payment_method":"చెల్లింపు విధానం","final_amount":"తుది బుకింగ్ మొత్తం","received":"అందుకున్న మొత్తం","diagnosis_fee":"తనిఖీ ఫీజు","work_amount":"పని మొత్తం","payment_id":"చెల్లింపు ID","order_id":"ఆర్డర్ ID","cash_verified":"క్యాష్ OTP ధృవీకరణ","gross":"మొత్తం బుకింగ్ మొత్తం","commission":"ప్లాట్‌ఫారమ్ ఫీజు","worker_net":"కార్మికుడి నికర ఆదాయం","settlement":"సెటిల్‌మెంట్ స్థితి","settlement_ref":"సెటిల్‌మెంట్ రిఫరెన్స్","support":"HIRE NOW - కస్టమర్ సపోర్ట్","system_note":"ఇది సిస్టమ్ సృష్టించిన రసీదు. సంతకం అవసరం లేదు."},
+    "mr": {"payment_receipt":"पेमेंट पावती","worker_receipt":"कामगार कमाई पावती","receipt_summary":"पावती सारांश","booking_service":"बुकिंग आणि सेवा तपशील","hirer_worker":"हायरर आणि कामगार","payment_details":"पेमेंट तपशील","worker_earnings":"कामगार कमाई","receipt_no":"पावती क्रमांक","booking_id":"बुकिंग ID","generated":"तयार केल्याची वेळ","booking_status":"बुकिंग स्थिती","payment_status":"पेमेंट स्थिती","service_type":"सेवा प्रकार","service_skill":"सेवा / कौशल्य","service_date":"सेवा दिनांक","scheduled_time":"नियोजित वेळ","actual_work":"प्रत्यक्ष कामाचा वेळ","work_address":"कामाचा पत्ता","instructions":"सूचना","hirer":"हायरर","hirer_contact":"हायरर संपर्क","worker":"कामगार","worker_contact":"कामगार संपर्क","worker_city":"कामगार शहर","payment_method":"पेमेंट पद्धत","final_amount":"अंतिम बुकिंग रक्कम","received":"प्राप्त रक्कम","diagnosis_fee":"तपासणी शुल्क","work_amount":"कामाची रक्कम","payment_id":"पेमेंट ID","order_id":"ऑर्डर ID","cash_verified":"कॅश OTP सत्यापित","gross":"एकूण बुकिंग रक्कम","commission":"प्लॅटफॉर्म शुल्क","worker_net":"कामगार निव्वळ कमाई","settlement":"सेटलमेंट स्थिती","settlement_ref":"सेटलमेंट संदर्भ","support":"HIRE NOW - ग्राहक सहाय्य","system_note":"ही प्रणालीद्वारे तयार केलेली पावती आहे. स्वाक्षरी आवश्यक नाही."},
+    "gu": {"payment_receipt":"ચુકવણી રસીદ","worker_receipt":"કામદાર કમાણી રસીદ","receipt_summary":"રસીદ સારાંશ","booking_service":"બુકિંગ અને સેવા વિગતો","hirer_worker":"હાયરર અને કામદાર","payment_details":"ચુકવણી વિગતો","worker_earnings":"કામદાર કમાણી","receipt_no":"રસીદ નંબર","booking_id":"બુકિંગ ID","generated":"બનાવ્યાનો સમય","booking_status":"બુકિંગ સ્થિતિ","payment_status":"ચુકવણી સ્થિતિ","service_type":"સેવા પ્રકાર","service_skill":"સેવા / કૌશલ્ય","service_date":"સેવાની તારીખ","scheduled_time":"નક્કી સમય","actual_work":"વાસ્તવિક કામનો સમય","work_address":"કામનું સરનામું","instructions":"સૂચનાઓ","hirer":"હાયરર","hirer_contact":"હાયરર સંપર્ક","worker":"કામદાર","worker_contact":"કામદાર સંપર્ક","worker_city":"કામદાર શહેર","payment_method":"ચુકવણી રીત","final_amount":"અંતિમ બુકિંગ રકમ","received":"મળેલ રકમ","diagnosis_fee":"તપાસ ફી","work_amount":"કામની રકમ","payment_id":"ચુકવણી ID","order_id":"ઓર્ડર ID","cash_verified":"કેશ OTP ચકાસણી","gross":"કુલ બુકિંગ રકમ","commission":"પ્લેટફોર્મ ફી","worker_net":"કામદાર નેટ કમાણી","settlement":"સેટલમેન્ટ સ્થિતિ","settlement_ref":"સેટલમેન્ટ સંદર્ભ","support":"HIRE NOW - ગ્રાહક સહાય","system_note":"આ સિસ્ટમ દ્વારા બનાવેલી રસીદ છે. સહી જરૂરી નથી."},
+    "kn": {"payment_receipt":"ಪಾವತಿ ರಸೀದಿ","worker_receipt":"ಕಾರ್ಮಿಕ ಆದಾಯ ರಸೀದಿ","receipt_summary":"ರಸೀದಿ ಸಾರಾಂಶ","booking_service":"ಬುಕಿಂಗ್ ಮತ್ತು ಸೇವಾ ವಿವರಗಳು","hirer_worker":"ಹೈರರ್ ಮತ್ತು ಕಾರ್ಮಿಕ","payment_details":"ಪಾವತಿ ವಿವರಗಳು","worker_earnings":"ಕಾರ್ಮಿಕ ಆದಾಯ","receipt_no":"ರಸೀದಿ ಸಂಖ್ಯೆ","booking_id":"ಬುಕಿಂಗ್ ID","generated":"ರಚಿಸಿದ ಸಮಯ","booking_status":"ಬುಕಿಂಗ್ ಸ್ಥಿತಿ","payment_status":"ಪಾವತಿ ಸ್ಥಿತಿ","service_type":"ಸೇವೆಯ ಪ್ರಕಾರ","service_skill":"ಸೇವೆ / ಕೌಶಲ್ಯ","service_date":"ಸೇವೆಯ ದಿನಾಂಕ","scheduled_time":"ನಿಗದಿತ ಸಮಯ","actual_work":"ನಿಜವಾದ ಕೆಲಸದ ಸಮಯ","work_address":"ಕೆಲಸದ ವಿಳಾಸ","instructions":"ಸೂಚನೆಗಳು","hirer":"ಹೈರರ್","hirer_contact":"ಹೈರರ್ ಸಂಪರ್ಕ","worker":"ಕಾರ್ಮಿಕ","worker_contact":"ಕಾರ್ಮಿಕ ಸಂಪರ್ಕ","worker_city":"ಕಾರ್ಮಿಕ ನಗರ","payment_method":"ಪಾವತಿ ವಿಧಾನ","final_amount":"ಅಂತಿಮ ಬುಕಿಂಗ್ ಮೊತ್ತ","received":"ಸ್ವೀಕರಿಸಿದ ಮೊತ್ತ","diagnosis_fee":"ಪರಿಶೀಲನಾ ಶುಲ್ಕ","work_amount":"ಕೆಲಸದ ಮೊತ್ತ","payment_id":"ಪಾವತಿ ID","order_id":"ಆರ್ಡರ್ ID","cash_verified":"ಕ್ಯಾಶ್ OTP ಪರಿಶೀಲನೆ","gross":"ಒಟ್ಟು ಬುಕಿಂಗ್ ಮೊತ್ತ","commission":"ಪ್ಲಾಟ್‌ಫಾರ್ಮ್ ಶುಲ್ಕ","worker_net":"ಕಾರ್ಮಿಕ ಶುದ್ಧ ಆದಾಯ","settlement":"ಸೆಟಲ್‌ಮೆಂಟ್ ಸ್ಥಿತಿ","settlement_ref":"ಸೆಟಲ್‌ಮೆಂಟ್ ಉಲ್ಲೇಖ","support":"HIRE NOW - ಗ್ರಾಹಕ ಸಹಾಯ","system_note":"ಇದು ಸಿಸ್ಟಮ್ ರಚಿಸಿದ ರಸೀದಿ. ಸಹಿ ಅಗತ್ಯವಿಲ್ಲ."},
+    "ml": {"payment_receipt":"പേയ്മെന്റ് രസീത്","worker_receipt":"തൊഴിലാളി വരുമാന രസീത്","receipt_summary":"രസീത് സംഗ്രഹം","booking_service":"ബുക്കിംഗ് & സേവന വിശദാംശങ്ങൾ","hirer_worker":"ഹയററും തൊഴിലാളിയും","payment_details":"പേയ്മെന്റ് വിശദാംശങ്ങൾ","worker_earnings":"തൊഴിലാളി വരുമാനം","receipt_no":"രസീത് നമ്പർ","booking_id":"ബുക്കിംഗ് ID","generated":"സൃഷ്ടിച്ച സമയം","booking_status":"ബുക്കിംഗ് നില","payment_status":"പേയ്മെന്റ് നില","service_type":"സേവന തരം","service_skill":"സേവനം / കഴിവ്","service_date":"സേവന തീയതി","scheduled_time":"നിശ്ചിത സമയം","actual_work":"യഥാർത്ഥ ജോലി സമയം","work_address":"ജോലി വിലാസം","instructions":"നിർദ്ദേശങ്ങൾ","hirer":"ഹയർ","hirer_contact":"ഹയർ ബന്ധപ്പെടുക","worker":"തൊഴിലാളി","worker_contact":"തൊഴിലാളി ബന്ധപ്പെടുക","worker_city":"തൊഴിലാളിയുടെ നഗരം","payment_method":"പേയ്മെന്റ് രീതി","final_amount":"അവസാന ബുക്കിംഗ് തുക","received":"ലഭിച്ച തുക","diagnosis_fee":"പരിശോധന ഫീസ്","work_amount":"ജോലി തുക","payment_id":"പേയ്മെന്റ് ID","order_id":"ഓർഡർ ID","cash_verified":"ക്യാഷ് OTP സ്ഥിരീകരണം","gross":"ആകെ ബുക്കിംഗ് തുക","commission":"പ്ലാറ്റ്ഫോം ഫീസ്","worker_net":"തൊഴിലാളി ശുദ്ധ വരുമാനം","settlement":"സെറ്റിൽമെന്റ് നില","settlement_ref":"സെറ്റിൽമെന്റ് റഫറൻസ്","support":"HIRE NOW - കസ്റ്റമർ സപ്പോർട്ട്","system_note":"ഇത് സിസ്റ്റം സൃഷ്ടിച്ച രസീത് ആണ്. ഒപ്പ് ആവശ്യമില്ല."},
+    "pa": {"payment_receipt":"ਭੁਗਤਾਨ ਰਸੀਦ","worker_receipt":"ਕਾਮੇ ਦੀ ਕਮਾਈ ਰਸੀਦ","receipt_summary":"ਰਸੀਦ ਸੰਖੇਪ","booking_service":"ਬੁਕਿੰਗ ਅਤੇ ਸੇਵਾ ਵੇਰਵੇ","hirer_worker":"ਹਾਇਰਰ ਅਤੇ ਕਾਮਾ","payment_details":"ਭੁਗਤਾਨ ਵੇਰਵੇ","worker_earnings":"ਕਾਮੇ ਦੀ ਕਮਾਈ","receipt_no":"ਰਸੀਦ ਨੰਬਰ","booking_id":"ਬੁਕਿੰਗ ID","generated":"ਤਿਆਰ ਸਮਾਂ","booking_status":"ਬੁਕਿੰਗ ਸਥਿਤੀ","payment_status":"ਭੁਗਤਾਨ ਸਥਿਤੀ","service_type":"ਸੇਵਾ ਕਿਸਮ","service_skill":"ਸੇਵਾ / ਹੁਨਰ","service_date":"ਸੇਵਾ ਮਿਤੀ","scheduled_time":"ਨਿਰਧਾਰਤ ਸਮਾਂ","actual_work":"ਅਸਲ ਕੰਮ ਸਮਾਂ","work_address":"ਕੰਮ ਦਾ ਪਤਾ","instructions":"ਹਦਾਇਤਾਂ","hirer":"ਹਾਇਰਰ","hirer_contact":"ਹਾਇਰਰ ਸੰਪਰਕ","worker":"ਕਾਮਾ","worker_contact":"ਕਾਮੇ ਦਾ ਸੰਪਰਕ","worker_city":"ਕਾਮੇ ਦਾ ਸ਼ਹਿਰ","payment_method":"ਭੁਗਤਾਨ ਤਰੀਕਾ","final_amount":"ਅੰਤਿਮ ਬੁਕਿੰਗ ਰਕਮ","received":"ਪ੍ਰਾਪਤ ਰਕਮ","diagnosis_fee":"ਜਾਂਚ ਫੀਸ","work_amount":"ਕੰਮ ਰਕਮ","payment_id":"ਭੁਗਤਾਨ ID","order_id":"ਆਰਡਰ ID","cash_verified":"ਕੈਸ਼ OTP ਪੁਸ਼ਟੀ","gross":"ਕੁੱਲ ਬੁਕਿੰਗ ਰਕਮ","commission":"ਪਲੇਟਫਾਰਮ ਫੀਸ","worker_net":"ਕਾਮੇ ਦੀ ਨੈੱਟ ਕਮਾਈ","settlement":"ਸੈਟਲਮੈਂਟ ਸਥਿਤੀ","settlement_ref":"ਸੈਟਲਮੈਂਟ ਹਵਾਲਾ","support":"HIRE NOW - ਗਾਹਕ ਸਹਾਇਤਾ","system_note":"ਇਹ ਸਿਸਟਮ ਵੱਲੋਂ ਬਣਾਈ ਰਸੀਦ ਹੈ। ਦਸਤਖਤ ਦੀ ਲੋੜ ਨਹੀਂ।"}
+}
+
+
+RECEIPT_FONT_CONFIG = {
+    "hi": ("HN-Devanagari", "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"),
+    "mr": ("HN-Devanagari", "/usr/share/fonts/truetype/noto/NotoSansDevanagari-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"),
+    "bn": ("HN-Bengali", "/usr/share/fonts/truetype/noto/NotoSansBengali-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansbengali/NotoSansBengali%5Bwdth%2Cwght%5D.ttf"),
+    "ta": ("HN-Tamil", "/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstamil/NotoSansTamil%5Bwdth%2Cwght%5D.ttf"),
+    "te": ("HN-Telugu", "/usr/share/fonts/truetype/noto/NotoSansTelugu-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanstelugu/NotoSansTelugu%5Bwdth%2Cwght%5D.ttf"),
+    "gu": ("HN-Gujarati", "/usr/share/fonts/truetype/noto/NotoSansGujarati-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansgujarati/NotoSansGujarati%5Bwdth%2Cwght%5D.ttf"),
+    "kn": ("HN-Kannada", "/usr/share/fonts/truetype/noto/NotoSansKannada-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosanskannada/NotoSansKannada%5Bwdth%2Cwght%5D.ttf"),
+    "ml": ("HN-Malayalam", "/usr/share/fonts/truetype/noto/NotoSansMalayalam-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansmalayalam/NotoSansMalayalam%5Bwdth%2Cwght%5D.ttf"),
+    "pa": ("HN-Gurmukhi", "/usr/share/fonts/truetype/noto/NotoSansGurmukhi-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansgurmukhi/NotoSansGurmukhi%5Bwdth%2Cwght%5D.ttf"),
+    "ar": ("HN-Arabic", "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf"),
+    "ur": ("HN-Arabic", "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf", "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf"),
+}
+
+
+def receipt_text(lang, key):
+    lang = normalize_language(lang)
+    return RECEIPT_I18N.get(lang, RECEIPT_I18N["en"]).get(key, RECEIPT_I18N["en"].get(key, key))
+
+
+def receipt_font_for_language(lang):
+    lang = normalize_language(lang)
+    if lang == "en":
+        return "Helvetica"
+    config = RECEIPT_FONT_CONFIG.get(lang)
+    if not config:
+        return "Helvetica"
+    font_name, system_path, url = config
+    try:
+        pdfmetrics.getFont(font_name)
+        return font_name
+    except Exception:
+        pass
+    path = system_path
+    if not os.path.exists(path):
+        cache_dir = os.path.join("/tmp", "hirenow_receipt_fonts")
+        os.makedirs(cache_dir, exist_ok=True)
+        path = os.path.join(cache_dir, font_name + ".ttf")
+        if not os.path.exists(path):
+            try:
+                resp = _requests.get(url, timeout=15)
+                resp.raise_for_status()
+                with open(path, "wb") as font_file:
+                    font_file.write(resp.content)
+            except Exception as exc:
+                app.logger.warning("Receipt font download failed for %s: %s", lang, exc)
+                return "Helvetica"
+    try:
+        pdfmetrics.registerFont(TTFont(font_name, path, shapable=True))
+        return font_name
+    except Exception as exc:
+        app.logger.warning("Receipt font registration failed for %s: %s", lang, exc)
+        return "Helvetica"
+
+
+def receipt_visual_text(text, lang):
+    text = "-" if text is None or text == "" else str(text)
+    if normalize_language(lang) in ("ar", "ur"):
+        try:
+            return get_display(arabic_reshaper.reshape(text))
+        except Exception:
+            return text
+    return text
+
+
 def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
-    """Generate a professional branded Hire Now PDF receipt."""
+    """Generate a professional branded Hire Now PDF receipt in the user's selected language."""
+    lang = normalize_language((hirer["preferred_language"] if audience == "hirer" and hirer and "preferred_language" in hirer.keys() else None) or (worker["preferred_language"] if audience == "worker" and worker and "preferred_language" in worker.keys() else None) or "en")
+    label = lambda key: receipt_text(lang, key)
+    content_font = receipt_font_for_language(lang)
+    is_rtl = lang in ("ar", "ur")
+    shaping = content_font != "Helvetica" and not is_rtl
     buf = BytesIO()
     pdf = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
@@ -1918,11 +2185,13 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         pdf.drawCentredString(center_x + 18 * mm, height - 30 * mm, "Now")
 
     pdf.setFillColor(ORANGE)
-    pdf.setFont("Helvetica-Bold", 13)
+    pdf.setFont(content_font if content_font != "Helvetica" else "Helvetica-Bold", 13)
     pdf.drawCentredString(
         center_x,
         height - 52 * mm,
-        "PAYMENT RECEIPT" if audience == "hirer" else "WORKER EARNINGS RECEIPT",
+        receipt_visual_text(label("payment_receipt") if audience == "hirer" else label("worker_receipt"), lang),
+        direction="RTL" if is_rtl else "LTR",
+        shaping=shaping,
     )
     pdf.setFillColor(colors.white)
     pdf.setFont("Helvetica", 8.5)
@@ -1930,8 +2199,9 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
 
     y = height - 76 * mm
 
-    def fit_centered_text(text, font="Helvetica", size=9, max_width=None, leading=4.4 * mm, color=TEXT):
+    def fit_centered_text(text, font=None, size=9, max_width=None, leading=4.4 * mm, color=TEXT):
         nonlocal y
+        font = font or content_font
         max_width = max_width or (content_w - 14 * mm)
         raw = "-" if text is None or text == "" else str(text)
         words = raw.split()
@@ -1952,7 +2222,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         pdf.setFillColor(color)
         pdf.setFont(font, size)
         for line_text in lines:
-            pdf.drawCentredString(center_x, y, line_text)
+            pdf.drawCentredString(center_x, y, receipt_visual_text(line_text, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
             y -= leading
         return len(lines)
 
@@ -1964,7 +2234,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
             label_text = str(label)
             value_text = "-" if value is None or value == "" else str(value)
             pair = f"{label_text}: {value_text}"
-            font = "Helvetica-Bold" if emphasized else "Helvetica"
+            font = content_font
             size = 9.2 if emphasized else 8.6
             words = pair.split()
             line_list = []
@@ -1997,15 +2267,15 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         pdf.roundRect(left, top - box_h, content_w, box_h, 3 * mm, fill=1, stroke=1)
 
         pdf.setFillColor(NAVY)
-        pdf.setFont("Helvetica-Bold", 10.5)
-        pdf.drawCentredString(center_x, top - 6.5 * mm, title.upper())
+        pdf.setFont(content_font, 10.5)
+        pdf.drawCentredString(center_x, top - 6.5 * mm, receipt_visual_text(title, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
         y = top - 12 * mm
 
         for lines, font, size, emphasized in prepared:
             pdf.setFillColor(ORANGE if emphasized else TEXT)
             pdf.setFont(font, size)
             for line_text in lines:
-                pdf.drawCentredString(center_x, y, line_text)
+                pdf.drawCentredString(center_x, y, receipt_visual_text(line_text, lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
                 y -= 4.7 * mm
         y = top - box_h - 5 * mm
 
@@ -2018,59 +2288,59 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
     payment_status = (booking["payment_status"] or "").replace("_", " ").title()
     booking_status = (booking["status"] or "").replace("_", " ").title()
 
-    section("Receipt Summary", [
-        ("Receipt No.", receipt_no, True),
-        ("Booking ID", f"#{booking['id']}", False),
-        ("Generated", generated, False),
-        ("Booking Status", booking_status, False),
-        ("Payment Status", payment_status, True),
+    section(label("receipt_summary"), [
+        (label("receipt_no"), receipt_no, True),
+        (label("booking_id"), f"#{booking['id']}", False),
+        (label("generated"), generated, False),
+        (label("booking_status"), booking_status, False),
+        (label("payment_status"), payment_status, True),
     ])
 
-    section("Booking & Service Details", [
-        ("Service Type", booking_type, False),
-        ("Service / Skill", worker["skill"] if worker and "skill" in worker.keys() else "-", False),
-        ("Service Date", booking["start_date"], False),
-        ("Scheduled Time", f"{start_time} - {end_time}", False),
-        ("Actual Work Time", f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
-        ("Work Address", booking["address"] or "-", False),
-        ("Instructions", booking["special_instructions"] or "-", False),
+    section(label("booking_service"), [
+        (label("service_type"), booking_type, False),
+        (label("service_skill"), worker["skill"] if worker and "skill" in worker.keys() else "-", False),
+        (label("service_date"), booking["start_date"], False),
+        (label("scheduled_time"), f"{start_time} - {end_time}", False),
+        (label("actual_work"), f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
+        (label("work_address"), booking["address"] or "-", False),
+        (label("instructions"), booking["special_instructions"] or "-", False),
     ])
 
-    section("Hirer & Worker", [
-        ("Hirer", hirer["name"] if hirer else "-", False),
-        ("Hirer Contact", hirer["phone"] if hirer and "phone" in hirer.keys() else "-", False),
-        ("Worker", worker["name"] if worker else "-", False),
-        ("Worker Contact", worker["phone"] if worker and "phone" in worker.keys() else "-", False),
-        ("Worker City", worker["city"] if worker and "city" in worker.keys() else "-", False),
+    section(label("hirer_worker"), [
+        (label("hirer"), hirer["name"] if hirer else "-", False),
+        (label("hirer_contact"), hirer["phone"] if hirer and "phone" in hirer.keys() else "-", False),
+        (label("worker"), worker["name"] if worker else "-", False),
+        (label("worker_contact"), worker["phone"] if worker and "phone" in worker.keys() else "-", False),
+        (label("worker_city"), worker["city"] if worker and "city" in worker.keys() else "-", False),
     ])
 
     payment_rows = [
-        ("Payment Method", payment_method, False),
-        ("Payment Status", payment_status, True),
-        ("Final Booking Amount", f"INR {int(booking['total_amount'] or 0)}", True),
-        ("Amount Received", f"INR {int(booking['paid_amount'] or 0)}", True),
+        (label("payment_method"), payment_method, False),
+        (label("payment_status"), payment_status, True),
+        (label("final_amount"), f"INR {int(booking['total_amount'] or 0)}", True),
+        (label("received"), f"INR {int(booking['paid_amount'] or 0)}", True),
     ]
     if int(booking["diagnosis_fee"] or 0):
-        payment_rows.append(("Diagnosis Fee", f"INR {int(booking['diagnosis_fee'] or 0)}", False))
+        payment_rows.append((label("diagnosis_fee"), f"INR {int(booking['diagnosis_fee'] or 0)}", False))
     if int(booking["work_amount"] or 0):
-        payment_rows.append(("Work Amount", f"INR {int(booking['work_amount'] or 0)}", False))
+        payment_rows.append((label("work_amount"), f"INR {int(booking['work_amount'] or 0)}", False))
     if booking["payment_id"]:
-        payment_rows.append(("Payment ID", booking["payment_id"], False))
+        payment_rows.append((label("payment_id"), booking["payment_id"], False))
     if booking["razorpay_order_id"]:
-        payment_rows.append(("Order ID", booking["razorpay_order_id"], False))
+        payment_rows.append((label("order_id"), booking["razorpay_order_id"], False))
     if booking["cash_verified_at"]:
-        payment_rows.append(("Cash OTP Verified", booking["cash_verified_at"], False))
-    section("Payment Details", payment_rows)
+        payment_rows.append((label("cash_verified"), booking["cash_verified_at"], False))
+    section(label("payment_details"), payment_rows)
 
     if audience == "worker":
         finance_rows = [
-            ("Gross Booking Amount", f"INR {int(finance['gross_amount'] or 0)}", False),
-            ("Platform Commission", f"INR {int(finance['platform_commission'] or 0)}", False),
-            ("Worker Net Earning", f"INR {int(finance['worker_net'] or 0)}", True),
-            ("Settlement Status", (finance["settlement_status"] or "not_ready").replace("_", " ").title(), True),
-            ("Settlement Reference", finance["settlement_reference"] or "-", False),
+            (label("gross"), f"INR {int(finance['gross_amount'] or 0)}", False),
+            (label("commission"), f"INR {int(finance['platform_commission'] or 0)}", False),
+            (label("worker_net"), f"INR {int(finance['worker_net'] or 0)}", True),
+            (label("settlement"), (finance["settlement_status"] or "not_ready").replace("_", " ").title(), True),
+            (label("settlement_ref"), finance["settlement_reference"] or "-", False),
         ]
-        section("Worker Earnings", finance_rows)
+        section(label("worker_earnings"), finance_rows)
 
     # Centered support/footer card.
     if y < 66 * mm:
@@ -2082,8 +2352,8 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
 
     footer_y = y - 8 * mm
     pdf.setFillColor(ORANGE)
-    pdf.setFont("Helvetica-Bold", 10.5)
-    pdf.drawCentredString(center_x, footer_y, "HIRE NOW - CUSTOMER SUPPORT")
+    pdf.setFont(content_font if content_font != "Helvetica" else "Helvetica-Bold", 10.5)
+    pdf.drawCentredString(center_x, footer_y, receipt_visual_text(label("support"), lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
     footer_y -= 6 * mm
 
     pdf.setFillColor(colors.white)
@@ -2100,8 +2370,8 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
 
     footer_y -= 1 * mm
     pdf.setFillColor(colors.HexColor("#DCE6F5"))
-    pdf.setFont("Helvetica-Oblique", 7.5)
-    pdf.drawCentredString(center_x, footer_y, "This is a system-generated receipt. No signature is required.")
+    pdf.setFont(content_font if content_font != "Helvetica" else "Helvetica-Oblique", 7.5)
+    pdf.drawCentredString(center_x, footer_y, receipt_visual_text(label("system_note"), lang), direction="RTL" if is_rtl else "LTR", shaping=shaping)
 
     pdf.save()
     buf.seek(0)
@@ -2149,8 +2419,8 @@ def hirer_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone, preferred_language FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city, preferred_language FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
@@ -2172,8 +2442,8 @@ def worker_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone, preferred_language FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city, preferred_language FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
@@ -2566,7 +2836,7 @@ def hirer_profile():
     if auth_error:
         return auth_error
     conn = get_db()
-    hirer = conn.execute("SELECT id, name, phone, created_at FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
+    hirer = conn.execute("SELECT id, name, phone, preferred_language, preferred_theme, notifications_enabled, home_address, home_city, home_latitude, home_longitude, location_updated_at, created_at FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
     counts = conn.execute(
         "SELECT COUNT(*) AS bookings, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed FROM bookings WHERE hirer_id = ?",
         (current_hirer_id(),),
