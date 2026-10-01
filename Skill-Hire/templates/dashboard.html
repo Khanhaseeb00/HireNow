@@ -1550,7 +1550,7 @@
         '<div class="avatar" style="width:42px;height:42px;background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
         '<div class="body"><div class="name">' + b.worker_name + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
           '<div class="amount">' + fmtMoney(b.total_amount) + '</div>' +
-          '<div class="sub">' + (b.payment_method === "cash" ? "Cash after work" : (b.payment_status === "paid" ? "Online paid" : "Online payment pending")) + '</div>' +
+          '<div class="sub">' + (b.status==="cancelled"||b.status==="rejected" ? "No payment due" : (b.payment_method === "cash" ? (b.payment_status==="paid"?"Cash verified":"Cash after work") : (b.payment_status === "paid" ? "Online paid" : b.payment_status==="refund_pending"?"Refund pending":b.payment_status==="balance_due"?"Balance due":"Online payment pending"))) + '</div>' +
           '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + (b.status === "rejected" ? "Rejected" : statusLabel(b.status)) + '</span></div>' +
         '<div style="color:var(--ink-soft);">›</div>' +
       '</div>';
@@ -1626,7 +1626,7 @@
             '<div class="ref-detail-row"><div class="k">Paid Amount</div><div class="v">'+fmtMoney(b.paid_amount||0)+'</div></div>' +
             (b.actual_minutes?'<div class="ref-detail-row"><div class="k">Actual Work</div><div class="v">'+b.actual_minutes+' min · '+fmtMoney(b.work_amount||0)+'</div></div>':'') +
             (b.diagnosis_fee?'<div class="ref-detail-row"><div class="k">Diagnosis Fee</div><div class="v">'+fmtMoney(b.diagnosis_fee)+'</div></div>':'') +
-            '<div class="ref-detail-row"><div class="k">Payment</div><div class="v"><span class="ref-status">'+String(b.payment_status||"pending").replaceAll("_"," ")+'</span></div></div>' +
+            '<div class="ref-detail-row"><div class="k">Payment</div><div class="v"><span class="ref-status">'+((b.status==="cancelled"||b.status==="rejected")&&Number(b.paid_amount||0)===0?"No payment due":String(b.payment_status||"pending").replaceAll("_"," "))+'</span></div></div>' +
             '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+statusLabel(b.status)+'</span></div></div>' +
           '</div>' +
           '<div class="ref-detail-actions">' +

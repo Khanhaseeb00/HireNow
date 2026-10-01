@@ -438,6 +438,89 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertEqual(worker_pdf.mimetype, "application/pdf")
         self.assertTrue(worker_pdf.data.startswith(b"%PDF"))
 
+    def test_cash_paid_booking_is_immediately_settled_and_no_adjustment(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Cash Hirer", "9000000801", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000801",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Cash Worker", "9000000802", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000802",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status, cash_verified_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-08", 2, "cash", 248, 248, 248, "completed", "paid", "2099-01-08T12:00:00"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        finance = app.sync_booking_financials(conn, booking_id)
+        conn.commit()
+        row = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        adjustments = conn.execute("SELECT COUNT(*) AS n FROM payment_adjustments WHERE booking_id=? AND status='pending'", (booking_id,)).fetchone()["n"]
+        conn.close()
+        self.assertEqual(finance["settlement_status"], "settled")
+        self.assertEqual(row["settlement_status"], "settled")
+        self.assertEqual(row["settlement_reference"], "cash_otp")
+        self.assertEqual(row["payment_collected"], 248)
+        self.assertEqual(adjustments, 0)
+
+    def test_cancelled_unpaid_booking_has_no_payment_pending(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Cancel Hirer", "9000000811", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000811",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Cancel Worker", "9000000812", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000812",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, status, payment_status)
+                        VALUES (?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-09", 2, "online", 248, 0, "confirmed", "pending"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.commit(); conn.close()
+
+        with self.client.session_transaction() as sess:
+            sess.clear()
+            sess["hirer_id"] = hirer_id
+        response = self.client.post(f"/api/bookings/{booking_id}/cancel", json={"reason":"No longer needed"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["payment_status"], "cancelled")
+
+        conn = get_db()
+        booking = conn.execute("SELECT status, payment_status, paid_amount FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        pending = conn.execute("SELECT COUNT(*) AS n FROM payment_adjustments WHERE booking_id=? AND status='pending'", (booking_id,)).fetchone()["n"]
+        conn.close()
+        self.assertEqual(booking["status"], "cancelled")
+        self.assertEqual(booking["payment_status"], "cancelled")
+        self.assertEqual(booking["paid_amount"], 0)
+        self.assertEqual(pending, 0)
+
+    def test_legacy_paid_amount_repair_and_cash_settlement(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Legacy Hirer", "9000000821", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000821",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Legacy Worker", "9000000822", "x", "Painter", "Test City", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000822",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, hours, payment_method,
+                        total_amount, paid_amount, work_amount, status, payment_status, cash_verified_at)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-10", 2, "cash", 750, 0, 750, "completed", "paid", "2099-01-10T12:00:00"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.execute("""INSERT INTO booking_financials(booking_id, worker_id, gross_amount, work_amount,
+                        platform_commission, worker_net, payment_collected, adjustment_amount, settlement_status)
+                        VALUES (?,?,?,?,?,?,?,?,?)""",
+                     (booking_id, worker_id, 750, 750, 75, 675, 0, -750, "pending"))
+        conn.commit(); conn.close()
+
+        app.ensure_schema_extensions()
+
+        conn = get_db()
+        booking = conn.execute("SELECT paid_amount FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        finance = conn.execute("SELECT payment_collected, adjustment_amount, settlement_status, settlement_reference FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.close()
+        self.assertEqual(booking["paid_amount"], 750)
+        self.assertEqual(finance["payment_collected"], 750)
+        self.assertEqual(finance["adjustment_amount"], 0)
+        self.assertEqual(finance["settlement_status"], "settled")
+        self.assertEqual(finance["settlement_reference"], "cash_otp")
+
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:
             sess.clear()
