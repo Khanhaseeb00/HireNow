@@ -294,6 +294,53 @@ def worker_notifications_read():
     return jsonify({"ok": True})
 
 
+def _moderated_account_state(table, account_id):
+    if not account_id:
+        return None
+    conn = get_db()
+    try:
+        return conn.execute(
+            f"SELECT account_status, account_status_reason, deleted_at FROM {table} WHERE id = ?",
+            (account_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+
+def _moderated_account_blocked(row):
+    return not row or row["deleted_at"] is not None or (row["account_status"] or "active") != "active"
+
+
+def _moderated_account_response(row):
+    status = (row["account_status"] or "active") if row else "deleted"
+    reason = row["account_status_reason"] if row else None
+    message = "This account is temporarily frozen by HireNow admin." if status == "frozen" else "This account is no longer active."
+    payload = {"error": message, "account_status": status}
+    if reason:
+        payload["reason"] = reason
+    return jsonify(payload), 403
+
+
+@app.before_request
+def enforce_moderated_accounts():
+    """Block frozen/deleted hirer and worker sessions across all API actions."""
+    if not request.path.startswith("/api/") or request.path.startswith("/api/admin/"):
+        return None
+    worker_id = session.get("worker_id")
+    if worker_id:
+        row = _moderated_account_state("workers", worker_id)
+        if _moderated_account_blocked(row):
+            session.pop("worker_id", None)
+            return _moderated_account_response(row)
+    hirer_id = session.get("hirer_id")
+    if hirer_id:
+        row = _moderated_account_state("hirers", hirer_id)
+        if _moderated_account_blocked(row):
+            session.pop("hirer_id", None)
+            return _moderated_account_response(row)
+    return None
+
+
 @app.get("/")
 def dashboard():
     """
@@ -534,6 +581,8 @@ def login():
     conn.close()
     if not hirer or not check_password_hash(hirer["password_hash"], password or ""):
         return jsonify({"error": "Invalid phone or password"}), 401
+    if _moderated_account_blocked(hirer):
+        return _moderated_account_response(hirer)
 
     session["hirer_id"] = hirer["id"]
     return jsonify({"id": hirer["id"], "name": hirer["name"], "phone": hirer["phone"]})
@@ -597,6 +646,8 @@ def worker_login():
     conn.close()
     if not worker or not worker["password_hash"] or not check_password_hash(worker["password_hash"], password or ""):
         return jsonify({"error": "Invalid phone or password"}), 401
+    if _moderated_account_blocked(worker):
+        return _moderated_account_response(worker)
 
     session["worker_id"] = worker["id"]
     return jsonify({"id": worker["id"], "name": worker["name"], "phone": worker["phone"]})
@@ -781,7 +832,7 @@ def list_workers():
     city = request.args.get("city")
     q = request.args.get("q")
 
-    query = "SELECT * FROM workers WHERE 1=1"
+    query = "SELECT * FROM workers WHERE account_status = 'active' AND deleted_at IS NULL"
     params = []
     if skill:
         query += " AND skill = ?"
@@ -809,7 +860,7 @@ def list_workers():
 @app.get("/api/workers/<int:worker_id>")
 def get_worker(worker_id):
     conn = get_db()
-    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ?"), (worker_id,)).fetchone()
+    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL"), (worker_id,)).fetchone()
     conn.close()
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
