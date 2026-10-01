@@ -83,6 +83,7 @@ def ensure_schema_extensions():
         "work_ended_at": "TEXT",
         "actual_minutes": "INTEGER NOT NULL DEFAULT 0",
         "work_amount": "INTEGER NOT NULL DEFAULT 0",
+        "paid_amount": "INTEGER NOT NULL DEFAULT 0",
     }
     for column, definition in additions.items():
         if column not in existing:
@@ -170,6 +171,36 @@ def ensure_schema_extensions():
             id {id_column_sql()}, account_type TEXT NOT NULL, account_id {foreign_id_sql()} NOT NULL,
             action TEXT NOT NULL, reason TEXT, admin_username TEXT,
             created_at TEXT DEFAULT {text_timestamp_default()}
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS platform_settings (
+            setting_key TEXT PRIMARY KEY,
+            setting_value TEXT NOT NULL,
+            updated_at TEXT
+        )
+    """)
+    conn.execute(
+        "INSERT INTO platform_settings(setting_key, setting_value, updated_at) VALUES ('commission_percent','10',?) ON CONFLICT(setting_key) DO NOTHING",
+        (datetime.utcnow().isoformat(),),
+    )
+    conn.execute(f"""
+        CREATE TABLE IF NOT EXISTS booking_financials (
+            booking_id {foreign_id_sql()} PRIMARY KEY,
+            worker_id {foreign_id_sql()} NOT NULL,
+            gross_amount INTEGER NOT NULL DEFAULT 0,
+            diagnosis_fee INTEGER NOT NULL DEFAULT 0,
+            work_amount INTEGER NOT NULL DEFAULT 0,
+            platform_commission INTEGER NOT NULL DEFAULT 0,
+            worker_net INTEGER NOT NULL DEFAULT 0,
+            payment_collected INTEGER NOT NULL DEFAULT 0,
+            adjustment_amount INTEGER NOT NULL DEFAULT 0,
+            settlement_status TEXT NOT NULL DEFAULT 'not_ready',
+            settlement_reference TEXT,
+            created_at TEXT DEFAULT {text_timestamp_default()},
+            updated_at TEXT DEFAULT {text_timestamp_default()},
+            FOREIGN KEY(booking_id) REFERENCES bookings(id),
+            FOREIGN KEY(worker_id) REFERENCES workers(id)
         )
     """)
     conn.execute("""
@@ -872,6 +903,65 @@ def get_worker(worker_id):
     return jsonify(result)
 
 
+def get_commission_percent(conn):
+    row = conn.execute("SELECT setting_value FROM platform_settings WHERE setting_key='commission_percent'").fetchone()
+    try:
+        return max(0.0, min(100.0, float(row["setting_value"] if row else 10)))
+    except (TypeError, ValueError):
+        return 10.0
+
+
+def sync_booking_financials(conn, booking_id):
+    booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+    if not booking:
+        return None
+    gross = int(booking["total_amount"] or 0)
+    diagnosis_fee = int(booking["diagnosis_fee"] or 0)
+    work_amount = int(booking["work_amount"] or 0)
+    paid_amount = int(booking["paid_amount"] or 0)
+    commission_percent = get_commission_percent(conn)
+    commission = round(gross * commission_percent / 100)
+    worker_net = max(0, gross - commission)
+    adjustment = paid_amount - gross
+    payout = conn.execute("SELECT verification_status FROM worker_payout_accounts WHERE worker_id = ?", (booking["worker_id"],)).fetchone()
+    if booking["status"] == "completed" and booking["payment_status"] == "paid":
+        settlement_status = "pending" if payout and payout["verification_status"] == "verified" else "held"
+    elif booking["status"] == "completed" and booking["payment_status"] in ("balance_due", "refund_pending"):
+        settlement_status = "held"
+    else:
+        settlement_status = "not_ready"
+    now = datetime.utcnow().isoformat()
+    conn.execute("""
+        INSERT INTO booking_financials
+        (booking_id, worker_id, gross_amount, diagnosis_fee, work_amount, platform_commission,
+         worker_net, payment_collected, adjustment_amount, settlement_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(booking_id) DO UPDATE SET
+          gross_amount=excluded.gross_amount,
+          diagnosis_fee=excluded.diagnosis_fee,
+          work_amount=excluded.work_amount,
+          platform_commission=excluded.platform_commission,
+          worker_net=excluded.worker_net,
+          payment_collected=excluded.payment_collected,
+          adjustment_amount=excluded.adjustment_amount,
+          settlement_status=CASE
+            WHEN booking_financials.settlement_status='settled' THEN 'settled'
+            ELSE excluded.settlement_status
+          END,
+          updated_at=excluded.updated_at
+    """, (booking_id, booking["worker_id"], gross, diagnosis_fee, work_amount, commission,
+          worker_net, paid_amount, adjustment, settlement_status, now, now))
+    return {
+        "gross_amount": gross,
+        "platform_commission": commission,
+        "worker_net": worker_net,
+        "payment_collected": paid_amount,
+        "adjustment_amount": adjustment,
+        "settlement_status": settlement_status,
+        "commission_percent": commission_percent,
+    }
+
+
 def derived_hourly_rate(worker):
     """Display/billing rate derived from the admin-reviewable daily wage."""
     return round(float(worker["daily_wage"]) / STANDARD_WORKDAY_HOURS, 2)
@@ -963,10 +1053,18 @@ def worker_work_timer(booking_id):
     hourly = derived_hourly_rate(worker)
     work_amount = round(hourly * minutes / 60)
     total = int(booking["diagnosis_fee"] or 0) + int(work_amount)
-    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed' WHERE id = ?""",
-                 (now.isoformat(), minutes, work_amount, total, booking_id))
+    paid_amount = int(booking["paid_amount"] or 0)
+    payment_status = booking["payment_status"]
+    if booking["payment_method"] == "online" and payment_status == "paid":
+        if paid_amount < total:
+            payment_status = "balance_due"
+        elif paid_amount > total:
+            payment_status = "refund_pending"
+    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed', payment_status = ? WHERE id = ?""",
+                 (now.isoformat(), minutes, work_amount, total, payment_status, booking_id))
+    finance = sync_booking_financials(conn, booking_id)
     conn.commit(); conn.close()
-    return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total})
+    return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total, "payment_status": payment_status, "finance": finance})
 
 
 
@@ -1201,7 +1299,7 @@ def verify_payment():
         return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
 
     conn.execute(
-        "UPDATE bookings SET payment_status = 'paid', payment_id = ? WHERE id = ?",
+        "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
         (payment_id, booking["id"]),
     )
     conn.execute(
@@ -1212,6 +1310,7 @@ def verify_payment():
     hirer = conn.execute("SELECT name, phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
     add_in_app_notification(conn, "hirer", booking["hirer_id"], "payment_paid", "Payment successful", f"Online payment for booking #{booking['id']} was verified.", booking["id"])
     add_in_app_notification(conn, "worker", booking["worker_id"], "payment_paid", "Booking paid", f"Online payment for booking #{booking['id']} is complete. You can proceed with the job.", booking["id"])
+    sync_booking_financials(conn, booking["id"])
     conn.commit()
     conn.close()
 
@@ -1253,7 +1352,7 @@ def razorpay_webhook():
         booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
         if booking and booking["payment_method"] == "online" and booking["status"] == "confirmed" and booking["payment_status"] != "paid":
             conn.execute(
-                "UPDATE bookings SET payment_status = 'paid', payment_id = ? WHERE id = ?",
+                "UPDATE bookings SET payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
                 (payment_id, booking["id"]),
             )
             conn.execute(
@@ -1261,6 +1360,7 @@ def razorpay_webhook():
                 (booking["id"],),
             )
             worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
+            sync_booking_financials(conn, booking["id"])
             conn.commit()
             if worker and worker["phone"]:
                 notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
@@ -1636,7 +1736,7 @@ def verify_cash_payment_otp(booking_id):
 
     verified_at = datetime.now().isoformat()
     conn.execute(
-        """UPDATE bookings SET payment_status = 'paid', cash_verified_at = ?,
+        """UPDATE bookings SET payment_status = 'paid', cash_verified_at = ?, paid_amount = total_amount,
            cash_otp_hash = NULL, cash_otp_expires_at = NULL WHERE id = ?""",
         (verified_at, booking_id),
     )
@@ -1647,6 +1747,7 @@ def verify_cash_payment_otp(booking_id):
     hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
     add_in_app_notification(conn, "hirer", booking["hirer_id"], "cash_verified", "Cash payment verified", f"Cash payment for booking #{booking_id} was verified by OTP.", booking_id)
     add_in_app_notification(conn, "worker", booking["worker_id"], "cash_verified", "Cash payment received", f"Cash payment for booking #{booking_id} is verified and added to earnings.", booking_id)
+    sync_booking_financials(conn, booking_id)
     conn.commit()
     conn.close()
 
@@ -2033,6 +2134,109 @@ def admin_rate_review(worker_id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "rate_status": decision, "note": note})
+
+
+@app.get("/api/worker/earnings-summary")
+def worker_earnings_summary():
+    err = require_worker_login()
+    if err: return err
+    conn = get_db()
+    rows = conn.execute("""SELECT bf.*, b.start_date, b.booking_type, b.payment_status
+                           FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
+                           WHERE bf.worker_id=? ORDER BY bf.booking_id DESC""", (current_worker_id(),)).fetchall()
+    items = rows_to_list(rows)
+    conn.close()
+    return jsonify({
+        "items": items,
+        "gross": sum(int(x["gross_amount"] or 0) for x in items),
+        "commission": sum(int(x["platform_commission"] or 0) for x in items),
+        "net": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] in ("pending","settled")),
+        "pending": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] == "pending"),
+        "settled": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] == "settled"),
+    })
+
+
+@app.get("/api/admin/finance")
+def admin_finance():
+    err = _check_admin_session()
+    if err: return err
+    conn = get_db()
+    rows = conn.execute("""SELECT bf.*, b.payment_status, b.status AS booking_status,
+                                  w.name AS worker_name, h.name AS hirer_name
+                           FROM booking_financials bf
+                           JOIN bookings b ON b.id=bf.booking_id
+                           JOIN workers w ON w.id=bf.worker_id
+                           JOIN hirers h ON h.id=b.hirer_id
+                           ORDER BY bf.booking_id DESC LIMIT 500""").fetchall()
+    commission = get_commission_percent(conn)
+    items = rows_to_list(rows)
+    conn.close()
+    return jsonify({
+        "commission_percent": commission,
+        "items": items,
+        "platform_revenue": sum(int(x["platform_commission"] or 0) for x in items if x["booking_status"]=="completed"),
+        "worker_payable": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] in ("pending","held")),
+    })
+
+
+@app.put("/api/admin/finance/commission")
+def admin_set_commission():
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    try:
+        percent = float(data.get("percent"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "percent must be a number"}), 400
+    if percent < 0 or percent > 50:
+        return jsonify({"error": "Commission must be between 0 and 50 percent"}), 400
+    conn = get_db()
+    conn.execute("""INSERT INTO platform_settings(setting_key, setting_value, updated_at)
+                    VALUES ('commission_percent', ?, ?)
+                    ON CONFLICT(setting_key) DO UPDATE SET setting_value=excluded.setting_value, updated_at=excluded.updated_at""",
+                 (str(percent), datetime.utcnow().isoformat()))
+    for row in conn.execute("SELECT id FROM bookings WHERE status='completed'").fetchall():
+        sync_booking_financials(conn, row["id"])
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "commission_percent": percent})
+
+
+@app.get("/api/admin/payout-accounts")
+def admin_payout_accounts():
+    err = _check_admin_session()
+    if err: return err
+    conn = get_db()
+    rows = conn.execute("""SELECT p.worker_id, p.account_holder_name, p.account_number_last4, p.ifsc,
+                                  p.bank_name, p.upi_id, p.verification_status, w.name AS worker_name,
+                                  w.phone AS worker_phone
+                           FROM worker_payout_accounts p JOIN workers w ON w.id=p.worker_id
+                           ORDER BY p.updated_at DESC""").fetchall()
+    conn.close()
+    return jsonify(rows_to_list(rows))
+
+
+@app.post("/api/admin/payout-accounts/<int:worker_id>/review")
+def admin_review_payout_account(worker_id):
+    err = _check_admin_session()
+    if err: return err
+    err = _check_admin_csrf()
+    if err: return err
+    data = request.get_json(force=True) or {}
+    decision = (data.get("decision") or "").strip().lower()
+    if decision not in ("verified", "rejected"):
+        return jsonify({"error": "decision must be verified or rejected"}), 400
+    conn = get_db()
+    row = conn.execute("SELECT worker_id FROM worker_payout_accounts WHERE worker_id=?", (worker_id,)).fetchone()
+    if not row:
+        conn.close(); return jsonify({"error": "Payout account not found"}), 404
+    conn.execute("UPDATE worker_payout_accounts SET verification_status=?, updated_at=? WHERE worker_id=?",
+                 (decision, datetime.utcnow().isoformat(), worker_id))
+    for booking in conn.execute("SELECT id FROM bookings WHERE worker_id=? AND status='completed'", (worker_id,)).fetchall():
+        sync_booking_financials(conn, booking["id"])
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "verification_status": decision})
 
 
 @app.get("/api/admin/bookings")
