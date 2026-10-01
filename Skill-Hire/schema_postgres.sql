@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS workers (
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
+CREATE TABLE IF NOT EXISTS worker_payout_accounts (
+    worker_id BIGINT PRIMARY KEY REFERENCES workers(id),
+    account_holder_name TEXT NOT NULL,
+    account_number_last4 TEXT NOT NULL,
+    account_number_encrypted TEXT,
+    ifsc TEXT NOT NULL,
+    bank_name TEXT,
+    upi_id TEXT,
+    provider_account_id TEXT,
+    provider_fund_account_id TEXT,
+    verification_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
 CREATE TABLE IF NOT EXISTS hirers (
     id BIGSERIAL PRIMARY KEY,
     name TEXT NOT NULL,
