@@ -609,6 +609,33 @@ class HireNowSmokeTests(unittest.TestCase):
         self.assertEqual(booking["paid_amount"], 500)
         self.assertEqual(booking["payment_id"], "pay_switch_verify")
 
+    def test_branded_receipt_contains_professional_contact_details(self):
+        conn = get_db()
+        conn.execute("INSERT INTO hirers(name, phone, password_hash) VALUES (?,?,?)", ("Brand Hirer", "9000000991", "x"))
+        hirer_id = conn.execute("SELECT id FROM hirers WHERE phone=?", ("9000000991",)).fetchone()["id"]
+        conn.execute("""INSERT INTO workers(name, phone, password_hash, skill, city, daily_wage, rate_status)
+                        VALUES (?,?,?,?,?,?,?)""", ("Brand Worker", "9000000992", "x", "Plumber", "Balrampur", 800, "approved"))
+        worker_id = conn.execute("SELECT id FROM workers WHERE phone=?", ("9000000992",)).fetchone()["id"]
+        conn.execute("""INSERT INTO bookings(hirer_id, worker_id, start_date, start_time, end_time, hours, address,
+                        special_instructions, booking_type, payment_method, total_amount, paid_amount, work_amount,
+                        actual_minutes, status, payment_status, payment_id, razorpay_order_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                     (hirer_id, worker_id, "2099-01-20", "10:00", "12:00", 2, "Jarwa Road, Tulsipur",
+                      "Test receipt details", "regular", "online", 500, 500, 500, 120, "completed", "paid",
+                      "pay_brand_1", "order_brand_1"))
+        booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        app.sync_booking_financials(conn, booking_id)
+        booking = conn.execute("SELECT * FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (hirer_id,)).fetchone()
+        worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (worker_id,)).fetchone()
+        finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
+        conn.close()
+
+        pdf_buffer = app.build_payment_receipt_pdf(booking, hirer, worker, finance, "hirer")
+        pdf_bytes = pdf_buffer.getvalue()
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertGreater(len(pdf_bytes), 5000)
+
     def test_worker_payout_endpoint_requires_login(self):
         with self.client.session_transaction() as sess:
             sess.clear()

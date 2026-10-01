@@ -33,6 +33,9 @@ import math
 import requests as _requests
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+from reportlab.lib.utils import ImageReader
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 
@@ -1844,71 +1847,262 @@ def create_razorpay_order(booking_id):
 
 
 def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
-    """Generate a compact PDF payment/earning receipt for hirer or worker."""
+    """Generate a professional branded Hire Now PDF receipt."""
     buf = BytesIO()
     pdf = canvas.Canvas(buf, pagesize=A4)
     width, height = A4
-    x = 20 * mm
-    y = height - 20 * mm
 
-    pdf.setTitle(f"HireNow Receipt #{booking['id']}")
-    pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(x, y, "HireNow")
-    pdf.setFont("Helvetica", 10)
-    pdf.drawRightString(width - x, y + 2, f"Receipt #{booking['id']}")
-    y -= 12 * mm
+    NAVY = colors.HexColor("#0B1E3F")
+    ORANGE = colors.HexColor("#FF9F1C")
+    SOFT = colors.HexColor("#F5F7FB")
+    TEXT = colors.HexColor("#172033")
+    MUTED = colors.HexColor("#6B7280")
+    BORDER = colors.HexColor("#D9E1EC")
+    LIGHT_WATERMARK = colors.HexColor("#EEF2F7")
 
+    center_x = width / 2
+    content_w = 166 * mm
+    left = (width - content_w) / 2
+    right = left + content_w
+    y = height - 14 * mm
+
+    pdf.setTitle(f"Hire Now Receipt #{booking['id']}")
+    pdf.setAuthor("Hire Now")
+
+    # Centered watermark.
+    pdf.saveState()
+    try:
+        pdf.setFillAlpha(0.45)
+    except Exception:
+        pass
+    pdf.setFillColor(LIGHT_WATERMARK)
+    pdf.setFont("Helvetica-Bold", 48)
+    pdf.translate(center_x, height / 2)
+    pdf.rotate(32)
+    pdf.drawCentredString(0, 0, "HIRE NOW")
+    pdf.restoreState()
+
+    # Header card.
+    pdf.setFillColor(NAVY)
+    pdf.roundRect(left, height - 66 * mm, content_w, 52 * mm, 5 * mm, fill=1, stroke=0)
+
+    logo_path = os.path.join(os.path.dirname(__file__), "static", "brand", "hirenow-logo.webp")
+    logo_drawn = False
+    try:
+        logo = ImageReader(logo_path)
+        iw, ih = logo.getSize()
+        logo_w = 39 * mm
+        logo_h = logo_w * ih / iw
+        max_h = 25 * mm
+        if logo_h > max_h:
+            logo_h = max_h
+            logo_w = logo_h * iw / ih
+        pdf.drawImage(
+            logo,
+            center_x - logo_w / 2,
+            height - 42 * mm,
+            width=logo_w,
+            height=logo_h,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
+        logo_drawn = True
+    except Exception:
+        app.logger.exception("Receipt logo could not be rendered")
+
+    if not logo_drawn:
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 22)
+        pdf.drawCentredString(center_x, height - 30 * mm, "Hire")
+        pdf.setFillColor(ORANGE)
+        pdf.drawCentredString(center_x + 18 * mm, height - 30 * mm, "Now")
+
+    pdf.setFillColor(ORANGE)
     pdf.setFont("Helvetica-Bold", 13)
-    pdf.drawString(x, y, "Payment Receipt" if audience == "hirer" else "Worker Earnings Receipt")
-    y -= 8 * mm
+    pdf.drawCentredString(
+        center_x,
+        height - 52 * mm,
+        "PAYMENT RECEIPT" if audience == "hirer" else "WORKER EARNINGS RECEIPT",
+    )
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica", 8.5)
+    pdf.drawCentredString(center_x, height - 58 * mm, "Skilled People. Real Work. Faster.")
 
-    def line(label, value, bold=False):
+    y = height - 76 * mm
+
+    def fit_centered_text(text, font="Helvetica", size=9, max_width=None, leading=4.4 * mm, color=TEXT):
         nonlocal y
-        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10)
-        pdf.drawString(x, y, f"{label}:")
-        pdf.setFont("Helvetica-Bold" if bold else "Helvetica", 10)
-        pdf.drawRightString(width - x, y, str(value))
-        y -= 6 * mm
+        max_width = max_width or (content_w - 14 * mm)
+        raw = "-" if text is None or text == "" else str(text)
+        words = raw.split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = word if not current else current + " " + word
+            if stringWidth(candidate, font, size) <= max_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        if not lines:
+            lines = ["-"]
+        pdf.setFillColor(color)
+        pdf.setFont(font, size)
+        for line_text in lines:
+            pdf.drawCentredString(center_x, y, line_text)
+            y -= leading
+        return len(lines)
 
-    line("Booking", f"#{booking['id']}")
-    line("Date", booking["start_date"])
-    line("Worker", worker["name"] if worker else "-")
-    line("Hirer", hirer["name"] if hirer else "-")
-    line("Payment method", (booking["payment_method"] or "").title())
-    line("Payment status", (booking["payment_status"] or "").replace("_", " ").title())
-    if booking["payment_id"]:
-        line("Payment ID", booking["payment_id"])
-    if booking["razorpay_order_id"]:
-        line("Order ID", booking["razorpay_order_id"])
-    y -= 2 * mm
-    pdf.line(x, y, width - x, y)
-    y -= 8 * mm
+    def section(title, rows):
+        nonlocal y
+        prepared = []
+        inner_w = content_w - 18 * mm
+        for label, value, emphasized in rows:
+            label_text = str(label)
+            value_text = "-" if value is None or value == "" else str(value)
+            pair = f"{label_text}: {value_text}"
+            font = "Helvetica-Bold" if emphasized else "Helvetica"
+            size = 9.2 if emphasized else 8.6
+            words = pair.split()
+            line_list = []
+            current = ""
+            for word in words:
+                candidate = word if not current else current + " " + word
+                if stringWidth(candidate, font, size) <= inner_w:
+                    current = candidate
+                else:
+                    if current:
+                        line_list.append(current)
+                    current = word
+            if current:
+                line_list.append(current)
+            prepared.append((line_list or ["-"], font, size, emphasized))
 
-    total = int(booking["total_amount"] or 0)
-    paid = int(booking["paid_amount"] or 0)
-    line("Final booking amount", f"INR {total}", True)
-    line("Amount received", f"INR {paid}", True)
+        box_h = 11 * mm + sum(max(1, len(lines)) * 4.7 * mm for lines, _, _, _ in prepared) + 3 * mm
+        if y - box_h < 32 * mm:
+            pdf.showPage()
+            # Preserve centered identity on overflow pages.
+            pdf.setFillColor(LIGHT_WATERMARK)
+            pdf.setFont("Helvetica-Bold", 36)
+            pdf.drawCentredString(center_x, height / 2, "HIRE NOW")
+            y = height - 22 * mm
+
+        top = y
+        pdf.setFillColor(SOFT)
+        pdf.setStrokeColor(BORDER)
+        pdf.setLineWidth(0.6)
+        pdf.roundRect(left, top - box_h, content_w, box_h, 3 * mm, fill=1, stroke=1)
+
+        pdf.setFillColor(NAVY)
+        pdf.setFont("Helvetica-Bold", 10.5)
+        pdf.drawCentredString(center_x, top - 6.5 * mm, title.upper())
+        y = top - 12 * mm
+
+        for lines, font, size, emphasized in prepared:
+            pdf.setFillColor(ORANGE if emphasized else TEXT)
+            pdf.setFont(font, size)
+            for line_text in lines:
+                pdf.drawCentredString(center_x, y, line_text)
+                y -= 4.7 * mm
+        y = top - box_h - 5 * mm
+
+    generated = datetime.utcnow().strftime("%d %b %Y, %H:%M UTC")
+    receipt_no = f"HN-{booking['id']}-{booking['start_date'].replace('-', '')}"
+    start_time = booking["start_time"] or "-"
+    end_time = booking["end_time"] or "-"
+    booking_type = (booking["booking_type"] or "regular").replace("_", " ").title()
+    payment_method = (booking["payment_method"] or "").replace("_", " ").title()
+    payment_status = (booking["payment_status"] or "").replace("_", " ").title()
+    booking_status = (booking["status"] or "").replace("_", " ").title()
+
+    section("Receipt Summary", [
+        ("Receipt No.", receipt_no, True),
+        ("Booking ID", f"#{booking['id']}", False),
+        ("Generated", generated, False),
+        ("Booking Status", booking_status, False),
+        ("Payment Status", payment_status, True),
+    ])
+
+    section("Booking & Service Details", [
+        ("Service Type", booking_type, False),
+        ("Service / Skill", worker["skill"] if worker and "skill" in worker.keys() else "-", False),
+        ("Service Date", booking["start_date"], False),
+        ("Scheduled Time", f"{start_time} - {end_time}", False),
+        ("Actual Work Time", f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
+        ("Work Address", booking["address"] or "-", False),
+        ("Instructions", booking["special_instructions"] or "-", False),
+    ])
+
+    section("Hirer & Worker", [
+        ("Hirer", hirer["name"] if hirer else "-", False),
+        ("Hirer Contact", hirer["phone"] if hirer and "phone" in hirer.keys() else "-", False),
+        ("Worker", worker["name"] if worker else "-", False),
+        ("Worker Contact", worker["phone"] if worker and "phone" in worker.keys() else "-", False),
+        ("Worker City", worker["city"] if worker and "city" in worker.keys() else "-", False),
+    ])
+
+    payment_rows = [
+        ("Payment Method", payment_method, False),
+        ("Payment Status", payment_status, True),
+        ("Final Booking Amount", f"INR {int(booking['total_amount'] or 0)}", True),
+        ("Amount Received", f"INR {int(booking['paid_amount'] or 0)}", True),
+    ]
     if int(booking["diagnosis_fee"] or 0):
-        line("Diagnosis fee", f"INR {int(booking['diagnosis_fee'] or 0)}")
+        payment_rows.append(("Diagnosis Fee", f"INR {int(booking['diagnosis_fee'] or 0)}", False))
     if int(booking["work_amount"] or 0):
-        line("Work amount", f"INR {int(booking['work_amount'] or 0)}")
-    if int(booking["actual_minutes"] or 0):
-        line("Actual work time", f"{int(booking['actual_minutes'] or 0)} minutes")
+        payment_rows.append(("Work Amount", f"INR {int(booking['work_amount'] or 0)}", False))
+    if booking["payment_id"]:
+        payment_rows.append(("Payment ID", booking["payment_id"], False))
+    if booking["razorpay_order_id"]:
+        payment_rows.append(("Order ID", booking["razorpay_order_id"], False))
+    if booking["cash_verified_at"]:
+        payment_rows.append(("Cash OTP Verified", booking["cash_verified_at"], False))
+    section("Payment Details", payment_rows)
 
     if audience == "worker":
-        y -= 2 * mm
-        pdf.line(x, y, width - x, y)
-        y -= 8 * mm
-        line("Gross amount", f"INR {int(finance['gross_amount'] or 0)}")
-        line("Platform commission", f"INR {int(finance['platform_commission'] or 0)}")
-        line("Worker net", f"INR {int(finance['worker_net'] or 0)}", True)
-        line("Settlement status", (finance["settlement_status"] or "not ready").replace("_", " ").title())
+        finance_rows = [
+            ("Gross Booking Amount", f"INR {int(finance['gross_amount'] or 0)}", False),
+            ("Platform Commission", f"INR {int(finance['platform_commission'] or 0)}", False),
+            ("Worker Net Earning", f"INR {int(finance['worker_net'] or 0)}", True),
+            ("Settlement Status", (finance["settlement_status"] or "not_ready").replace("_", " ").title(), True),
+            ("Settlement Reference", finance["settlement_reference"] or "-", False),
+        ]
+        section("Worker Earnings", finance_rows)
 
-    y -= 8 * mm
-    pdf.setFont("Helvetica", 8)
-    pdf.drawString(x, y, "This receipt is generated electronically by HireNow.")
-    y -= 5 * mm
-    pdf.drawString(x, y, f"Generated at {datetime.utcnow().isoformat()} UTC")
+    # Centered support/footer card.
+    if y < 66 * mm:
+        pdf.showPage()
+        y = height - 22 * mm
+    footer_h = 48 * mm
+    pdf.setFillColor(NAVY)
+    pdf.roundRect(left, y - footer_h, content_w, footer_h, 4 * mm, fill=1, stroke=0)
+
+    footer_y = y - 8 * mm
+    pdf.setFillColor(ORANGE)
+    pdf.setFont("Helvetica-Bold", 10.5)
+    pdf.drawCentredString(center_x, footer_y, "HIRE NOW - CUSTOMER SUPPORT")
+    footer_y -= 6 * mm
+
+    pdf.setFillColor(colors.white)
+    pdf.setFont("Helvetica", 8.3)
+    footer_lines = [
+        "Office: Jarwa Road Tulsipur District Balrampur Pin Code 271208",
+        "Customer Care: +918303478983  |  +9660503429167",
+        "Email: Hirenow@gmail.com  |  Website: Hirenow.com",
+        "Facebook: @HireNow  |  Instagram: @HireNow  |  X (Twitter): @HireNow",
+    ]
+    for footer_line in footer_lines:
+        pdf.drawCentredString(center_x, footer_y, footer_line)
+        footer_y -= 5 * mm
+
+    footer_y -= 1 * mm
+    pdf.setFillColor(colors.HexColor("#DCE6F5"))
+    pdf.setFont("Helvetica-Oblique", 7.5)
+    pdf.drawCentredString(center_x, footer_y, "This is a system-generated receipt. No signature is required.")
+
     pdf.save()
     buf.seek(0)
     return buf
@@ -1955,8 +2149,8 @@ def hirer_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
@@ -1978,8 +2172,8 @@ def worker_payment_receipt(booking_id):
         conn.close(); return jsonify({"error": "Booking not found"}), 404
     if booking["payment_status"] not in ("paid", "balance_due", "refund_pending") or int(booking["paid_amount"] or 0) <= 0:
         conn.close(); return jsonify({"error": "Receipt is available only after a successful payment"}), 409
-    hirer = conn.execute("SELECT name FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
-    worker = conn.execute("SELECT name FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
+    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id=?", (booking["hirer_id"],)).fetchone()
+    worker = conn.execute("SELECT name, phone, skill, city FROM workers WHERE id=?", (booking["worker_id"],)).fetchone()
     finance = conn.execute("SELECT * FROM booking_financials WHERE booking_id=?", (booking_id,)).fetchone()
     if not finance:
         sync_booking_financials(conn, booking_id)
