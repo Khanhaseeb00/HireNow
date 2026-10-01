@@ -637,7 +637,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
     }
     return fetch(path, opts).then(function (r) {
-      return r.json().then(function (data) { return { ok: r.ok, status: r.status, data: data }; });
+      return r.text().then(function (text) {
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; }
+        catch (e) { data = { error: "Server returned an invalid response" }; }
+        return { ok: r.ok, status: r.status, data: data };
+      });
+    }).catch(function () {
+      return { ok: false, status: 0, data: { error: "Unable to reach HireNow server" } };
     });
   }
   function fmtMoney(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
@@ -1035,8 +1042,12 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
   // ---------------- boot ----------------
   api("/api/worker-auth/me").then(function (res) {
-    if (res.data.logged_in) startApp(res.data);
-    else authScreen.style.display = "block";
+    if (res.ok && res.data && res.data.logged_in) {
+      startApp(res.data);
+      return;
+    }
+    authScreen.style.display = "block";
+    if (!res.ok && res.status >= 500) showAuthError("Worker portal is temporarily unavailable. Please refresh after a moment.");
   });
 })();
 </script>
