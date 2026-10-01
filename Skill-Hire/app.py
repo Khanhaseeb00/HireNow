@@ -1869,8 +1869,11 @@ def create_booking():
         service_longitude = float(service_longitude)
         total = diagnosis_fee
     else:
-        service_latitude = None
-        service_longitude = None
+        try:
+            service_latitude, service_longitude = parse_optional_coordinates(service_latitude, service_longitude)
+        except ValueError as exc:
+            conn.rollback(); conn.close()
+            return jsonify({"error": str(exc)}), 400
         total = round(rate * hours)
 
     cur = conn.execute(
