@@ -5,22 +5,25 @@ CREATE TABLE IF NOT EXISTS workers (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     name                TEXT NOT NULL,
     phone               TEXT UNIQUE,
-    password_hash       TEXT,               -- set once worker registers/logs in
+    password_hash       TEXT,
     skill               TEXT NOT NULL,
-    skills_detail       TEXT,               -- comma-separated specific skills
+    skills_detail       TEXT,
     city                TEXT NOT NULL,
-    daily_wage          INTEGER NOT NULL,   -- in rupees
-    hourly_wage         INTEGER,            -- in rupees, optional — shown on worker list/profile cards
-    overtime_wage       INTEGER,            -- in rupees/hr, optional — shown on worker profile as "Overtime Rate"
-    background_checked  INTEGER DEFAULT 0,  -- 0/1 — separate from ID verification, shown as its own badge
-    about               TEXT,               -- short bio shown on worker profile "About" section
-    distance_km         REAL,               -- distance from hirer, filled in once real geolocation matching exists
-    availability        TEXT,               -- 'today' | 'tomorrow' | NULL (unknown) — worker-set availability status
+    daily_wage          INTEGER NOT NULL,
+    hourly_wage         INTEGER,
+    overtime_wage       INTEGER,
+    background_checked  INTEGER DEFAULT 0,
+    about               TEXT,
+    distance_km         REAL,
+    availability        TEXT,
     rating              REAL DEFAULT 0,
     jobs_completed      INTEGER DEFAULT 0,
     experience_years    INTEGER DEFAULT 0,
-    verification_status TEXT DEFAULT 'unverified', -- unverified | pending | verified | rejected
-    id_document_path    TEXT,               -- uploaded ID photo, reviewed manually by admin
+    verification_status TEXT DEFAULT 'unverified',
+    id_document_path    TEXT,
+    account_status      TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at          TEXT,
     created_at          TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -47,6 +50,9 @@ CREATE TABLE IF NOT EXISTS hirers (
     name           TEXT NOT NULL,
     phone          TEXT NOT NULL UNIQUE,
     password_hash  TEXT NOT NULL,
+    account_status TEXT NOT NULL DEFAULT 'active',
+    account_status_reason TEXT,
+    deleted_at     TEXT,
     created_at     TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -89,10 +95,6 @@ CREATE TABLE IF NOT EXISTS bookings (
     FOREIGN KEY (worker_id) REFERENCES workers(id)
 );
 
--- Every status change and every location ping is one row here.
--- This is what powers the "work tracking" and "location tracking" screens.
--- latitude/longitude here now come from the WORKER's real browser GPS
--- (navigator.geolocation) when they check in from the worker portal.
 CREATE TABLE IF NOT EXISTS booking_events (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     booking_id  INTEGER NOT NULL,
@@ -104,11 +106,10 @@ CREATE TABLE IF NOT EXISTS booking_events (
     FOREIGN KEY (booking_id) REFERENCES bookings(id)
 );
 
--- In-app chat between a hirer and a worker, scoped to one booking.
 CREATE TABLE IF NOT EXISTS messages (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     booking_id  INTEGER NOT NULL,
-    sender_role TEXT NOT NULL,   -- 'hirer' | 'worker'
+    sender_role TEXT NOT NULL,
     sender_id   INTEGER NOT NULL,
     body        TEXT NOT NULL,
     created_at  TEXT DEFAULT CURRENT_TIMESTAMP,
