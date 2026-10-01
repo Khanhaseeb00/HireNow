@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS admin_account_actions (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS platform_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS bookings (
     id                   INTEGER PRIMARY KEY AUTOINCREMENT,
     hirer_id             INTEGER NOT NULL,
@@ -93,6 +99,22 @@ CREATE TABLE IF NOT EXISTS bookings (
     created_at           TEXT DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (hirer_id) REFERENCES hirers(id),
     FOREIGN KEY (worker_id) REFERENCES workers(id)
+);
+
+CREATE TABLE IF NOT EXISTS booking_financials (
+    booking_id INTEGER PRIMARY KEY REFERENCES bookings(id),
+    worker_id INTEGER NOT NULL REFERENCES workers(id),
+    gross_amount INTEGER NOT NULL DEFAULT 0,
+    diagnosis_fee INTEGER NOT NULL DEFAULT 0,
+    work_amount INTEGER NOT NULL DEFAULT 0,
+    platform_commission INTEGER NOT NULL DEFAULT 0,
+    worker_net INTEGER NOT NULL DEFAULT 0,
+    payment_collected INTEGER NOT NULL DEFAULT 0,
+    adjustment_amount INTEGER NOT NULL DEFAULT 0,
+    settlement_status TEXT NOT NULL DEFAULT 'not_ready',
+    settlement_reference TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS booking_events (

@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS admin_account_actions (
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
+CREATE TABLE IF NOT EXISTS platform_settings (
+    setting_key TEXT PRIMARY KEY,
+    setting_value TEXT NOT NULL,
+    updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS bookings (
     id BIGSERIAL PRIMARY KEY,
     hirer_id BIGINT NOT NULL REFERENCES hirers(id),
@@ -88,6 +94,7 @@ CREATE TABLE IF NOT EXISTS bookings (
     work_ended_at TEXT,
     actual_minutes INTEGER NOT NULL DEFAULT 0,
     work_amount INTEGER NOT NULL DEFAULT 0,
+    paid_amount INTEGER NOT NULL DEFAULT 0,
     special_instructions TEXT,
     address TEXT,
     payment_method TEXT NOT NULL DEFAULT 'online',
@@ -104,6 +111,22 @@ CREATE TABLE IF NOT EXISTS bookings (
     cancelled_at TEXT,
     cancellation_reason TEXT,
     created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
+);
+
+CREATE TABLE IF NOT EXISTS booking_financials (
+    booking_id BIGINT PRIMARY KEY REFERENCES bookings(id),
+    worker_id BIGINT NOT NULL REFERENCES workers(id),
+    gross_amount INTEGER NOT NULL DEFAULT 0,
+    diagnosis_fee INTEGER NOT NULL DEFAULT 0,
+    work_amount INTEGER NOT NULL DEFAULT 0,
+    platform_commission INTEGER NOT NULL DEFAULT 0,
+    worker_net INTEGER NOT NULL DEFAULT 0,
+    payment_collected INTEGER NOT NULL DEFAULT 0,
+    adjustment_amount INTEGER NOT NULL DEFAULT 0,
+    settlement_status TEXT NOT NULL DEFAULT 'not_ready',
+    settlement_reference TEXT,
+    created_at TEXT DEFAULT (CURRENT_TIMESTAMP::text),
+    updated_at TEXT DEFAULT (CURRENT_TIMESTAMP::text)
 );
 
 CREATE TABLE IF NOT EXISTS booking_events (
