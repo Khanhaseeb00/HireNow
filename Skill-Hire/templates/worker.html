@@ -655,13 +655,13 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   document.getElementById("saveAvailabilityBtn").addEventListener("click",function(){var days=Array.from(document.querySelectorAll("[data-availability-day]")).map(function(row){return {weekday:Number(row.dataset.availabilityDay),enabled:row.querySelector("[data-day-enabled]").checked,start_time:row.querySelector("[data-day-start]").value,end_time:row.querySelector("[data-day-end]").value};});api("/api/worker/availability",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({is_online:document.getElementById("availabilityOnline").checked,days:days,unavailable_dates:availabilityState.unavailable_dates})}).then(function(){document.getElementById("availabilityMessage").textContent="Availability saved.";loadAvailability();}).catch(function(e){document.getElementById("availabilityMessage").textContent=e.message;});});
   document.getElementById("openSettingsBtn").addEventListener("click",function(){showWorkerPanel("settings");});
   document.getElementById("settingsBackBtn").addEventListener("click",function(){workerGoBack();});
-  document.getElementById("workerThemeRow").addEventListener("click",function(){showWorkerPanel("worker-theme");applyWorkerI18n();document.querySelectorAll("[data-theme-check]").forEach(function(x){x.textContent=x.dataset.themeCheck===state.theme?"✓":"";});});
-  document.getElementById("workerLanguageRow").addEventListener("click",function(){showWorkerPanel("worker-language");applyWorkerI18n();});
-  document.getElementById("workerNotificationsRow").addEventListener("click",function(){state.notificationsEnabled=!state.notificationsEnabled;syncWorkerPreferences();applyWorkerI18n();});
-  document.getElementById("workerLocationRow").addEventListener("click",function(){showWorkerPanel("service-location");loadServiceLocation();});
-  document.getElementById("workerAvailabilityRow").addEventListener("click",function(){showWorkerPanel("availability");loadAvailability();});
-  document.getElementById("workerPayoutRow").addEventListener("click",function(){showWorkerPanel("payout");loadPayout();});
-  document.getElementById("workerLogoutRow").addEventListener("click",function(){document.getElementById("logoutBtn").click();});
+  var workerThemeRow=document.getElementById("workerThemeRow");if(workerThemeRow)workerThemeRow.addEventListener("click",function(){showWorkerPanel("worker-theme");applyWorkerI18n();document.querySelectorAll("[data-theme-check]").forEach(function(x){x.textContent=x.dataset.themeCheck===state.theme?"✓":"";});});
+  var workerLanguageRow=document.getElementById("workerLanguageRow");if(workerLanguageRow)workerLanguageRow.addEventListener("click",function(){showWorkerPanel("worker-language");applyWorkerI18n();});
+  var workerNotificationsRow=document.getElementById("workerNotificationsRow");if(workerNotificationsRow)workerNotificationsRow.addEventListener("click",function(){state.notificationsEnabled=!state.notificationsEnabled;syncWorkerPreferences();applyWorkerI18n();});
+  var workerLocationRow=document.getElementById("workerLocationRow");if(workerLocationRow)workerLocationRow.addEventListener("click",function(){showWorkerPanel("service-location");loadServiceLocation();});
+  var workerAvailabilityRow=document.getElementById("workerAvailabilityRow");if(workerAvailabilityRow)workerAvailabilityRow.addEventListener("click",function(){showWorkerPanel("availability");loadAvailability();});
+  var workerPayoutRow=document.getElementById("workerPayoutRow");if(workerPayoutRow)workerPayoutRow.addEventListener("click",function(){showWorkerPanel("payout");loadPayout();});
+  var workerLogoutRow=document.getElementById("workerLogoutRow");if(workerLogoutRow)workerLogoutRow.addEventListener("click",function(){document.getElementById("logoutBtn").click();});
 
   function loadWorkerNotifications(renderList){
     return api("/api/worker/notifications").then(function(res){
