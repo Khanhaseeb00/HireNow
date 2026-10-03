@@ -473,31 +473,41 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     <section class="panel" id="panel-payout"><div class="screen-head"><button class="screen-back" id="payoutBackBtn">‹</button><div><h2>Bank &amp; Payout</h2><div class="screen-sub">Verified earnings will settle here after payout provider activation</div></div></div><div class="availability-card"><div class="availability-title">Payout account</div><label>Account holder name</label><input id="payoutHolder" placeholder="Name as per bank"><label>Account number</label><input id="payoutAccount" inputmode="numeric" placeholder="Enter account number"><label>IFSC</label><input id="payoutIfsc" placeholder="e.g. HDFC0001234"><label>Bank name</label><input id="payoutBank" placeholder="Optional"><label>UPI ID</label><input id="payoutUpi" placeholder="Optional"><div id="payoutSaved" class="gps-note"></div></div><button class="btn btn-safety btn-block" id="savePayoutBtn">Save for Verification</button><div id="payoutMessage" class="gps-note"></div></section>
 
     <section class="panel" id="panel-availability"><div class="screen-head"><button class="screen-back" id="availabilityBackBtn">‹</button><div><h2>Availability</h2><div class="screen-sub">Choose when hirers can book you</div></div></div><div class="availability-card"><div class="availability-online"><div><strong>Accept new bookings</strong><span>Turn off when you do not want new requests</span></div><label class="availability-switch"><input type="checkbox" id="availabilityOnline" checked><span></span></label></div></div><div class="availability-card"><div class="availability-title">Weekly working hours</div><div id="availabilityDays"></div></div><div class="availability-card"><div class="availability-title">Unavailable dates</div><div class="availability-date-add"><input type="date" id="availabilityDate"><button type="button" id="addUnavailableDate">Add</button></div><div id="unavailableDateList"></div></div><button class="btn btn-safety btn-block availability-save" id="saveAvailabilityBtn">Save Availability</button><div id="availabilityMessage" class="gps-note"></div></section><section class="panel" id="panel-settings">
-      <div class="screen-head"><button class="screen-back" id="settingsBackBtn">‹</button><div><h2 class="section-title">Settings</h2><div class="screen-sub">Personalize your HireNow experience</div></div></div>
-      <div class="settings-block flatcard">
-        <h3>Theme</h3>
-        <div class="sub">Dark ya Light mode chunein</div>
-        <div class="choice-row">
-          <button class="choice-btn" data-theme-choice="dark"><span class="dot"></span><span>Dark</span></button>
-          <button class="choice-btn" data-theme-choice="light"><span class="dot"></span><span>Light</span></button>
-        </div>
+      <div class="screen-head"><button class="screen-back" id="settingsBackBtn">‹</button><div><h2 class="section-title" id="settingsTitle">Settings</h2><div class="screen-sub" id="settingsSubtitle">Personalize your HireNow experience</div></div></div>
+      <div class="worker-settings-list">
+        <button class="worker-settings-row" id="workerThemeRow"><span><b id="workerThemeLabel">Theme</b><div class="meta" id="workerThemeMeta">Light / Dark appearance</div></span><span class="chev" id="workerThemeValue">Light ›</span></button>
+        <button class="worker-settings-row" id="workerLanguageRow"><span><b id="workerLanguageLabel">Language</b><div class="meta" id="workerLanguageMeta">Choose app language</div></span><span class="chev" id="workerLanguageValue">English ›</span></button>
+        <button class="worker-settings-row" id="workerNotificationsRow"><span><b id="workerNotifLabel">Notifications</b><div class="meta" id="workerNotifMeta">Booking, payment and message alerts</div></span><span class="chev" id="workerNotificationsValue">On ›</span></button>
+        <button class="worker-settings-row" id="workerLocationRow"><span><b id="workerLocationLabel">Service Location</b><div class="meta" id="workerLocationMeta">Location used for diagnosis travel fee</div></span><span class="chev">›</span></button>
+        <button class="worker-settings-row" id="workerAvailabilityRow"><span><b id="workerAvailabilityLabel">Availability</b><div class="meta">Working days and hours</div></span><span class="chev">›</span></button>
+        <button class="worker-settings-row" id="workerPayoutRow"><span><b id="workerPayoutLabel">Bank &amp; Payout</b><div class="meta">Settlement account</div></span><span class="chev">›</span></button>
+        <button class="worker-settings-row" id="workerLogoutRow"><span><b id="workerLogoutLabel">Logout</b><div class="meta">Sign out from this device</div></span><span class="chev">›</span></button>
       </div>
-      <div class="settings-block flatcard">
-        <h3>Language</h3><div class="sub">Choose the app language</div>
-        <div class="choice-row">
-          <button class="choice-btn" data-lang-choice="en"><span class="dot"></span><span>English</span></button>
-          <button class="choice-btn" data-lang-choice="hi"><span class="dot"></span><span>हिन्दी</span></button>
-          <button class="choice-btn" data-lang-choice="ar"><span class="dot"></span><span>العربية</span></button>
-          <button class="choice-btn" data-lang-choice="bn"><span class="dot"></span><span>বাংলা</span></button>
-          <button class="choice-btn" data-lang-choice="ta"><span class="dot"></span><span>தமிழ்</span></button>
-          <button class="choice-btn" data-lang-choice="te"><span class="dot"></span><span>తెలుగు</span></button>
-          <button class="choice-btn" data-lang-choice="mr"><span class="dot"></span><span>मराठी</span></button>
-          <button class="choice-btn" data-lang-choice="gu"><span class="dot"></span><span>ગુજરાતી</span></button>
-          <button class="choice-btn" data-lang-choice="kn"><span class="dot"></span><span>ಕನ್ನಡ</span></button>
-          <button class="choice-btn" data-lang-choice="ml"><span class="dot"></span><span>മലയാളം</span></button>
-          <button class="choice-btn" data-lang-choice="pa"><span class="dot"></span><span>ਪੰਜਾਬੀ</span></button>
-          <button class="choice-btn" data-lang-choice="ur"><span class="dot"></span><span>اردو</span></button>
-        </div>
+    </section>
+
+    <section class="panel" id="panel-worker-theme">
+      <div class="screen-head"><button class="screen-back" data-worker-back>‹</button><div><h2 id="workerThemeScreenTitle">Theme</h2><div class="screen-sub" id="workerThemeScreenSub">Choose appearance</div></div></div>
+      <div class="worker-settings-list">
+        <button class="worker-settings-row" data-theme-choice="light"><span><b>☀️ <span id="workerLightText">Light</span></b></span><span data-theme-check="light"></span></button>
+        <button class="worker-settings-row" data-theme-choice="dark"><span><b>🌙 <span id="workerDarkText">Dark</span></b></span><span data-theme-check="dark"></span></button>
+      </div>
+    </section>
+
+    <section class="panel" id="panel-worker-language">
+      <div class="screen-head"><button class="screen-back" data-worker-back>‹</button><div><h2 id="workerLanguageScreenTitle">Language</h2><div class="screen-sub" id="workerLanguageScreenSub">Choose app language</div></div></div>
+      <div class="worker-lang-list">
+        <button class="choice-btn" data-lang-choice="en"><span>English</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="hi"><span>हिन्दी</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="ar"><span>العربية</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="bn"><span>বাংলা</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="ta"><span>தமிழ்</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="te"><span>తెలుగు</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="mr"><span>मराठी</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="gu"><span>ગુજરાતી</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="kn"><span>ಕನ್ನಡ</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="ml"><span>മലയാളം</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="pa"><span>ਪੰਜਾਬੀ</span><span>✓</span></button>
+        <button class="choice-btn" data-lang-choice="ur"><span>اردو</span><span>✓</span></button>
       </div>
     </section>
   </main>
@@ -676,8 +686,12 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
   document.getElementById("workerNotifBtn").addEventListener("click",function(){showWorkerPanel("notifications");loadWorkerNotifications(true).then(function(){return api("/api/worker/notifications/read",{method:"POST",body:JSON.stringify({})});}).then(function(){loadWorkerNotifications(false);});});
   document.getElementById("workerNotifBack").addEventListener("click",function(){workerGoBack();});
-  loadWorkerNotifications(false);
-  setInterval(function(){loadWorkerNotifications(false);},60000);
+  var workerNotificationTimer=null;
+  function startWorkerNotificationPolling(){
+    loadWorkerNotifications(false);
+    if(workerNotificationTimer) clearInterval(workerNotificationTimer);
+    workerNotificationTimer=setInterval(function(){loadWorkerNotifications(false);},60000);
+  }
   var viewJobsBtn=document.getElementById("viewJobsBtn");
   if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){showWorkerPanel("jobs");});
     function api(path, opts) {
@@ -759,6 +773,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
   document.getElementById("logoutBtn").addEventListener("click", function () {
     api("/api/worker-auth/logout", { method: "POST" }).then(function () {
+      if(workerNotificationTimer){clearInterval(workerNotificationTimer);workerNotificationTimer=null;}
       appScreen.style.display = "none";
       appScreen.classList.remove("enter");
       authScreen.style.display = "block";
@@ -784,6 +799,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     });
     renderVerifyBox();
     loadBookings();
+    startWorkerNotificationPolling();
     // login/register responses are minimal (id, name, phone) — refresh full profile fields
     api("/api/worker-auth/me").then(function (res) {
       if (res.data && res.data.logged_in) { state.worker = res.data;if(res.data.preferred_language)state.lang=res.data.preferred_language;if(res.data.preferred_theme)state.theme=res.data.preferred_theme;if(res.data.notifications_enabled!=null)state.notificationsEnabled=!!res.data.notifications_enabled;document.documentElement.setAttribute("data-theme",state.theme);applyWorkerI18n();renderVerifyBox();renderProfile(); }
@@ -1100,14 +1116,38 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
 
   // ---------------- boot ----------------
+  function revealWorkerAuth(message){
+    try{
+      appScreen.style.display="none";
+      appScreen.classList.remove("enter");
+      authScreen.style.display="block";
+      if(message) showAuthError(message);
+    }catch(e){}
+  }
+  window.addEventListener("error",function(){
+    var authVisible=authScreen && getComputedStyle(authScreen).display!=="none";
+    var appVisible=appScreen && getComputedStyle(appScreen).display!=="none";
+    if(!authVisible && !appVisible) revealWorkerAuth("Worker page startup issue detected. Please login again.");
+  });
   api("/api/worker-auth/me").then(function (res) {
     if (res.ok && res.data && res.data.logged_in) {
-      startApp(res.data);
+      try { startApp(res.data); }
+      catch (e) {
+        console.error("HireNow worker startup failed", e);
+        revealWorkerAuth("Worker page could not start correctly. Please login again.");
+      }
       return;
     }
-    authScreen.style.display = "block";
-    if (!res.ok && res.status >= 500) showAuthError("Worker portal is temporarily unavailable. Please refresh after a moment.");
+    revealWorkerAuth(!res.ok && res.status >= 500 ? "Worker portal is temporarily unavailable. Please refresh after a moment." : "");
+  }).catch(function(e){
+    console.error("HireNow worker boot failed", e);
+    revealWorkerAuth("Unable to start worker portal. Please refresh and try again.");
   });
+  setTimeout(function(){
+    var authVisible=authScreen && getComputedStyle(authScreen).display!=="none";
+    var appVisible=appScreen && getComputedStyle(appScreen).display!=="none";
+    if(!authVisible && !appVisible) revealWorkerAuth("Worker portal did not finish loading. Please login again.");
+  },1800);
 })();
 </script>
 <script>window.addEventListener('load',function(){var s=document.getElementById('workerBrandSplash');setTimeout(function(){if(s){s.classList.add('hide');setTimeout(function(){s.remove()},500)}},900)});</script>
