@@ -83,7 +83,7 @@
   @media (max-width: 480px) { .profile-grid { grid-template-columns: 1fr; } }
   .chat-btn { font-size: 12.5px; }
   .chat-fab-panel {
-    position: fixed; right: 20px; bottom: 20px; width: 320px; max-width: calc(100vw - 32px);
+    position: fixed; right: 20px; bottom: 90px; width: 320px; max-width: calc(100vw - 32px);
     background: var(--bp-1); border: 1px solid var(--line); border-radius: 10px;
     box-shadow: 0 16px 40px rgba(0,0,0,0.4); z-index: 80; display: flex; flex-direction: column;
     max-height: 440px; transform: translateY(24px) scale(0.95); opacity: 0; pointer-events: none;
@@ -100,7 +100,7 @@
   .chat-fab-msg .who { font-size: 10.5px; color: var(--ink-soft); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
   .chat-fab-send { display: flex; gap: 6px; padding: 10px 12px; border-top: 1px solid var(--line); }
   .chat-fab-send input { flex: 1; }
-  @media (max-width: 480px) { .chat-fab-panel { right: 10px; left: 10px; width: auto; bottom: 10px; } }
+  @media (max-width: 480px) { .chat-fab-panel { right: 10px; left: 10px; width: auto; bottom: calc(80px + env(safe-area-inset-bottom)); } }
   .brand { display: flex; align-items: center; gap: 9px; }
   .brand .mark { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
   .brand h1 { font-size: 18px; }
@@ -522,11 +522,11 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 <div class="chat-fab-panel" id="chatPanel">
   <div class="chat-fab-head">
     <div class="who"><div class="name" id="chatWith">—</div><div class="sub" id="chatSubLabel">Message</div></div>
-    <button id="chatClose">&times;</button>
+    <button id="chatClose" aria-label="Close conversation">&times;</button>
   </div>
   <div class="chat-fab-log" id="chatLog"></div>
   <div class="chat-fab-send">
-    <input type="text" id="chatInput" placeholder="Message likhein...">
+    <input type="text" id="chatInput" aria-label="Message" placeholder="Message likhein...">
     <button class="btn btn-primary" id="chatSendBtn">Bhejein</button>
   </div>
 </div>
@@ -1145,12 +1145,24 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     });
   }
 
+  function workerConversationRows(bookings,query){
+    query=String(query||"").trim().toLocaleLowerCase();
+    return bookings.filter(function(b){
+      var haystack=[b.hirer_name,jobTitle(b),b.id,b.start_date,b.status].join(" ").toLocaleLowerCase();
+      return !query || haystack.indexOf(query)>=0;
+    });
+  }
+  document.getElementById("workerMessageSearch").setAttribute("aria-label","Search by hirer, service or booking number");
+  document.getElementById("workerMessageSearch").addEventListener("input",renderMessagesScreen);
   function renderMessagesScreen(){
     var wrap=document.getElementById("messagesScreenList");if(!wrap)return;
-    var jobs=state.bookings.filter(function(b){return b.hirer_name;});
-    var seen={};jobs=jobs.filter(function(b){var k=b.hirer_name;if(seen[k])return false;seen[k]=1;return true;});
-    wrap.innerHTML=jobs.length?jobs.map(function(b){return '<button class="message-row" style="width:100%;text-align:left" data-message-booking="'+b.id+'" data-message-name="'+b.hirer_name+'"><div class="msg-avatar">'+initials(b.hirer_name)+'</div><div class="msg-body"><div class="msg-name">'+b.hirer_name+'</div><div class="msg-preview">'+jobTitle(b)+' · Tap to open conversation</div></div><span>›</span></button>';}).join(""):'<div class="empty-soft">No job conversations yet.</div>';
-    wrap.querySelectorAll("[data-message-booking]").forEach(function(btn){btn.addEventListener("click",function(){openChat(Number(btn.dataset.messageBooking),btn.dataset.messageName);});});
+    var query=document.getElementById("workerMessageSearch").value;
+    var jobs=workerConversationRows(state.bookings,query);
+    wrap.innerHTML=jobs.length?jobs.map(function(b){
+      var id=Number(b.id),name=b.hirer_name||"Hirer",status=(STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en)[b.status]||b.status;
+      return '<button type="button" class="message-row" style="width:100%;text-align:start" data-message-booking="'+id+'"><div class="msg-avatar">'+earningsText(initials(name))+'</div><div class="msg-body"><div class="msg-name">'+earningsText(name)+'</div><div class="msg-preview">'+earningsText(jobTitle(b))+' · Booking #'+id+'</div><div class="msg-preview">'+earningsText(b.start_date?fmtDate(b.start_date):"Date unavailable")+' · '+earningsText(status)+'</div></div><span aria-hidden="true">›</span></button>';
+    }).join(""):'<div class="empty-soft" role="status">'+(query.trim()?"No matching conversations. Try a name, service or booking number.":"No job conversations yet.")+'</div>';
+    wrap.querySelectorAll("[data-message-booking]").forEach(function(btn){btn.addEventListener("click",function(){var b=findBooking(Number(btn.dataset.messageBooking));if(b)openChat(b.id,b.hirer_name||"Hirer");});});
   }
 
     function doCheckIn(bookingId, noteId) {
@@ -1190,6 +1202,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   function openChat(bookingId, hirerName) {
     state.chatBookingId = bookingId;
     chatWith.textContent = hirerName;
+    document.getElementById("chatSubLabel").textContent=wt("chat_title")+" · Booking #"+bookingId;
+    chatLog.textContent="Loading messages…";
     chatPanel.classList.add("open");
     loadMessages();
   }
@@ -1199,14 +1213,16 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   });
 
   function loadMessages() {
-    if (!state.chatBookingId) return;
-    api("/api/bookings/" + state.chatBookingId + "/messages").then(function (res) {
-      if (!res.ok) { chatLog.innerHTML = '<div style="color:#FFB7A0;">Messages load nahi hue</div>'; return; }
-      if (!res.data.length) { chatLog.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
-      chatLog.innerHTML = res.data.map(function (m) {
-        return '<div class="chat-fab-msg"><div class="who">' + (m.sender_role === "worker" ? "Aap" : "Hirer") + '</div>' + m.body + '</div>';
+    var bookingId=state.chatBookingId;
+    if(!bookingId)return;
+    api("/api/bookings/"+bookingId+"/messages").then(function(res){
+      if(state.chatBookingId!==bookingId)return;
+      if(!res.ok || !Array.isArray(res.data)){chatLog.textContent="Unable to load messages. Close and reopen this conversation to retry.";return;}
+      if(!res.data.length){chatLog.textContent="No messages yet. Send the first message about this booking.";return;}
+      chatLog.innerHTML=res.data.map(function(m){
+        return '<div class="chat-fab-msg"><div class="who">'+(m.sender_role==="worker"?"You":"Hirer")+'</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">'+earningsText(m.body)+'</div></div>';
       }).join("");
-      chatLog.scrollTop = chatLog.scrollHeight;
+      chatLog.scrollTop=chatLog.scrollHeight;
     });
   }
 
@@ -1214,10 +1230,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   chatInput.addEventListener("keydown", function (e) { if (e.key === "Enter") sendChatMessage(); });
 
   function sendChatMessage() {
-    var body = chatInput.value.trim();
-    if (!body || !state.chatBookingId) return;
-    api("/api/bookings/" + state.chatBookingId + "/messages", { method: "POST", body: JSON.stringify({ body: body }) }).then(function (res) {
-      if (res.ok) { chatInput.value = ""; loadMessages(); }
+    var body=chatInput.value.trim(),bookingId=state.chatBookingId,sendBtn=document.getElementById("chatSendBtn");
+    if(!body || !bookingId || sendBtn.disabled)return;
+    sendBtn.disabled=true;
+    api("/api/bookings/"+bookingId+"/messages",{method:"POST",body:JSON.stringify({body:body})}).then(function(res){
+      sendBtn.disabled=false;
+      if(state.chatBookingId!==bookingId)return;
+      if(res.ok){if(chatInput.value.trim()===body)chatInput.value="";loadMessages();}
+      else{var error=document.createElement("div");error.setAttribute("role","alert");error.textContent=res.data.error||"Message was not sent. Your text is saved; try again.";chatLog.appendChild(error);}
     });
   }
 
