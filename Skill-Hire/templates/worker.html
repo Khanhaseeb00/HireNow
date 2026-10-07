@@ -327,6 +327,32 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
 .detail-stage{margin:16px 0;padding:15px;border:1px solid var(--app-border);border-radius:14px;background:var(--app-bg)}.detail-stage p{margin:0 0 12px;color:var(--app-text);font-size:14px}.detail-stage .status-pill{margin-bottom:8px}
 .earn-periods button{border:0;background:transparent;text-align:center;padding:12px 4px;border-radius:11px;font-size:12px;font-weight:700;color:#52677e;min-height:44px}.earn-periods button.active{background:#fff;color:var(--app-navy);box-shadow:0 2px 7px rgba(20,48,78,.08)}.earn-periods button:focus-visible{outline:3px solid var(--app-orange)}.earn-item{padding:15px 0;border-top:1px solid var(--app-border)}.earn-item-head{display:flex;justify-content:space-between;gap:10px}.earn-item small{display:block;color:var(--app-muted);margin:5px 0}.earn-item-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;font-size:12px}.earn-item-values strong{display:block;font-size:14px;color:var(--app-text)}
+
+/* Worker dark appearance: preserve the navy/orange brand and use readable surfaces. */
+:root[data-theme="dark"]{color-scheme:dark;--app-bg:#0c1728;--app-card:#17263b;--app-text:#edf3fa;--app-muted:#b0c1d5;--app-border:#35465e;--ink:#edf3fa;--ink-soft:#b0c1d5;--bp-0:#0c1728;--bp-1:#17263b;--bp-2:#243952;--line:#35465e;--line-bright:#94c7fa}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"] .flatcard,:root[data-theme="dark"] .tick,:root[data-theme="dark"] .bcard,:root[data-theme="dark"] .worker-stats,:root[data-theme="dark"] .detail-card,:root[data-theme="dark"] .earn-card:not(.earnings-hero),:root[data-theme="dark"] .availability-card,:root[data-theme="dark"] .worker-settings-row,:root[data-theme="dark"] .message-list-card,:root[data-theme="dark"] .message-row,:root[data-theme="dark"] .message-search-shell,:root[data-theme="dark"] .worker-notification-item,:root[data-theme="dark"] .map-card,:root[data-theme="dark"] .chat-fab-panel{background:var(--app-card);color:var(--app-text);border-color:var(--app-border)}
+:root[data-theme="dark"] nav.tabs{background:var(--app-card);border-color:var(--app-border)}
+:root[data-theme="dark"] nav.tabs button{color:var(--app-muted)}
+:root[data-theme="dark"] nav.tabs button.active,:root[data-theme="dark"] .choice-btn.selected,:root[data-theme="dark"] .worker-lang-list .choice-btn.selected{background:#49391e;color:#ffc46b;border-color:#ffc46b}
+:root[data-theme="dark"] .worker-lang-list .choice-btn,:root[data-theme="dark"] .choice-btn,:root[data-theme="dark"] .btn-outline,:root[data-theme="dark"] #openSettingsBtn{background:var(--app-card);color:var(--app-text);border-color:var(--app-border)}
+:root[data-theme="dark"] input,:root[data-theme="dark"] select,:root[data-theme="dark"] .chat-fab-send input{background:var(--app-bg);color:var(--app-text);border-color:var(--app-border)}
+:root[data-theme="dark"] input::placeholder{color:var(--app-muted);opacity:1}
+:root[data-theme="dark"] .earn-periods{background:var(--app-bg)}
+:root[data-theme="dark"] .earn-periods button{color:var(--app-muted)}
+:root[data-theme="dark"] .earn-periods button.active{background:var(--app-card);color:#ffc46b}
+:root[data-theme="dark"] .earn-break strong,:root[data-theme="dark"] .detail-title,:root[data-theme="dark"] .detail-amount,:root[data-theme="dark"] .msg-name,:root[data-theme="dark"] .worker-stat strong{color:var(--app-text)}
+:root[data-theme="dark"] .worker-stat span,:root[data-theme="dark"] .msg-preview,:root[data-theme="dark"] .empty-soft{color:var(--app-muted)}
+:root[data-theme="dark"] .status-pill{background:#203b59;color:#a6d2ff}
+:root[data-theme="dark"] .worker-notification-item.unread{background:#342c20}
+:root[data-theme="dark"] .availability-day,:root[data-theme="dark"] .message-list-card .message-row{border-color:var(--app-border)!important}
+:root[data-theme="dark"] .tl-node{background:var(--app-card);color:var(--app-muted);border-color:var(--app-border)}
+:root[data-theme="dark"] .tl-step.now .tl-node{background:var(--app-orange);color:#172234}
+:root[data-theme="dark"] .tl-step.done .tl-node{background:var(--app-green);color:#081b12}
+:root[data-theme="dark"] #authScreen.auth-wrap{background:var(--app-card)!important;border-color:var(--app-border)!important}
+:root[data-theme="dark"] #authScreen input,:root[data-theme="dark"] #authScreen select,:root[data-theme="dark"] #authScreen .country-prefix{background:var(--app-bg);color:var(--app-text);border-color:var(--app-border)}
+:root[data-theme="dark"] #authScreen label,:root[data-theme="dark"] #authScreen h2,:root[data-theme="dark"] .worker-wordmark .hire{color:var(--app-text)}
+:root[data-theme="dark"] .error-box{color:#ffd1c4}
 </style>
 </head>
 <body>
@@ -608,6 +634,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     syncWorkerPreferences();
     document.querySelectorAll("[data-theme-choice]").forEach(function (btn) {
       btn.classList.toggle("selected", btn.dataset.themeChoice === theme);
+      btn.setAttribute("aria-pressed", String(btn.dataset.themeChoice === theme));
     });
   }
   (function initWorkerPrefs() {
