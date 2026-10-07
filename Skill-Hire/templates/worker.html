@@ -353,6 +353,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 :root[data-theme="dark"] #authScreen input,:root[data-theme="dark"] #authScreen select,:root[data-theme="dark"] #authScreen .country-prefix{background:var(--app-bg);color:var(--app-text);border-color:var(--app-border)}
 :root[data-theme="dark"] #authScreen label,:root[data-theme="dark"] #authScreen h2,:root[data-theme="dark"] .worker-wordmark .hire{color:var(--app-text)}
 :root[data-theme="dark"] .error-box{color:#ffd1c4}
+.job-filter-row{overflow-x:auto;flex-wrap:nowrap}.job-filter-row button{flex-shrink:0;min-height:44px}.job-filter-row button:focus-visible{outline:3px solid var(--app-orange);outline-offset:-3px}
 </style>
 </head>
 <body>
@@ -437,15 +438,15 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     </section>
 
     <section class="panel" id="panel-notifications"><div class="screen-head"><button class="screen-back" id="workerNotifBack">‹</button><div><h2>Notifications</h2><div class="screen-sub">Booking, payment and message updates</div></div></div><div id="workerNotificationList"></div></section><section class="panel" id="panel-jobs">
-      <div class="screen-head"><div><h2>My Jobs</h2><div class="screen-sub">Manage requests, upcoming work and completed jobs</div></div></div><div class="jobs-summary"><div><strong>Requests</strong><span>New jobs</span></div><div><strong>Active</strong><span>In progress</span></div><div><strong>Done</strong><span>Completed</span></div></div>
+      <div class="screen-head"><div><h2>My Jobs</h2><div class="screen-sub">Manage requests, upcoming work and completed jobs</div></div></div><div class="jobs-summary"><div><strong id="workerRequestsCount">0</strong><span>Requests</span></div><div><strong id="workerOngoingCount">0</strong><span>Ongoing</span></div><div><strong id="workerCompletedCount">0</strong><span>Completed</span></div></div>
       <div class="job-filter-row">
         <button class="job-filter active" data-job-filter="all">All</button>
-        <button class="job-filter" data-job-filter="ongoing">Ongoing</button>
+        <button type="button" class="job-filter" data-job-filter="requests">Requests</button><button class="job-filter" data-job-filter="ongoing">Ongoing</button>
         <button class="job-filter" data-job-filter="upcoming">Upcoming</button>
         <button class="job-filter" data-job-filter="completed">Completed</button>
         <button class="job-filter" data-job-filter="cancelled">Cancelled</button>
       </div>
-      <div id="jobsScreenList"><div class="empty-soft">Loading jobs...</div></div>
+      <p id="workerJobsSummary" role="status" aria-live="polite" style="font-size:13px;color:var(--app-muted)"></p><div id="jobsScreenList"><div class="empty-soft">Loading jobs...</div></div>
     </section>
 
     <section class="panel" id="panel-job-detail">
@@ -1040,20 +1041,31 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
 
   var jobFilter="all";
-  function filteredJobs(){
-    return state.bookings.filter(function(b){
-      if(jobFilter==="all") return true;
-      if(jobFilter==="ongoing") return ["en_route","checked_in","in_progress"].indexOf(b.status)>=0;
-      if(jobFilter==="upcoming") return ["requested","confirmed"].indexOf(b.status)>=0;
-      if(jobFilter==="completed") return b.status==="completed";
-      if(jobFilter==="cancelled") return ["cancelled","rejected"].indexOf(b.status)>=0;
-      return true;
-    });
+  function workerJobMatches(b,filter){
+    if(filter==="requests")return b.status==="requested";
+    if(filter==="ongoing")return ["en_route","checked_in","in_progress"].indexOf(b.status)>=0;
+    if(filter==="upcoming")return b.status==="confirmed";
+    if(filter==="completed")return b.status==="completed";
+    if(filter==="cancelled")return ["cancelled","rejected"].indexOf(b.status)>=0;
+    return true;
   }
+  function filteredJobs(){return state.bookings.filter(function(b){return workerJobMatches(b,jobFilter);});}
   function jobTitle(b){ return b.service_name || b.skill || b.category || "Service Job"; }
   function renderJobsScreen(){
     var wrap=document.getElementById("jobsScreenList"); if(!wrap)return;
     var rows=filteredJobs();
+    var labels={all:"All",requests:"Requests",ongoing:"Ongoing",upcoming:"Upcoming",completed:"Completed",cancelled:"Cancelled / Rejected"};
+    function count(filter){return state.bookings.filter(function(b){return workerJobMatches(b,filter);}).length;}
+    document.getElementById("workerRequestsCount").textContent=count("requests");
+    document.getElementById("workerOngoingCount").textContent=count("ongoing");
+    document.getElementById("workerCompletedCount").textContent=count("completed");
+    document.querySelectorAll("[data-job-filter]").forEach(function(btn){
+      btn.textContent=labels[btn.dataset.jobFilter]+" ("+count(btn.dataset.jobFilter)+")";
+      btn.classList.toggle("active",btn.dataset.jobFilter===jobFilter);
+      btn.setAttribute("aria-pressed",String(btn.dataset.jobFilter===jobFilter));
+    });
+    var hints={all:"All assigned jobs",requests:"New requests waiting for your response",ongoing:"Travelling, checked in or working",upcoming:"Accepted and confirmed jobs before travel",completed:"Finished jobs",cancelled:"Cancelled and rejected jobs"};
+    document.getElementById("workerJobsSummary").textContent=hints[jobFilter]+" · "+rows.length+" job"+(rows.length===1?"":"s");
     if(!rows.length){wrap.innerHTML='<div class="empty-soft">No jobs in this section.</div>';return;}
     wrap.innerHTML=rows.map(function(b){return '<div class="bcard" data-detail-job="'+b.id+'"><div class="bcard-head"><div><div class="name">'+jobTitle(b)+'</div><div class="meta">'+fmtDate(b.start_date)+' · '+(b.hours||2)+' hrs · '+(b.hirer_name||"Hirer")+'</div></div><div class="num">'+fmtMoney(b.total_amount)+'</div></div><span class="status-pill">'+(STATUS_LABELS_BY_LANG[state.lang]&&STATUS_LABELS_BY_LANG[state.lang][b.status]||b.status)+'</span><button class="btn btn-outline btn-block" data-detail-open="'+b.id+'">View Job Details</button></div>';}).join("");
     wrap.querySelectorAll("[data-detail-open]").forEach(function(btn){btn.addEventListener("click",function(){openJobDetail(Number(btn.dataset.detailOpen));});});
