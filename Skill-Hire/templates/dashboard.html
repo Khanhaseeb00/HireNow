@@ -565,6 +565,25 @@
   html[dir="rtl"] .bottom-nav,html[dir="rtl"] .category-grid{direction:rtl}
   @media(max-width:360px){.language-grid{grid-template-columns:1fr}}
 .slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}.notif-button{position:relative}.notif-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#e84d4d;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--navy)}.notification-list{display:flex;flex-direction:column;gap:9px}.notification-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.notification-item.unread{border-left:4px solid var(--orange);background:#fffaf1}.notification-title{font-weight:800;font-size:13px}.notification-message{font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.45}.notification-time{font-size:9px;color:var(--ink-soft);margin-top:7px}.notification-empty{text-align:center;padding:42px 15px;color:var(--ink-soft)}.home-booking-card{margin:0 0 18px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--card,var(--bg))}.home-booking-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.home-booking-card p{font-size:13px;color:var(--ink-soft);margin:10px 0}.home-next-booking{display:flex;flex-direction:column;gap:7px;width:100%;padding:14px;text-align:start;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:12px;cursor:pointer}.home-next-booking span{font-size:13px}.home-next-booking[hidden],#homeBookingsRetry[hidden]{display:none}.home-next-booking:focus-visible{outline:3px solid var(--safety,#F5A623);outline-offset:3px}
+
+/* Complete Hirer dark surfaces, including chat and authentication. */
+:root[data-theme="dark"]{color-scheme:dark;--ink-soft:#b3c3d5;--line:#35506a}
+:root:not([data-theme="dark"]){color-scheme:light}
+:root[data-theme="dark"] .auth-page{background:linear-gradient(180deg,#071b3a 0 30%,var(--bg) 30% 100%)}
+:root[data-theme="dark"] .auth-card,:root[data-theme="dark"] .phone-shell,:root[data-theme="dark"] .lang-code,:root[data-theme="dark"] .notification-item{background:var(--card);color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] .auth-mode-tabs,:root[data-theme="dark"] .auth-tip,:root[data-theme="dark"] .slot-state{background:#172f47;color:var(--ink-soft)}
+:root[data-theme="dark"] .auth-mode-tabs button.active{background:#29465f;color:var(--ink)}
+:root[data-theme="dark"] .notification-item.unread{background:#342c20}
+:root[data-theme="dark"] .ref-chat-bubble.them{background:#253b52;color:var(--ink)}
+:root[data-theme="dark"] .ref-chat-bubble.me{background:#24557e;color:#fff}
+:root[data-theme="dark"] .ref-chat-send,:root[data-theme="dark"] .btn-primary{background:#24557e;color:#fff}
+:root[data-theme="dark"] input,:root[data-theme="dark"] select{background:var(--card);color:var(--ink);border-color:var(--line)}
+:root[data-theme="dark"] input::placeholder{color:var(--ink-soft);opacity:1}
+:root[data-theme="dark"] .ref-status.requested{background:var(--orange-tint);color:#ffca78}
+:root[data-theme="dark"] .slot-state.unavailable{background:var(--rust-tint);color:#ffb7aa}
+:root[data-theme="dark"] .msg-row{background:var(--card);border-color:var(--line)}
+:root[data-theme="dark"] .ref-chat-bubble .time{opacity:1;color:#cfdeec}
+:root[data-theme="dark"] button:focus-visible,:root[data-theme="dark"] a:focus-visible{outline:3px solid #ffca78;outline-offset:3px}
 </style>
 </head>
 
