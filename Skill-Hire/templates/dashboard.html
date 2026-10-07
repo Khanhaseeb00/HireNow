@@ -584,6 +584,7 @@
 :root[data-theme="dark"] .msg-row{background:var(--card);border-color:var(--line)}
 :root[data-theme="dark"] .ref-chat-bubble .time{opacity:1;color:#cfdeec}
 :root[data-theme="dark"] button:focus-visible,:root[data-theme="dark"] a:focus-visible{outline:3px solid #ffca78;outline-offset:3px}
+.hirer-job-guidance{margin-bottom:14px}.hirer-job-guidance>strong{font-size:17px;color:var(--ink)}.hirer-job-guidance p{font-size:13px;color:var(--ink-soft);margin:8px 0 14px}.hirer-job-progress{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hirer-job-progress li{display:flex;gap:7px;align-items:center;font-size:12px;color:var(--ink-soft)}.hirer-job-progress li>span{display:flex;align-items:center;justify-content:center;width:25px;height:25px;flex-shrink:0;border:1px solid var(--line);border-radius:50%}.hirer-job-progress li.done>span{background:var(--ok-tint);color:var(--ok)}.hirer-job-progress li.current{color:var(--ink);font-weight:700}.hirer-job-progress li.current>span{background:var(--orange);color:var(--orange-ink)}
 </style>
 </head>
 
@@ -1816,13 +1817,39 @@
     }
   }
 
+  function hirerBookingGuidance(b){
+    if(b.status==="cancelled" || b.status==="rejected")return {title:b.status==="rejected"?"Worker declined this request":"Booking cancelled",note:b.payment_status==="refund_pending"?"Your refund is pending. Check the refund details below.":"This booking is closed. You can still contact the worker or view available receipts."};
+    if(b.status==="requested")return {title:"Waiting for worker response",note:"The worker needs to accept your request. Check back here for the latest status."};
+    if(b.status==="completed"){
+      if(b.payment_status==="paid")return {title:"Work and payment completed",note:"Your final bill is paid. Download the receipt below."};
+      if(b.payment_status==="refund_pending")return {title:"Work completed · Refund pending",note:"Check your final bill and refund details below."};
+      if(b.payment_status==="balance_due")return {title:"Work completed · Balance due",note:"Pay the remaining balance using the action below."};
+      return {title:"Work completed · Payment pending",note:"Use the payment options below. For cash payments, follow the OTP verification flow."};
+    }
+    if(b.status==="confirmed" && b.payment_method==="online" && b.payment_status!=="paid")return {title:"Worker accepted · Payment pending",note:"Use Pay Online Now below. If you already paid, check payment status before retrying."};
+    if(b.status==="confirmed")return {title:"Worker accepted your booking",note:"Your job is confirmed. The worker will update their status when heading out."};
+    if(b.status==="en_route")return {title:"Worker is on the way",note:"Keep the job address and access instructions ready. Contact the worker if you need to clarify anything."};
+    if(b.status==="checked_in" && b.booking_type==="diagnosis" && b.diagnosis_notes && !b.work_approved_at && !b.work_declined_at)return {title:"Your approval is needed",note:"Review the diagnosis below, then choose Approve Paid Work or Diagnosis Only."};
+    if(b.status==="checked_in")return {title:"Worker checked in",note:"The worker has recorded a location update. Coordinate the job and wait for work to start."};
+    if(b.status==="in_progress" || (b.work_started_at && !b.work_ended_at))return {title:"Work is in progress",note:"The worker's timer has started. The final amount may update based on recorded work."};
+    return {title:"Booking update",note:"Review the current status and payment details below."};
+  }
+  function hirerBookingProgress(b){
+    var step=STATUS_FLOW.indexOf(b.status);
+    if(step<0)return "";
+    return '<ol class="hirer-job-progress" aria-label="Booking progress">'+STATUS_FLOW.map(function(status,i){
+      return '<li class="'+(i<step?"done":i===step?"current":"")+'"'+(i===step?' aria-current="step"':"")+'><span aria-hidden="true">'+(i<step?"✓":i+1)+'</span>'+hirerMessageText(statusLabel(status))+'</li>';
+    }).join("")+'</ol>';
+  }
+
   function openBookingDetailsScreen(bookingId) {
     openStack("booking-details","Booking Details",function(){
       stackBody.innerHTML='<div class="paying"><span class="spinner"></span> Booking load ho rahi hai...</div>';
       api("/api/bookings/"+bookingId).then(function(res){
         if(!res.ok){stackBody.innerHTML='<div class="pay-note">'+(res.data.error||"Booking load nahi hui")+'</div>';return;}
-        var b=res.data;
+        var b=res.data,guide=hirerBookingGuidance(b);
         stackBody.innerHTML =
+          '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+hirerBookingProgress(b)+'</section>' +
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+initials(b.worker_name)+'</div>' +
             '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
           '<div class="ref-detail-list">' +
