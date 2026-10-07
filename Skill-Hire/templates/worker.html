@@ -324,6 +324,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 @media(max-width:480px){ #authScreen.auth-wrap{margin:0;min-height:100vh;max-width:none;border:0;border-radius:0;box-shadow:none;padding:34px 20px 28px}#authScreen .field-2{grid-template-columns:1fr}}
 #authScreen select{height:48px;border:1px solid #dbe4ed;border-radius:12px;background:#f9fbfd;padding:0 13px;font-size:14px;outline:0;width:100%;color:#173b5d}#authScreen select:focus{border-color:#1677f2;box-shadow:0 0 0 3px rgba(22,119,242,.09);background:#fff}.availability-card{background:#fff;border:1px solid var(--app-border);border-radius:18px;padding:16px;margin-bottom:12px}.availability-title{font-weight:800;font-size:15px;margin-bottom:12px}.availability-online{display:flex;align-items:center;justify-content:space-between;gap:15px}.availability-online strong,.availability-online span{display:block}.availability-online span{font-size:10px;color:var(--app-muted);margin-top:3px}.availability-switch{position:relative;width:48px;height:27px}.availability-switch input{opacity:0}.availability-switch>span{position:absolute;inset:0;background:#ccd6df;border-radius:20px}.availability-switch>span:before{content:"";position:absolute;width:21px;height:21px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}.availability-switch input:checked+span{background:#20b978}.availability-switch input:checked+span:before{transform:translateX(21px)}.availability-day{display:grid;grid-template-columns:84px 1fr 1fr;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid #edf1f5}.availability-day input[type=time]{width:100%;height:38px;border:1px solid #dbe4ed;border-radius:10px}.availability-day.off input[type=time]{opacity:.38}.availability-date-add{display:grid;grid-template-columns:1fr auto;gap:8px}.availability-date-add input{height:42px;border:1px solid #dbe4ed;border-radius:11px;padding:0 10px}.availability-date-add button{border:0;border-radius:11px;padding:0 15px;background:var(--app-navy);color:#fff}.unavailable-chip{display:inline-flex;gap:6px;margin:9px 6px 0 0;padding:7px 9px;background:#fff1ee;color:#b14b37;border-radius:10px;font-size:10px}.unavailable-chip button{border:0;background:transparent;color:inherit}.worker-name-line{display:flex;align-items:center;justify-content:space-between;gap:10px}.worker-notif-btn{position:relative;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:18px}.worker-notif-btn span{position:absolute;right:-4px;top:-4px;min-width:18px;height:18px;padding:0 4px;border-radius:10px;background:#ff4f4f;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--app-navy)}.worker-notification-item{background:#fff;border:1px solid var(--app-border);border-radius:15px;padding:13px;margin-bottom:9px}.worker-notification-item.unread{border-left:4px solid var(--app-orange);background:#fffaf1}.worker-notification-item strong{display:block;font-size:13px}.worker-notification-item p{font-size:11px;color:var(--app-muted);line-height:1.45;margin:4px 0}.worker-notification-item time{font-size:9px;color:var(--app-muted)}
 .worker-online.offline{background:#53647a}.worker-online.unknown{background:rgba(255,255,255,.15)}.worker-online:focus-visible{outline:3px solid #fff;outline-offset:3px}.worker-online{min-height:44px}
+
+.detail-stage{margin:16px 0;padding:15px;border:1px solid var(--app-border);border-radius:14px;background:var(--app-bg)}.detail-stage p{margin:0 0 12px;color:var(--app-text);font-size:14px}.detail-stage .status-pill{margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -893,7 +895,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
   function loadBookings() {
     api("/api/worker/bookings").then(function (res) {
-      state.bookings = res.data || [];
+      if(!res.ok || !Array.isArray(res.data))return;
+      state.bookings = res.data;
       var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
       var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
       var completedToday=state.bookings.filter(function(b){return b.status==="completed" && b.start_date===new Date().toISOString().slice(0,10);});
@@ -906,6 +909,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       renderJobsScreen();
       renderEarningsScreen();
       renderMessagesScreen();
+      if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
     });
   }
 
@@ -1029,12 +1033,37 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   document.querySelectorAll("[data-job-filter]").forEach(function(btn){btn.addEventListener("click",function(){jobFilter=btn.dataset.jobFilter;document.querySelectorAll("[data-job-filter]").forEach(function(x){x.classList.toggle("active",x===btn);});renderJobsScreen();});});
 
   function findBooking(id){return state.bookings.find(function(b){return Number(b.id)===Number(id);});}
+  var detailBookingId=null;
+  function detailNextAction(b){
+    if(["completed","cancelled","rejected"].indexOf(b.status)>=0)return {label:b.status==="completed"?"Job completed":"This job is closed"};
+    if(b.status==="requested")return {label:"Review this request and accept or reject below."};
+    if(!(b.payment_status==="paid" || (b.payment_method==="cash" && b.payment_status==="cash_pending")))return {label:"Waiting for payment confirmation before work can continue."};
+    if(b.work_started_at && !b.work_ended_at)return {label:"Work timer is running",action:"stop",button:"Stop & Complete Work"};
+    if(b.status==="confirmed" || b.status==="en_route")return {label:"Record your location to update this job.",action:"checkin",button:b.status==="confirmed"?"Heading Out · GPS Update":"Arrived at Site · Check In"};
+    if(b.status==="checked_in"){
+      if(b.booking_type==="diagnosis" && !b.diagnosis_notes)return {label:"Submit your findings for the hirer to review.",action:"diagnose",button:"Submit Diagnosis"};
+      if(b.booking_type==="diagnosis" && !b.work_approved_at)return {label:"Diagnosis submitted. Waiting for hirer approval."};
+      if(!b.work_started_at)return {label:"Ready to begin? Start the work timer.",action:"start",button:"Start Work Timer"};
+    }
+    return {label:"Waiting for the next job update."};
+  }
   function openJobDetail(id){
     var b=findBooking(id); if(!b)return;
+    detailBookingId=b.id;
+    var next=detailNextAction(b);
+    var statusLabels=STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en;
     var canAccept=b.status==="requested";
     var canNavigate=["confirmed","en_route"].indexOf(b.status)>=0;
-    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+b.id+'">PDF Receipt</button>':'')+'</div></div>';
+    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-stage"><span class="status-pill">'+(statusLabels[b.status]||b.status)+'</span><p>'+next.label+'</p>'+(next.action?'<button class="btn btn-safety btn-block" data-detail-next="'+next.action+'">'+next.button+'</button>':'')+'<div class="gps-note" id="gps-detail-'+b.id+'" role="status" aria-live="polite"></div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+b.id+'">PDF Receipt</button>':'')+'</div></div>';
     showWorkerPanel("job-detail");
+    var nextBtn=document.querySelector("[data-detail-next]");
+    if(nextBtn)nextBtn.addEventListener("click",function(){
+      if(next.action==="checkin"){doCheckIn(b.id,"gps-detail-"+b.id);return;}
+      if(next.action==="diagnose"){submitDiagnosis(b.id);return;}
+      if(next.action==="stop" && !window.confirm("Stop the timer and mark this work completed?"))return;
+      nextBtn.disabled=true;
+      workTimer(b.id,next.action);
+    });
     var a=document.querySelector("[data-detail-accept]");if(a)a.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"accept"})}).then(function(r){if(r.ok){loadBookings();showWorkerPanel("jobs");}else alert(r.data.error||"Accept failed");});});
     var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"reject",reason:""})}).then(function(x){if(x.ok){loadBookings();showWorkerPanel("jobs");}else alert(x.data.error||"Reject failed");});});
     var n=document.querySelector("[data-nav-job]");if(n)n.addEventListener("click",function(){openNavigation(b.id);});
@@ -1051,7 +1080,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   }
 
   function submitDiagnosis(id){var notes=prompt("Enter diagnosis / problem found:");if(!notes)return;api("/api/bookings/"+id+"/diagnosis",{method:"POST",body:JSON.stringify({notes:notes})}).then(function(r){if(!r.ok)alert(r.data.error||"Diagnosis failed");else{alert("Diagnosis sent to hirer for approval.");loadBookings();}});}
-  function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
+  function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");var btn=document.querySelector("[data-detail-next]");if(btn)btn.disabled=false;return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
 
   function renderEarningsScreen(){
     var box=document.getElementById("earningsBreakdown");
