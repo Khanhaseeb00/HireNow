@@ -379,7 +379,7 @@
   .ref-notes { min-height:72px; }
   .ref-total { display:flex; align-items:center; justify-content:space-between; margin:16px 0 12px; font-weight:800; }
   .ref-total .amt { font-size:18px; }
-  .booking-filter-tabs { padding:0 0 12px; flex-wrap:nowrap; }
+  .booking-filter-tabs { padding:0 0 12px; flex-wrap:nowrap; overflow-x:auto; } .booking-filter-tabs button{flex-shrink:0;min-height:44px} .booking-filter-tabs button:focus-visible{outline:3px solid var(--orange);outline-offset:-3px}
   .booking-filter-btn { flex:1; padding:8px 6px; background:#F5F7FA; }
   .booking-filter-btn.active { background:var(--orange-tint); color:var(--orange); border-color:transparent; }
   .schedule-card {
@@ -678,11 +678,15 @@
       <h1>My Bookings</h1>
     </div>
     <div class="main-pad" style="padding-top:6px;">
-      <div class="booking-filter-tabs">
-        <button class="booking-filter-btn active" data-booking-filter="upcoming">Upcoming</button>
-        <button class="booking-filter-btn" data-booking-filter="completed">Completed</button>
-        <button class="booking-filter-btn" data-booking-filter="cancelled">Cancelled</button>
+      <div class="booking-filter-tabs" aria-label="Booking status filters">
+        <button type="button" class="booking-filter-btn active" data-booking-filter="active">Active</button>
+        <button type="button" class="booking-filter-btn" data-booking-filter="requests">Requests</button>
+        <button type="button" class="booking-filter-btn" data-booking-filter="upcoming">Upcoming</button>
+        <button type="button" class="booking-filter-btn" data-booking-filter="ongoing">Ongoing</button>
+        <button type="button" class="booking-filter-btn" data-booking-filter="completed">Completed</button>
+        <button type="button" class="booking-filter-btn" data-booking-filter="cancelled">Cancelled / Rejected</button>
       </div>
+      <p id="hirerBookingFilterSummary" role="status" aria-live="polite" style="font-size:13px;color:var(--ink-soft)"></p>
       <div id="bookingsList"></div>
     </div>
   </section>
@@ -800,7 +804,7 @@
 (function () {
   "use strict";
 
-  var state = { hirer: null, workers: [], bookings: [], lang: "en", theme:"light", notificationsEnabled:true, chatBookingId: null, selectedSkill: "", favorites: {}, bookingFilter: "upcoming", location:{address:"",city:"",latitude:null,longitude:null} };
+  var state = { hirer: null, workers: [], bookings: [], lang: "en", theme:"light", notificationsEnabled:true, chatBookingId: null, selectedSkill: "", favorites: {}, bookingFilter: "active", location:{address:"",city:"",latitude:null,longitude:null} };
 
   // ---------------- i18n ----------------
   var LANG = {
@@ -1674,7 +1678,7 @@
     document.getElementById("homeNextAction").textContent=l[4];
     next.onclick=function(){nav(function(){openBookingDetailsScreen(b.id);});};
   }
-  document.getElementById("homeViewBookings").addEventListener("click",function(){state.bookingFilter="upcoming";document.querySelector('.nav-item[data-tab="bookings"]').click();renderBookings();});
+  document.getElementById("homeViewBookings").addEventListener("click",function(){state.bookingFilter="active";document.querySelector('.nav-item[data-tab="bookings"]').click();renderBookings();});
   document.getElementById("homeBookingsRetry").addEventListener("click",loadBookings);
   function loadBookings() {
     api("/api/bookings").then(function (res) {
@@ -1690,27 +1694,42 @@
   function bookingStatusClass(status) {
     return status === "confirmed" ? "confirmed" : status === "completed" ? "completed" : (status === "cancelled" || status === "rejected") ? "cancelled" : "requested";
   }
+  function hirerBookingMatches(b,filter){
+    if(filter==="requests")return b.status==="requested";
+    if(filter==="upcoming")return b.status==="confirmed";
+    if(filter==="ongoing")return ["en_route","checked_in","in_progress"].indexOf(b.status)>=0;
+    if(filter==="completed")return b.status==="completed";
+    if(filter==="cancelled")return ["cancelled","rejected"].indexOf(b.status)>=0;
+    return ["requested","confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;
+  }
+  function hirerBookingPaymentLabel(b){
+    if(b.payment_status==="refund_pending")return "Refund pending";
+    if(b.payment_status==="refunded")return "Refunded";
+    if(b.status==="cancelled" || b.status==="rejected")return Number(b.paid_amount||0)>0?"Payment recorded · Open for refund details":"No payment due";
+    if(b.payment_method==="cash")return b.payment_status==="paid"?"Cash verified":"Cash after work";
+    return b.payment_status==="paid"?"Online paid":b.payment_status==="balance_due"?"Balance due":"Online payment pending";
+  }
   function renderBookings() {
-    var wrap = document.getElementById("bookingsList");
-    if (!wrap) return;
-    var list = state.bookings.filter(function(b){
-      if (state.bookingFilter === "completed") return b.status === "completed";
-      if (state.bookingFilter === "cancelled") return b.status === "cancelled" || b.status === "rejected";
-      return b.status !== "completed" && b.status !== "cancelled" && b.status !== "rejected";
-    });
+    var wrap=document.getElementById("bookingsList");if(!wrap)return;
+    var list=state.bookings.filter(function(b){return hirerBookingMatches(b,state.bookingFilter);});
     document.querySelectorAll("[data-booking-filter]").forEach(function(btn){
-      btn.classList.toggle("active", btn.dataset.bookingFilter === state.bookingFilter);
-      btn.onclick = function(){ state.bookingFilter = btn.dataset.bookingFilter; renderBookings(); };
+      var filter=btn.dataset.bookingFilter,count=state.bookings.filter(function(b){return hirerBookingMatches(b,filter);}).length;
+      var labels={active:"Active",requests:"Requests",upcoming:"Upcoming",ongoing:"Ongoing",completed:"Completed",cancelled:"Cancelled / Rejected"};
+      btn.textContent=labels[filter]+" ("+count+")";
+      btn.classList.toggle("active",filter===state.bookingFilter);btn.setAttribute("aria-pressed",String(filter===state.bookingFilter));
+      btn.onclick=function(){state.bookingFilter=filter;renderBookings();};
     });
+    var hints={active:"All requests, upcoming and ongoing jobs",requests:"Waiting for the worker to respond",upcoming:"Confirmed bookings before travel starts",ongoing:"Worker travelling, checked in or working",completed:"Finished jobs",cancelled:"Cancelled and rejected bookings"};
+    document.getElementById("hirerBookingFilterSummary").textContent=hints[state.bookingFilter]+" · "+list.length+" booking"+(list.length===1?"":"s");
     if (!list.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_BOOKINGS + 'No bookings in this section.</div>'; return; }
     wrap.innerHTML = list.map(function(b){
       var dt = new Date(b.start_date + "T00:00:00");
       return '<div class="schedule-card" data-ref-booking="' + b.id + '">' +
         '<div class="schedule-date"><b>' + String(dt.getDate()).padStart(2,"0") + '</b>' + dt.toLocaleDateString("en",{month:"short"}) + '</div>' +
         '<div class="avatar" style="width:42px;height:42px;background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
-        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
+        '<div class="body"><div class="name">' + hirerMessageText(b.worker_name) + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
           '<div class="amount">' + fmtMoney(b.total_amount) + '</div>' +
-          '<div class="sub">' + (b.status==="cancelled"||b.status==="rejected" ? "No payment due" : (b.payment_method === "cash" ? (b.payment_status==="paid"?"Cash verified":"Cash after work") : (b.payment_status === "paid" ? "Online paid" : b.payment_status==="refund_pending"?"Refund pending":b.payment_status==="balance_due"?"Balance due":"Online payment pending"))) + '</div>' +
+          '<div class="sub">' + hirerBookingPaymentLabel(b) + '</div>' +
           '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + (b.status === "rejected" ? "Rejected" : statusLabel(b.status)) + '</span></div>' +
         '<div style="color:var(--ink-soft);">›</div>' +
       '</div>';
