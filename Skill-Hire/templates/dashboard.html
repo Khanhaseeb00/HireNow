@@ -693,7 +693,7 @@
       <p data-i18n="messages_sub">Apne bookings ke workers se baat karein</p>
     </div>
     <div class="main-pad" style="padding-top:6px;">
-      <div id="messagesList"></div>
+      <input type="search" id="hirerMessageSearch" aria-label="Search conversations" placeholder="Search worker, service or booking number" style="width:100%;margin-bottom:14px;min-height:44px;border-radius:12px"><div id="messagesList"></div>
     </div>
   </section>
 
@@ -1721,50 +1721,60 @@
   }
 
   // ---------------- messages tab (inbox list over bookings) ----------------
-  function renderMessages() {
-    var wrap = document.getElementById("messagesList");
-    if (!wrap) return;
-    var list = state.bookings.filter(function(b){ return b.status !== "cancelled"; });
-    if (!list.length) { wrap.innerHTML = '<div class="empty">' + ICON_NO_MESSAGES + 'Your booking conversations will appear here.</div>'; return; }
-    wrap.innerHTML = list.map(function(b){
-      return '<div class="msg-row" data-ref-chat="' + b.id + '">' +
-        '<div class="avatar" style="background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
-        '<div class="body"><div class="name">' + b.worker_name + '</div><div class="preview">' + b.worker_skill + ' · Booking #' + b.id + '</div></div>' +
-        '<div class="chev">›</div></div>';
-    }).join("");
-    wrap.querySelectorAll("[data-ref-chat]").forEach(function(row){
-      row.addEventListener("click",function(){ var id=Number(row.dataset.refChat); var b=state.bookings.filter(function(x){return x.id===id;})[0]; nav(function(){openChatScreen(id,b.worker_name);}); });
-    });
+  function hirerMessageText(v){return String(v==null?"":v).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function hirerConversationRows(bookings,query){
+    query=String(query||"").trim().toLocaleLowerCase();
+    return bookings.filter(function(b){return !query || [b.worker_name,b.worker_skill,b.id,b.start_date,b.status].join(" ").toLocaleLowerCase().indexOf(query)>=0;});
   }
-
-  function openChatScreen(bookingId, workerName) {
-    state.chatBookingId = bookingId;
-    openStack("chat", workerName, renderChatScreen, { subtitle:"● Online" });
-    function renderChatScreen() {
-      stackBody.innerHTML =
-        '<div id="refChatLog" class="ref-chat-log"><div class="paying"><span class="spinner"></span> Messages load ho rahe hain...</div></div>' +
-        '<div class="ref-chat-composer"><input type="text" id="refChatInput" placeholder="Type a message..."><button class="ref-chat-send" id="refChatSend">➤</button></div>';
+  document.getElementById("hirerMessageSearch").addEventListener("input",renderMessages);
+  function renderMessages(){
+    var wrap=document.getElementById("messagesList");if(!wrap)return;
+    var query=document.getElementById("hirerMessageSearch").value;
+    var list=hirerConversationRows(state.bookings,query);
+    if(!list.length){wrap.innerHTML='<div class="empty" role="status">'+ICON_NO_MESSAGES+(query.trim()?"No matching conversations. Try a worker, service or booking number.":"Your booking conversations will appear here.")+'</div>';return;}
+    wrap.innerHTML=list.map(function(b){
+      return '<button type="button" class="msg-row" style="width:100%;text-align:start;color:var(--ink)" data-ref-chat="'+Number(b.id)+'"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div><div class="body"><div class="name">'+hirerMessageText(b.worker_name||"Worker")+'</div><div class="preview">'+hirerMessageText(b.worker_skill||"Service")+' · Booking #'+Number(b.id)+'</div><div class="preview">'+hirerMessageText(b.start_date?fmtDate(b.start_date):"Date unavailable")+' · '+hirerMessageText(statusLabel(b.status))+'</div></div><div class="chev" aria-hidden="true">›</div></button>';
+    }).join("");
+    wrap.querySelectorAll("[data-ref-chat]").forEach(function(row){row.addEventListener("click",function(){
+      var id=Number(row.dataset.refChat),booking=state.bookings.find(function(x){return Number(x.id)===id;});
+      if(booking)nav(function(){openChatScreen(id,booking.worker_name||"Worker");});
+    });});
+  }
+  function openChatScreen(bookingId,workerName){
+    state.chatBookingId=bookingId;
+    openStack("chat",workerName,renderChatScreen,{subtitle:"Booking #"+bookingId});
+    function renderChatScreen(){
+      stackBody.innerHTML='<div id="refChatLog" class="ref-chat-log"></div><div id="refChatFeedback" role="status" aria-live="polite" style="padding:8px 12px;color:var(--ink-soft)"></div><div class="ref-chat-composer"><input type="text" id="refChatInput" aria-label="Message" placeholder="Type a message..."><button type="button" class="ref-chat-send" id="refChatSend" aria-label="Send message">➤</button></div>';
+      var log=stackBody.querySelector("#refChatLog"),input=stackBody.querySelector("#refChatInput"),send=stackBody.querySelector("#refChatSend"),feedback=stackBody.querySelector("#refChatFeedback");
+      function stillOpen(){return stackBody.querySelector("#refChatLog")===log && state.chatBookingId===bookingId;}
+      function loadRefMessages(){
+        log.textContent="Loading messages…";
+        api("/api/bookings/"+bookingId+"/messages").then(function(res){
+          if(!stillOpen())return;
+          if(!res.ok || !Array.isArray(res.data))throw Error("Unable to load messages.");
+          feedback.textContent="";
+          if(!res.data.length){log.textContent="Start the conversation about this booking.";return;}
+          log.innerHTML=res.data.map(function(m){return '<div class="ref-chat-bubble '+(m.sender_role==="hirer"?"me":"them")+'" style="white-space:pre-wrap;overflow-wrap:anywhere">'+hirerMessageText(m.body)+'<span class="time">'+hirerMessageText((m.created_at||"").slice(11,16))+'</span></div>';}).join("");
+          log.scrollTop=log.scrollHeight;
+        }).catch(function(){
+          if(!stillOpen())return;
+          log.innerHTML='<div class="pay-note">Unable to load messages.</div><button type="button" class="btn btn-outline" id="refChatRetry">Retry</button>';
+          log.querySelector("#refChatRetry").addEventListener("click",loadRefMessages);
+        });
+      }
+      function sendRefMessage(){
+        var body=input.value.trim();if(!body || send.disabled)return;
+        send.disabled=true;feedback.textContent="Sending…";
+        api("/api/bookings/"+bookingId+"/messages",{method:"POST",body:JSON.stringify({body:body})}).then(function(res){
+          if(!stillOpen())return;
+          if(!res.ok)throw Error(res.data && res.data.error || "Message was not sent. Please try again.");
+          if(input.value.trim()===body)input.value="";
+          feedback.textContent="Sent";loadRefMessages();
+        }).catch(function(e){if(stillOpen())feedback.textContent=e.message||"Message was not sent. Your text is saved; try again.";}).finally(function(){send.disabled=false;});
+      }
+      send.addEventListener("click",sendRefMessage);
+      input.addEventListener("keydown",function(e){if(e.key==="Enter" && !e.isComposing){e.preventDefault();sendRefMessage();}});
       loadRefMessages();
-      stackBody.querySelector("#refChatSend").addEventListener("click",sendRefMessage);
-      stackBody.querySelector("#refChatInput").addEventListener("keydown",function(e){if(e.key==="Enter")sendRefMessage();});
-    }
-    function loadRefMessages(){
-      api("/api/bookings/"+bookingId+"/messages").then(function(res){
-        var log=stackBody.querySelector("#refChatLog"); if(!log)return;
-        if(!res.ok){log.innerHTML='<div class="pay-note">Messages load nahi hue.</div>';return;}
-        if(!res.data.length){log.innerHTML='<div class="empty">Start the conversation.</div>';return;}
-        log.innerHTML=res.data.map(function(m){
-          var mine=m.sender_role==="hirer";
-          return '<div class="ref-chat-bubble '+(mine?'me':'them')+'">'+m.body+'<span class="time">'+((m.created_at||"").slice(11,16))+'</span></div>';
-        }).join("");
-        log.scrollTop=log.scrollHeight;
-      });
-    }
-    function sendRefMessage(){
-      var input=stackBody.querySelector("#refChatInput"); var body=input.value.trim(); if(!body)return;
-      api("/api/bookings/"+bookingId+"/messages",{method:"POST",body:JSON.stringify({body:body})}).then(function(res){
-        if(res.ok){input.value="";loadRefMessages();}
-      });
     }
   }
 
@@ -1928,7 +1938,7 @@
       if (!res.ok) { chatLog.innerHTML = '<div style="color:var(--rust);">Messages load nahi hue</div>'; return; }
       if (!res.data.length) { chatLog.innerHTML = '<div style="color:var(--ink-soft);">Koi message nahi hai abhi.</div>'; return; }
       chatLog.innerHTML = res.data.map(function (m) {
-        return '<div class="chat-fab-msg"><div class="who">' + (m.sender_role === "hirer" ? t("you") : t("worker_word")) + '</div>' + m.body + '</div>';
+        return '<div class="chat-fab-msg"><div class="who">' + (m.sender_role === "hirer" ? t("you") : t("worker_word")) + '</div>' + hirerMessageText(m.body) + '</div>';
       }).join("");
       chatLog.scrollTop = chatLog.scrollHeight;
     });
