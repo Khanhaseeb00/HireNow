@@ -326,6 +326,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 .worker-online.offline{background:#53647a}.worker-online.unknown{background:rgba(255,255,255,.15)}.worker-online:focus-visible{outline:3px solid #fff;outline-offset:3px}.worker-online{min-height:44px}
 
 .detail-stage{margin:16px 0;padding:15px;border:1px solid var(--app-border);border-radius:14px;background:var(--app-bg)}.detail-stage p{margin:0 0 12px;color:var(--app-text);font-size:14px}.detail-stage .status-pill{margin-bottom:8px}
+.earn-periods button{border:0;background:transparent;text-align:center;padding:12px 4px;border-radius:11px;font-size:12px;font-weight:700;color:#52677e;min-height:44px}.earn-periods button.active{background:#fff;color:var(--app-navy);box-shadow:0 2px 7px rgba(20,48,78,.08)}.earn-periods button:focus-visible{outline:3px solid var(--app-orange)}.earn-item{padding:15px 0;border-top:1px solid var(--app-border)}.earn-item-head{display:flex;justify-content:space-between;gap:10px}.earn-item small{display:block;color:var(--app-muted);margin:5px 0}.earn-item-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;font-size:12px}.earn-item-values strong{display:block;font-size:14px;color:var(--app-text)}
 </style>
 </head>
 <body>
@@ -433,11 +434,11 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
     <section class="panel" id="panel-earnings">
       <div class="screen-head"><div><h2>Earnings</h2><div class="screen-sub">Track income from your completed jobs</div></div></div>
-      <div class="earn-periods"><span class="active">This Week</span><span>This Month</span><span>All Time</span></div>
+      <div class="earn-periods" aria-label="Earnings period"><button type="button" data-earn-period="week" class="active" aria-pressed="true">This Week</button><button type="button" data-earn-period="month" aria-pressed="false">This Month</button><button type="button" data-earn-period="all" aria-pressed="false">All Time</button></div>
       <div class="earn-card earnings-hero">
-        <div class="earn-label">Total Earnings</div>
+        <div class="earn-label">Net Earnings · Pending + Settled</div>
         <div class="earn-total" id="earningsTotal">₹0</div>
-        <div class="earn-caption">Completed jobs</div>
+        <div class="earn-caption" id="earningsPeriodCaption">By booking date · Week starts Monday</div>
       </div>
       <div class="earn-card">
         <div class="earn-card-title">Earnings Breakdown</div>
@@ -1082,16 +1083,66 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   function submitDiagnosis(id){var notes=prompt("Enter diagnosis / problem found:");if(!notes)return;api("/api/bookings/"+id+"/diagnosis",{method:"POST",body:JSON.stringify({notes:notes})}).then(function(r){if(!r.ok)alert(r.data.error||"Diagnosis failed");else{alert("Diagnosis sent to hirer for approval.");loadBookings();}});}
   function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");var btn=document.querySelector("[data-detail-next]");if(btn)btn.disabled=false;return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
 
-  function renderEarningsScreen(){
+  var earningsPeriod="week",earningsData=null,earningsRequest=0;
+  function earningsForPeriod(items,period,now){
+    var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    var begin=new Date(today);
+    if(period==="week")begin.setDate(begin.getDate()-((begin.getDay()+6)%7));
+    if(period==="month")begin.setDate(1);
+    var finish=new Date(today);finish.setDate(finish.getDate()+1);
+    return items.filter(function(x){
+      if(period==="all")return true;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(x.start_date||""))return false;
+      var parts=x.start_date.split("-"),d=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
+      return d>=begin && d<finish;
+    });
+  }
+  function summarizeEarnings(items){
+    return items.reduce(function(t,x){
+      var gross=Number(x.gross_amount)||0,commission=Number(x.platform_commission)||0,net=Number(x.worker_net)||0;
+      t.gross+=gross;t.commission+=commission;t.workerNet+=net;
+      if(x.settlement_status==="pending")t.pending+=net;
+      else if(x.settlement_status==="settled")t.settled+=net;
+      else if(x.settlement_status==="held")t.held+=net;
+      else t.other+=net;
+      return t;
+    },{gross:0,commission:0,workerNet:0,pending:0,settled:0,held:0,other:0});
+  }
+  function earningsText(value){return String(value==null?"":value).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+  function paintEarnings(){
+    if(!earningsData)return;
+    var items=earningsForPeriod(earningsData.items,earningsPeriod,new Date()),totals=summarizeEarnings(items);
+    document.getElementById("earningsTotal").textContent=fmtMoney(totals.pending+totals.settled);
+    document.getElementById("earningsPeriodCaption").textContent=(earningsPeriod==="week"?"This week · Monday to today":earningsPeriod==="month"?"This month to today":"All time")+" · By booking date · "+items.length+" booking"+(items.length===1?"":"s");
+    function row(label,value){return '<div class="earn-break"><span>'+label+'</span><strong>'+fmtMoney(value)+'</strong></div>';}
     var box=document.getElementById("earningsBreakdown");
-    box.innerHTML='<div class="empty-soft">Loading earnings…</div>';
+    box.innerHTML=row("Gross booking amount",totals.gross)+row("Platform commission",totals.commission)+row("Worker net · All statuses",totals.workerNet)+row("Pending settlement",totals.pending)+row("Settled",totals.settled)+row("On hold · Not included above",totals.held)+(totals.other?row("Other settlement statuses",totals.other):"")+
+      (items.length?items.map(function(x){
+        var id=Number(x.booking_id),status=String(x.settlement_status||"Unknown").replace(/_/g," ");
+        return '<div class="earn-item"><div class="earn-item-head"><strong>Booking #'+id+'</strong><strong>'+fmtMoney(x.worker_net||0)+'</strong></div><small>'+earningsText(x.start_date?fmtDate(x.start_date):"Date unavailable")+' · '+earningsText(status)+'</small><div class="earn-item-values"><span>Gross<strong>'+fmtMoney(x.gross_amount||0)+'</strong></span><span>Commission<strong>'+fmtMoney(x.platform_commission||0)+'</strong></span><span>Worker net<strong>'+fmtMoney(x.worker_net||0)+'</strong></span></div>'+(x.settlement_reference?'<small>Settlement reference: '+earningsText(x.settlement_reference)+'</small>':"")+(x.payment_status==="paid"?'<button type="button" class="btn btn-outline" data-worker-receipt="'+id+'">PDF Receipt</button>':"")+'</div>';
+      }).join(""):'<div class="empty-soft">No earnings records for this period. Try All Time.</div>');
+    box.querySelectorAll("[data-worker-receipt]").forEach(function(btn){btn.addEventListener("click",function(){window.open("/api/worker/bookings/"+btn.dataset.workerReceipt+"/receipt.pdf","_blank","noopener");});});
+  }
+  document.querySelectorAll("[data-earn-period]").forEach(function(btn){btn.addEventListener("click",function(){
+    earningsPeriod=btn.dataset.earnPeriod;
+    document.querySelectorAll("[data-earn-period]").forEach(function(x){var selected=x===btn;x.classList.toggle("active",selected);x.setAttribute("aria-pressed",String(selected));});
+    if(earningsData)paintEarnings();else renderEarningsScreen();
+  });});
+  function renderEarningsScreen(){
+    var request=++earningsRequest,box=document.getElementById("earningsBreakdown");
+    earningsData=null;
+    document.getElementById("earningsTotal").textContent="—";
+    box.innerHTML='<div class="empty-soft" role="status">Loading earnings…</div>';
     api("/api/worker/earnings-summary").then(function(r){
-      if(!r.ok)throw Error(r.data.error||"Unable to load earnings");
-      var d=r.data||{},items=d.items||[];
-      document.getElementById("earningsTotal").textContent=fmtMoney(d.net||0);
-      box.innerHTML='<div class="earn-break"><span>Platform commission</span><strong>'+fmtMoney(d.commission||0)+'</strong></div><div class="earn-break"><span>Pending settlement</span><strong>'+fmtMoney(d.pending||0)+'</strong></div><div class="earn-break"><span>Settled</span><strong>'+fmtMoney(d.settled||0)+'</strong></div>'+(items.length?items.map(function(x){return '<div class="earn-break"><span>Booking #'+x.booking_id+'<small style="display:block;color:var(--app-muted)">'+fmtDate(x.start_date)+' · '+x.settlement_status+'</small><button class="btn btn-outline" style="margin-top:6px;padding:6px 9px" data-worker-receipt="'+x.booking_id+'">PDF Receipt</button></span><strong>'+fmtMoney(x.worker_net)+'</strong></div>';}).join(""):'<div class="empty-soft">Completed paid jobs will appear here.</div>');
-      box.querySelectorAll("[data-worker-receipt]").forEach(function(btn){btn.addEventListener("click",function(){window.open("/api/worker/bookings/"+btn.dataset.workerReceipt+"/receipt.pdf","_blank");});});
-    }).catch(function(e){box.innerHTML='<div class="empty-soft">'+e.message+'</div>';});
+      if(request!==earningsRequest)return;
+      if(!r.ok || !r.data || !Array.isArray(r.data.items))throw Error(r.data && r.data.error || "Unable to load earnings");
+      earningsData=r.data;paintEarnings();
+    }).catch(function(e){
+      if(request!==earningsRequest)return;
+      document.getElementById("earningsTotal").textContent="—";
+      box.innerHTML='<div class="empty-soft" role="status">'+earningsText(e.message)+'<button type="button" class="btn btn-outline btn-block" id="retryEarnings" style="margin-top:12px">Retry</button></div>';
+      document.getElementById("retryEarnings").addEventListener("click",renderEarningsScreen);
+    });
   }
 
   function renderMessagesScreen(){
