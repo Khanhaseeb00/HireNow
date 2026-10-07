@@ -564,7 +564,8 @@
   html[dir="rtl"] body{text-align:right}html[dir="rtl"] .header-row,html[dir="rtl"] .section-row,html[dir="rtl"] .ref-profile-person{direction:rtl}
   html[dir="rtl"] .bottom-nav,html[dir="rtl"] .category-grid{direction:rtl}
   @media(max-width:360px){.language-grid{grid-template-columns:1fr}}
-.slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}.notif-button{position:relative}.notif-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#e84d4d;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--navy)}.notification-list{display:flex;flex-direction:column;gap:9px}.notification-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.notification-item.unread{border-left:4px solid var(--orange);background:#fffaf1}.notification-title{font-weight:800;font-size:13px}.notification-message{font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.45}.notification-time{font-size:9px;color:var(--ink-soft);margin-top:7px}.notification-empty{text-align:center;padding:42px 15px;color:var(--ink-soft)}</style>
+.slot-state{grid-column:1/-1;padding:13px;border-radius:11px;background:#f1f5f9;color:#62758a;font-size:12px;text-align:center}.slot-state.unavailable{background:#fff4f0;color:#a95743}.ref-time-btn:disabled,#refProceed:disabled{opacity:.45;cursor:not-allowed}.notif-button{position:relative}.notif-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#e84d4d;color:#fff;font-size:9px;font-weight:900;align-items:center;justify-content:center;border:2px solid var(--navy)}.notification-list{display:flex;flex-direction:column;gap:9px}.notification-item{background:#fff;border:1px solid var(--line);border-radius:14px;padding:13px}.notification-item.unread{border-left:4px solid var(--orange);background:#fffaf1}.notification-title{font-weight:800;font-size:13px}.notification-message{font-size:11px;color:var(--ink-soft);margin-top:4px;line-height:1.45}.notification-time{font-size:9px;color:var(--ink-soft);margin-top:7px}.notification-empty{text-align:center;padding:42px 15px;color:var(--ink-soft)}.home-booking-card{margin:0 0 18px;padding:16px;border:1px solid var(--line);border-radius:16px;background:var(--card,var(--bg))}.home-booking-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.home-booking-card p{font-size:13px;color:var(--ink-soft);margin:10px 0}.home-next-booking{display:flex;flex-direction:column;gap:7px;width:100%;padding:14px;text-align:start;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:12px;cursor:pointer}.home-next-booking span{font-size:13px}.home-next-booking[hidden],#homeBookingsRetry[hidden]{display:none}.home-next-booking:focus-visible{outline:3px solid var(--safety,#F5A623);outline-offset:3px}
+</style>
 </head>
 
 <body>
@@ -647,6 +648,12 @@
     </div>
 
     <div class="main-pad">
+      <section class="home-booking-card" id="homeBookingSummary" aria-label="Your bookings">
+        <div class="home-booking-heading"><strong id="homeBookingHeading">Your Bookings</strong><button type="button" class="btn btn-outline" id="homeViewBookings">View all</button></div>
+        <p id="homeBookingSummaryText" role="status" aria-live="polite">Loading your bookings…</p>
+        <button type="button" class="home-next-booking" id="homeNextBooking" hidden><strong id="homeNextWorker"></strong><span id="homeNextMeta"></span><span id="homeNextStatus"></span><span id="homeNextAction">View job details →</span></button>
+        <button type="button" class="btn btn-outline" id="homeBookingsRetry" hidden>Retry</button>
+      </section>
       <div class="promo-banner">
         <div class="promo-text">
           <div class="promo-title">Need help now?</div>
@@ -832,6 +839,7 @@
     try { localStorage.setItem("hirenow_lang", lang); } catch (e) {}
     applyStaticI18n();
     renderWorkers(); renderBookings(); renderMessages(); renderFeatured(); renderCategories();
+    renderHomeBookingSummary(false);
     syncHirerPreferences();
   }
   function setTheme(theme){
@@ -1641,13 +1649,42 @@
     return STATUS_LABELS_BY_LANG[state.lang][s] || s;
   }
 
+  function pickHomeBooking(bookings){
+    var live=["en_route","checked_in","in_progress"];
+    var active=bookings.filter(function(b){return ["requested","confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;});
+    active.sort(function(a,b){
+      var pa=live.indexOf(a.status)>=0?0:1,pb=live.indexOf(b.status)>=0?0:1;
+      return pa-pb || String(a.start_date||"").localeCompare(String(b.start_date||"")) || String(a.start_time||"").localeCompare(String(b.start_time||"")) || Number(a.id)-Number(b.id);
+    });
+    return {count:active.length,next:active[0]};
+  }
+  function renderHomeBookingSummary(failed){
+    var labels={en:["Your Bookings","View all","No active bookings. Choose a service below to get started.","active booking","View job details →","Unable to load bookings. Please retry.","Retry"],hi:["आपकी बुकिंग","सभी देखें","कोई सक्रिय बुकिंग नहीं। नीचे से सर्विस चुनें।","सक्रिय बुकिंग","जॉब की जानकारी देखें →","बुकिंग लोड नहीं हुई। फिर कोशिश करें।","फिर कोशिश करें"],ar:["حجوزاتك","عرض الكل","لا توجد حجوزات نشطة. اختر خدمة أدناه.","حجز نشط","عرض تفاصيل العمل ←","تعذر تحميل الحجوزات. أعد المحاولة.","إعادة المحاولة"]};
+    var l=labels[state.lang]||labels.en,summary=pickHomeBooking(state.bookings);
+    document.getElementById("homeBookingHeading").textContent=l[0];
+    document.getElementById("homeViewBookings").textContent=l[1];
+    document.getElementById("homeBookingSummaryText").textContent=failed?l[5]:summary.count?summary.count+" "+l[3]:l[2];
+    var retry=document.getElementById("homeBookingsRetry");retry.hidden=!failed;retry.textContent=l[6];
+    var next=document.getElementById("homeNextBooking");next.hidden=failed||!summary.next;
+    if(!summary.next)return;
+    var b=summary.next;
+    document.getElementById("homeNextWorker").textContent=b.worker_name||"Worker";
+    document.getElementById("homeNextMeta").textContent=(b.worker_skill||"Service")+" · "+fmtDate(b.start_date)+(b.start_time?" · "+b.start_time:"");
+    document.getElementById("homeNextStatus").textContent=statusLabel(b.status);
+    document.getElementById("homeNextAction").textContent=l[4];
+    next.onclick=function(){nav(function(){openBookingDetailsScreen(b.id);});};
+  }
+  document.getElementById("homeViewBookings").addEventListener("click",function(){state.bookingFilter="upcoming";document.querySelector('.nav-item[data-tab="bookings"]').click();renderBookings();});
+  document.getElementById("homeBookingsRetry").addEventListener("click",loadBookings);
   function loadBookings() {
     api("/api/bookings").then(function (res) {
-      state.bookings = res.data || [];
+      if(!res.ok || !Array.isArray(res.data)){renderHomeBookingSummary(true);return;}
+      state.bookings = res.data;
+      renderHomeBookingSummary(false);
       renderBookings();
       renderMessages();
       renderProfile();
-    });
+    }).catch(function(){renderHomeBookingSummary(true);});
   }
 
   function bookingStatusClass(status) {
