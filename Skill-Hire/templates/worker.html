@@ -939,6 +939,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       renderEarningsScreen();
       renderMessagesScreen();
       if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
+      if(currentWorkerPanel==="navigation" && detailBookingId!=null)openNavigation(detailBookingId);
     });
   }
 
@@ -1111,12 +1112,28 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var rr=document.querySelector("[data-detail-receipt]");if(rr)rr.addEventListener("click",function(){window.open("/api/worker/bookings/"+b.id+"/receipt.pdf","_blank");});
   }
 
+  function workerMapsUrl(booking){
+    var address=String(booking.address||"").trim(),city=String(booking.city||"").trim();
+    var destination=address?(address+(city && address.toLocaleLowerCase().indexOf(city.toLocaleLowerCase())<0?", "+city:"")):city;
+    return destination?"https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(destination):null;
+  }
   function openNavigation(id){
-    var b=findBooking(id); if(!b)return;
-    document.getElementById("navigationContent").innerHTML='<div class="map-card"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div><strong>'+(b.address||b.city||"Job Location")+'</strong><div style="color:var(--app-muted);font-size:12px">Use device location for check-in</div></div><button class="btn btn-primary" data-external-nav>Navigate</button></div><div class="map-placeholder"><div class="map-route"></div></div><div style="text-align:center;font-weight:800;font-size:18px">Have you arrived at location?</div><div style="text-align:center;color:var(--app-muted);font-size:12px;margin:5px 0 12px">Your real-time location will be recorded for this job.</div><button class="btn btn-safety btn-block" data-real-checkin="'+b.id+'">Check In / Update Status</button><div class="gps-note" id="gps-nav-'+b.id+'"></div></div>';
+    var b=findBooking(id);if(!b)return;
+    var next=detailNextAction(b),mapsUrl=workerMapsUrl(b),canCheck=next.action==="checkin";
+    var container=document.getElementById("navigationContent");
+    container.innerHTML='<div class="map-card"><div class="detail-title">Job destination</div><p style="overflow-wrap:anywhere;font-size:16px">'+earningsText(b.address||b.city||"Address not provided")+'</p>'+
+      (b.address && b.city?'<p style="color:var(--app-muted)">'+earningsText(b.city)+'</p>':"")+
+      '<p style="color:var(--app-muted);font-size:13px">Booking #'+Number(b.id)+' · '+earningsText(fmtDate(b.start_date))+(b.start_time?" · "+earningsText(b.start_time):"")+'</p>'+
+      (mapsUrl?'<a class="btn btn-primary btn-block" style="text-decoration:none" id="workerOpenMaps" target="_blank" rel="noopener noreferrer">Open directions in Maps ↗</a>':'<div class="empty-soft">No destination is available. Message the hirer for the address before travelling.</div>')+
+      '<button type="button" class="btn btn-outline btn-block" id="workerLocationChat" style="margin-top:10px">Message Hirer</button>'+
+      '<div class="detail-stage"><span class="status-pill">'+earningsText((STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en)[b.status]||b.status)+'</span><p>'+earningsText(next.label)+'</p>'+
+      (canCheck?'<button type="button" class="btn btn-safety btn-block" id="workerNavCheckIn">'+earningsText(next.button)+'</button><p style="color:var(--app-muted);font-size:12px;margin-top:10px">GPS permission is needed only for this status update. Your current coordinates will be recorded for this booking.</p>':"")+
+      '<div class="gps-note" id="gps-nav-'+Number(b.id)+'" role="status" aria-live="polite"></div></div></div>';
+    var link=document.getElementById("workerOpenMaps");if(link)link.href=mapsUrl;
     showWorkerPanel("navigation");
-    document.querySelector("[data-real-checkin]").addEventListener("click",function(){doCheckIn(b.id,"gps-nav-"+b.id);});
-    document.querySelector("[data-external-nav]").addEventListener("click",function(){if(navigator.geolocation){navigator.geolocation.getCurrentPosition(function(p){window.open("https://www.google.com/maps/dir/?api=1&origin="+p.coords.latitude+","+p.coords.longitude+"&destination="+encodeURIComponent(b.address||b.city||""),"_blank");},function(){alert("Location permission is required for navigation.");});}});
+    document.getElementById("workerLocationChat").addEventListener("click",function(){openChat(b.id,b.hirer_name||"Hirer");});
+    var btn=document.getElementById("workerNavCheckIn");
+    if(btn)btn.addEventListener("click",function(){doCheckIn(b.id,"gps-nav-"+b.id);});
   }
 
   function submitDiagnosis(id){var notes=prompt("Enter diagnosis / problem found:");if(!notes)return;api("/api/bookings/"+id+"/diagnosis",{method:"POST",body:JSON.stringify({notes:notes})}).then(function(r){if(!r.ok)alert(r.data.error||"Diagnosis failed");else{alert("Diagnosis sent to hirer for approval.");loadBookings();}});}
