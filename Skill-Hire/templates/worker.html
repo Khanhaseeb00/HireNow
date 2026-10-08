@@ -413,6 +413,10 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   </header>
 
   <main>
+    <div id="workerBookingLoadStatus" class="detail-card" role="status" aria-live="polite" hidden>
+      <span id="workerBookingLoadMessage"></span>
+      <button type="button" id="workerBookingRetry" class="btn btn-outline" style="margin-top:10px">Retry Jobs</button>
+    </div>
     <section class="panel active" id="panel-work">
       <div class="worker-home-head">
         <div class="worker-greet" id="workerGreeting">Welcome,</div>
@@ -902,8 +906,10 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   });
 
   document.getElementById("logoutBtn").addEventListener("click", function () {
+    workerJobsSession++;
     api("/api/worker-auth/logout", { method: "POST" }).then(function () {
       if(workerNotificationTimer){clearInterval(workerNotificationTimer);workerNotificationTimer=null;}
+      state.worker=null;state.bookings=[];
       appScreen.style.display = "none";
       appScreen.classList.remove("enter");
       authScreen.style.display = "block";
@@ -911,6 +917,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   });
 
   function startApp(worker) {
+    workerJobsSession++;
     state.worker = worker;
     if(worker.preferred_language)state.lang=worker.preferred_language;
     if(worker.preferred_theme)state.theme=worker.preferred_theme;
@@ -990,9 +997,26 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   var STATUS_LABELS_BY_LANG={"en":{"requested":"New request","confirmed":"Confirmed","en_route":"En route","checked_in":"Checked in","in_progress":"In progress","completed":"Completed","rejected":"Rejected","cancelled":"Cancelled"},"hi":{"requested":"नया अनुरोध","confirmed":"पुष्टि हो गई","en_route":"रास्ते में","checked_in":"साइट पर चेक-इन","in_progress":"काम जारी है","completed":"पूरा हुआ","rejected":"अस्वीकृत","cancelled":"रद्द"},"ar":{"requested":"طلب جديد","confirmed":"مؤكد","en_route":"في الطريق","checked_in":"تم تسجيل الوصول","in_progress":"العمل جارٍ","completed":"مكتمل","rejected":"مرفوض","cancelled":"ملغى"},"ur":{"requested":"نئی درخواست","confirmed":"تصدیق شدہ","en_route":"راستے میں","checked_in":"آمد درج","in_progress":"کام جاری ہے","completed":"مکمل","rejected":"مسترد","cancelled":"منسوخ"},"bn":{"requested":"নতুন অনুরোধ","confirmed":"নিশ্চিত","en_route":"পথে","checked_in":"পৌঁছানো নথিভুক্ত","in_progress":"কাজ চলছে","completed":"সম্পন্ন","rejected":"প্রত্যাখ্যাত","cancelled":"বাতিল"},"ta":{"requested":"புதிய கோரிக்கை","confirmed":"உறுதிசெய்யப்பட்டது","en_route":"வழியில்","checked_in":"வருகை பதிவு","in_progress":"வேலை நடைபெறுகிறது","completed":"முடிந்தது","rejected":"நிராகரிக்கப்பட்டது","cancelled":"ரத்து செய்யப்பட்டது"},"te":{"requested":"కొత్త అభ్యర్థన","confirmed":"నిర్ధారించబడింది","en_route":"దారిలో","checked_in":"చేరినట్లు నమోదు","in_progress":"పని కొనసాగుతోంది","completed":"పూర్తయింది","rejected":"తిరస్కరించబడింది","cancelled":"రద్దయింది"},"mr":{"requested":"नवीन विनंती","confirmed":"पुष्टी झाली","en_route":"वाटेत","checked_in":"आगमन नोंदवले","in_progress":"काम सुरू आहे","completed":"पूर्ण झाले","rejected":"नाकारले","cancelled":"रद्द केले"},"gu":{"requested":"નવી વિનંતી","confirmed":"પુષ્ટિ થઈ","en_route":"રસ્તામાં","checked_in":"આગમન નોંધાયું","in_progress":"કામ ચાલુ છે","completed":"પૂર્ણ થયું","rejected":"નકારેલ","cancelled":"રદ"},"kn":{"requested":"ಹೊಸ ವಿನಂತಿ","confirmed":"ದೃಢೀಕರಿಸಲಾಗಿದೆ","en_route":"ದಾರಿಯಲ್ಲಿ","checked_in":"ಆಗಮನ ದಾಖಲಾಗಿದೆ","in_progress":"ಕೆಲಸ ನಡೆಯುತ್ತಿದೆ","completed":"ಪೂರ್ಣಗೊಂಡಿದೆ","rejected":"ತಿರಸ್ಕರಿಸಲಾಗಿದೆ","cancelled":"ರದ್ದಾಗಿದೆ"},"ml":{"requested":"പുതിയ അഭ്യർഥന","confirmed":"സ്ഥിരീകരിച്ചു","en_route":"വഴിയിലാണ്","checked_in":"എത്തിയത് രേഖപ്പെടുത്തി","in_progress":"ജോലി നടക്കുന്നു","completed":"പൂർത്തിയായി","rejected":"നിരസിച്ചു","cancelled":"റദ്ദാക്കി"},"pa":{"requested":"ਨਵੀਂ ਬੇਨਤੀ","confirmed":"ਪੁਸ਼ਟੀ ਹੋਈ","en_route":"ਰਸਤੇ ਵਿੱਚ","checked_in":"ਪਹੁੰਚ ਦਰਜ","in_progress":"ਕੰਮ ਜਾਰੀ ਹੈ","completed":"ਪੂਰਾ ਹੋਇਆ","rejected":"ਅਸਵੀਕਾਰ","cancelled":"ਰੱਦ"}};
   var NEXT_ACTION_BY_LANG={"en":{"confirmed":"Heading out","en_route":"Arrived at site"},"hi":{"confirmed":"काम के लिए निकल रहा हूँ","en_route":"साइट पर पहुँच गया"},"ar":{"confirmed":"بدأت التوجه","en_route":"وصلت إلى الموقع"},"ur":{"confirmed":"کام کے لیے نکل رہا ہوں","en_route":"مقام پر پہنچ گیا"},"bn":{"confirmed":"রওনা হচ্ছি","en_route":"কাজের স্থানে পৌঁছেছি"},"ta":{"confirmed":"புறப்படுகிறேன்","en_route":"வேலை இடத்தை அடைந்தேன்"},"te":{"confirmed":"బయలుదేరుతున్నాను","en_route":"పని స్థలానికి చేరుకున్నాను"},"mr":{"confirmed":"निघत आहे","en_route":"कामाच्या ठिकाणी पोहोचलो"},"gu":{"confirmed":"નીકળી રહ્યો છું","en_route":"કામના સ્થળે પહોંચ્યો"},"kn":{"confirmed":"ಹೊರಡುತ್ತಿದ್ದೇನೆ","en_route":"ಕೆಲಸದ ಸ್ಥಳಕ್ಕೆ ಬಂದಿದ್ದೇನೆ"},"ml":{"confirmed":"പുറപ്പെടുന്നു","en_route":"ജോലിസ്ഥലത്ത് എത്തി"},"pa":{"confirmed":"ਨਿਕਲ ਰਿਹਾ ਹਾਂ","en_route":"ਕੰਮ ਵਾਲੀ ਥਾਂ ਪਹੁੰਚ ਗਿਆ"}};
 
+  var workerJobsRequest=0, workerJobsSession=0;
+  document.getElementById("workerBookingRetry").addEventListener("click",function(){loadBookings();});
+  function workerJobsLoadNotice(message, busy) {
+    var notice=document.getElementById("workerBookingLoadStatus");
+    document.getElementById("workerBookingLoadMessage").textContent=message;
+    var retry=document.getElementById("workerBookingRetry");
+    retry.disabled=busy;retry.hidden=busy;
+    notice.hidden=!message;
+  }
   function loadBookings() {
+    if(!state.worker)return Promise.resolve(false);
+    var requestId=++workerJobsRequest,sessionId=workerJobsSession,workerId=state.worker.id;
+    workerJobsLoadNotice("Updating jobs...",true);
     return api("/api/worker/bookings").then(function (res) {
-      if(!res.ok || !Array.isArray(res.data))return false;
+      if(requestId!==workerJobsRequest || sessionId!==workerJobsSession || !state.worker || state.worker.id!==workerId)return false;
+      if(!res.ok || !Array.isArray(res.data)){
+        workerJobsLoadNotice((res.data && res.data.error || "Jobs could not be loaded.")+" Last loaded jobs may be outdated. Retry before taking an action.",false);
+        return false;
+      }
+      workerJobsLoadNotice("",false);
       state.bookings = res.data;
       var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
       var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
