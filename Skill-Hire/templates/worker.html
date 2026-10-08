@@ -796,21 +796,27 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   var viewJobsBtn=document.getElementById("viewJobsBtn");
   if(viewJobsBtn) viewJobsBtn.addEventListener("click",function(){showWorkerPanel("jobs");});
     function api(path, opts) {
-    opts = opts || {};
+    opts = Object.assign({}, opts || {});
     if (!(opts.body instanceof FormData)) {
       opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
     }
-    return fetch(path, opts).then(function (r) {
-      return r.text().then(function (text) {
-        var data = {};
-        try { data = text ? JSON.parse(text) : {}; }
-        catch (e) { data = { error: "Server returned an invalid response" }; }
-        return { ok: r.ok, status: r.status, data: data };
+    opts.credentials = "same-origin";
+    var controller = new AbortController();
+    var timer = setTimeout(function(){controller.abort();}, 30000);
+    opts.signal = controller.signal;
+    return fetch(path, opts).then(function(r){
+      return r.text().then(function(text){
+        var data;
+        try { data = JSON.parse(text); }
+        catch(error) { return {ok:false,status:r.status,data:{error:"Server reply could not be read. Check job status before repeating an action."}}; }
+        if (!data || typeof data !== "object") return {ok:false,status:r.status,data:{error:"Unexpected server reply. Check job status before repeating an action."}};
+        return {ok:r.ok,status:r.status,data:data};
       });
-    }).catch(function () {
-      return { ok: false, status: 0, data: { error: "Unable to reach HireNow server" } };
-    });
+    }).catch(function(error){
+      return {ok:false,status:0,data:{error:error.name === "AbortError" ? "Request timed out. Check job status before repeating an action." : "Unable to reach HireNow server. Check job status before repeating an action."}};
+    }).finally(function(){clearTimeout(timer);});
   }
+
   function uiFormatLocale(){
     var locales={en:"en-IN",hi:"hi-IN",ar:"ar",ur:"ur-IN",bn:"bn-IN",ta:"ta-IN",te:"te-IN",mr:"mr-IN",gu:"gu-IN",kn:"kn-IN",ml:"ml-IN",pa:"pa-IN"};
     return locales[state.lang]||"en-IN";
@@ -985,8 +991,8 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   var NEXT_ACTION_BY_LANG={"en":{"confirmed":"Heading out","en_route":"Arrived at site"},"hi":{"confirmed":"काम के लिए निकल रहा हूँ","en_route":"साइट पर पहुँच गया"},"ar":{"confirmed":"بدأت التوجه","en_route":"وصلت إلى الموقع"},"ur":{"confirmed":"کام کے لیے نکل رہا ہوں","en_route":"مقام پر پہنچ گیا"},"bn":{"confirmed":"রওনা হচ্ছি","en_route":"কাজের স্থানে পৌঁছেছি"},"ta":{"confirmed":"புறப்படுகிறேன்","en_route":"வேலை இடத்தை அடைந்தேன்"},"te":{"confirmed":"బయలుదేరుతున్నాను","en_route":"పని స్థలానికి చేరుకున్నాను"},"mr":{"confirmed":"निघत आहे","en_route":"कामाच्या ठिकाणी पोहोचलो"},"gu":{"confirmed":"નીકળી રહ્યો છું","en_route":"કામના સ્થળે પહોંચ્યો"},"kn":{"confirmed":"ಹೊರಡುತ್ತಿದ್ದೇನೆ","en_route":"ಕೆಲಸದ ಸ್ಥಳಕ್ಕೆ ಬಂದಿದ್ದೇನೆ"},"ml":{"confirmed":"പുറപ്പെടുന്നു","en_route":"ജോലിസ്ഥലത്ത് എത്തി"},"pa":{"confirmed":"ਨਿਕਲ ਰਿਹਾ ਹਾਂ","en_route":"ਕੰਮ ਵਾਲੀ ਥਾਂ ਪਹੁੰਚ ਗਿਆ"}};
 
   function loadBookings() {
-    api("/api/worker/bookings").then(function (res) {
-      if(!res.ok || !Array.isArray(res.data))return;
+    return api("/api/worker/bookings").then(function (res) {
+      if(!res.ok || !Array.isArray(res.data))return false;
       state.bookings = res.data;
       var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
       var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
@@ -999,6 +1005,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       renderMessagesScreen();
       if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
       if(currentWorkerPanel==="navigation" && detailBookingId!=null)openNavigation(detailBookingId);
+      return true;
     });
   }
 
@@ -1038,7 +1045,14 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     api("/api/worker/bookings/"+request.id+"/respond",{method:"POST",body:JSON.stringify({action:request.action,reason:request.action==="reject"?document.getElementById("workerRejectReason").value.trim():""})}).then(function(res){
       if(!res.ok)throw Error(res.data.error||wresponse("error"));
       respondDialog.close();loadBookings();
-    }).catch(function(e){feedback.textContent=e.message||wresponse("error");}).finally(function(){
+    }).catch(function(e){
+      feedback.textContent=(e.message||wresponse("error"))+" Checking latest job status...";
+      return loadBookings().then(function(refreshed){
+        var latest=findBooking(request.id);
+        if(refreshed && latest && latest.status!=="requested"){respondDialog.close();return;}
+        feedback.textContent=(e.message||wresponse("error"))+" Check job status before trying again.";
+      });
+    }).finally(function(){
       workerResponseBusy=false;submit.disabled=false;cancel.disabled=false;submit.textContent=wresponse(request.action);
     });
   });
@@ -1249,7 +1263,22 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   }
 
   function submitDiagnosis(id){var notes=prompt("Enter diagnosis / problem found:");if(!notes)return;api("/api/bookings/"+id+"/diagnosis",{method:"POST",body:JSON.stringify({notes:notes})}).then(function(r){if(!r.ok)alert(r.data.error||"Diagnosis failed");else{alert("Diagnosis sent to hirer for approval.");loadBookings();}});}
-  function workTimer(id,action){api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){if(!r.ok){alert(r.data.error||"Timer action failed");var btn=document.querySelector("[data-detail-next]");if(btn)btn.disabled=false;return;}if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);loadBookings();});}
+  var workerTimerRequests = {};
+  function workTimer(id, action) {
+    if(workerTimerRequests[id])return;
+    workerTimerRequests[id]=true;
+    var btn=document.querySelector("[data-detail-next]");
+    if(btn && Number(detailBookingId)===Number(id))btn.disabled=true;
+    return api("/api/worker/bookings/"+id+"/work-timer",{method:"POST",body:JSON.stringify({action:action})}).then(function(r){
+      if(!r.ok){alert((r.data.error||"Timer action failed")+" Check the latest job status before retrying.");return loadBookings();}
+      if(action==="stop")alert("Work completed. "+r.data.actual_minutes+" minutes · Work ₹"+r.data.work_amount+" · Total ₹"+r.data.total_amount);
+      return loadBookings();
+    }).catch(function(){alert("Unable to confirm timer action. Check job status before retrying.");return loadBookings();}).finally(function(){
+      delete workerTimerRequests[id];
+      if(btn && Number(detailBookingId)===Number(id))btn.disabled=false;
+    });
+  }
+
 
   var earningsPeriod="week",earningsData=null,earningsRequest=0;
   function earningsForPeriod(items,period,now){
@@ -1356,7 +1385,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
           body: JSON.stringify({ latitude: lat, longitude: lng, accuracy: pos.coords.accuracy, gps_timestamp: pos.timestamp, expected_status: expectedStatus })
         }).then(function (res) {
           delete note.dataset.gpsBusy;
-          if (!res.ok) { note.textContent = res.data.error || "Kuch galat ho gaya"; if(res.status===409)loadBookings(); return; }
+          if (!res.ok) { note.textContent = res.data.error || "Kuch galat ho gaya"; if(res.status===409 || res.status===0 || res.status>=500)loadBookings(); return; }
           // the one deliberate moment on this page — a small stamp confirming the check-in landed
           note.innerHTML = '<span class="stamp-inline"><span class="pin done"></span><span class="stamp-mini">DONE</span></span>';
           loadBookings();
