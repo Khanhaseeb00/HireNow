@@ -59,15 +59,30 @@ def create_order(amount_rupees: int, receipt: str, notes: dict | None = None) ->
         "receipt": receipt,
         "notes": notes or {},
     }
-    resp = requests.post(
-        ORDERS_URL,
-        json=payload,
-        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
-        timeout=10,
-    )
-    if resp.status_code >= 400:
-        raise RazorpayAPIError(f"Razorpay order creation failed ({resp.status_code}): {resp.text}")
-    return resp.json()
+    try:
+        resp = requests.post(
+            ORDERS_URL,
+            json=payload,
+            auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
+            timeout=10,
+        )
+        if resp.status_code >= 400:
+            # Do not expose raw provider responses in customer-facing errors.
+            raise RazorpayAPIError("Payment provider could not start checkout. Please try again later.")
+        order = resp.json()
+    except requests.RequestException as exc:
+        # A timeout does not prove that the provider rejected the order.
+        # Never automatically repeat the POST here.
+        raise RazorpayAPIError("Checkout response was not received. Check payment status before trying again.") from exc
+    except ValueError as exc:
+        raise RazorpayAPIError("Payment provider returned an unreadable checkout response. Check payment status before retrying.") from exc
+    if (not isinstance(order, dict)
+            or not isinstance(order.get("id"), str) or not order["id"].strip()
+            or type(order.get("amount")) is not int
+            or order["amount"] != payload["amount"]
+            or order.get("currency") != "INR"):
+        raise RazorpayAPIError("Payment provider returned an invalid checkout order. Check payment status before retrying.")
+    return order
 
 
 def verify_checkout_signature(order_id: str, payment_id: str, signature: str) -> bool:

@@ -2031,8 +2031,10 @@
                   if(!vr.ok){window.alert(vr.data.error||"Payment verify nahi hua");return;}
                   loadBookings(); window.open(vr.data.receipt_url||("/api/bookings/"+Number(b.id)+"/receipt.pdf"),"_blank"); openBookingDetailsScreen(b.id);
                 });
-              }
+              },
+              modal:{ondismiss:function(){payOnline.disabled=false;payOnline.textContent="Pay Online Now";}}
             });
+            rzp.on("payment.failed",function(resp){payOnline.disabled=false;payOnline.textContent="Pay Online Now";window.alert("Payment failed: "+(resp.error&&resp.error.description||"Unknown error"));});
             rzp.open();
           });
         });
