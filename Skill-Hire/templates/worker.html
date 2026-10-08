@@ -354,6 +354,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 :root[data-theme="dark"] #authScreen label,:root[data-theme="dark"] #authScreen h2,:root[data-theme="dark"] .worker-wordmark .hire{color:var(--app-text)}
 :root[data-theme="dark"] .error-box{color:#ffd1c4}
 .job-filter-row{overflow-x:auto;flex-wrap:nowrap}.job-filter-row button{flex-shrink:0;min-height:44px}.job-filter-row button:focus-visible{outline:3px solid var(--app-orange);outline-offset:-3px}
+.worker-respond-dialog{width:min(430px,calc(100vw - 28px));max-height:85vh;overflow:auto;padding:22px;border:1px solid var(--app-border);border-radius:20px;background:var(--app-card);color:var(--app-text)}.worker-respond-dialog::backdrop{background:rgba(0,10,25,.65)}.worker-respond-dialog h2{font-size:21px}.worker-respond-dialog p{font-size:14px;color:var(--app-muted);overflow-wrap:anywhere}.worker-respond-dialog input{margin-top:8px;background:var(--app-bg);color:var(--app-text);border-color:var(--app-border)}.worker-respond-actions{display:flex;gap:10px;margin-top:18px}.worker-respond-actions button{flex:1;min-height:44px}.worker-respond-dialog [hidden]{display:none}
 </style>
 </head>
 <body>
@@ -558,6 +559,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   </div>
 </div>
 
+<dialog id="workerRespondDialog" class="worker-respond-dialog">
+  <form method="dialog" id="workerRespondForm">
+    <h2 id="workerRespondTitle">Respond to job</h2><p id="workerRespondDescription"></p>
+    <div id="workerRejectReasonWrap"><label for="workerRejectReason">Reason (optional)</label><input id="workerRejectReason" maxlength="500" placeholder="Why are you declining?"></div>
+    <p id="workerRespondFeedback" role="status" aria-live="polite"></p>
+    <div class="worker-respond-actions"><button type="button" class="btn btn-outline" id="workerRespondCancel">Keep Request</button><button type="submit" class="btn btn-safety" id="workerRespondSubmit">Confirm</button></div>
+  </form>
+</dialog>
 <script>
 (function () {
   "use strict";
@@ -943,6 +952,34 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     });
   }
 
+  var pendingWorkerResponse=null,workerResponseBusy=false;
+  var respondDialog=document.getElementById("workerRespondDialog");
+  function openWorkerResponse(id,action){
+    var booking=findBooking(Number(id));if(!booking || booking.status!=="requested" || workerResponseBusy)return;
+    pendingWorkerResponse={id:Number(id),action:action};
+    document.getElementById("workerRespondTitle").textContent=action==="accept"?"Accept this job?":"Decline this request?";
+    document.getElementById("workerRespondDescription").textContent="Booking #"+id+" · "+jobTitle(booking)+" · "+(booking.hirer_name||"Hirer")+(booking.start_date?" · "+fmtDate(booking.start_date):"");
+    document.getElementById("workerRejectReasonWrap").hidden=action!=="reject";
+    document.getElementById("workerRejectReason").value="";
+    document.getElementById("workerRespondFeedback").textContent="";
+    document.getElementById("workerRespondSubmit").textContent=action==="accept"?"Accept Job":"Decline Job";
+    respondDialog.showModal();
+  }
+  document.getElementById("workerRespondCancel").addEventListener("click",function(){if(!workerResponseBusy)respondDialog.close();});
+  respondDialog.addEventListener("cancel",function(e){if(workerResponseBusy)e.preventDefault();});
+  respondDialog.addEventListener("close",function(){pendingWorkerResponse=null;});
+  document.getElementById("workerRespondForm").addEventListener("submit",function(e){
+    e.preventDefault();if(!pendingWorkerResponse || workerResponseBusy)return;
+    var request=pendingWorkerResponse,submit=document.getElementById("workerRespondSubmit"),cancel=document.getElementById("workerRespondCancel"),feedback=document.getElementById("workerRespondFeedback");
+    workerResponseBusy=true;submit.disabled=true;cancel.disabled=true;submit.textContent="Sending…";feedback.textContent="";
+    api("/api/worker/bookings/"+request.id+"/respond",{method:"POST",body:JSON.stringify({action:request.action,reason:request.action==="reject"?document.getElementById("workerRejectReason").value.trim():""})}).then(function(res){
+      if(!res.ok)throw Error(res.data.error||"Unable to save your response. Please try again.");
+      respondDialog.close();loadBookings();
+    }).catch(function(e){feedback.textContent=e.message||"Unable to save your response. Please try again.";}).finally(function(){
+      workerResponseBusy=false;submit.disabled=false;cancel.disabled=false;submit.textContent=request.action==="accept"?"Accept Job":"Decline Job";
+    });
+  });
+
   function renderBookings() {
     var wrap = document.getElementById("bookingsList");
     if (!state.bookings.length) { wrap.innerHTML = '<div class="empty">' + wt("no_bookings") + '</div>'; return; }
@@ -991,27 +1028,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       );
     }).join("");
 
-    wrap.querySelectorAll("[data-accept]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        api("/api/worker/bookings/" + btn.dataset.accept + "/respond", {
-          method:"POST", body:JSON.stringify({action:"accept"})
-        }).then(function(res){
-          if(!res.ok){ window.alert(res.data.error || "Accept nahi hua"); return; }
-          loadBookings();
-        });
-      });
-    });
-    wrap.querySelectorAll("[data-reject]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var reason = window.prompt("Reject karne ka reason (optional):", "") || "";
-        api("/api/worker/bookings/" + btn.dataset.reject + "/respond", {
-          method:"POST", body:JSON.stringify({action:"reject",reason:reason})
-        }).then(function(res){
-          if(!res.ok){ window.alert(res.data.error || "Reject nahi hua"); return; }
-          loadBookings();
-        });
-      });
-    });
+    wrap.querySelectorAll("[data-accept]").forEach(function(btn){btn.addEventListener("click",function(){openWorkerResponse(btn.dataset.accept,"accept");});});
+    wrap.querySelectorAll("[data-reject]").forEach(function(btn){btn.addEventListener("click",function(){openWorkerResponse(btn.dataset.reject,"reject");});});
     wrap.querySelectorAll("[data-diagnose]").forEach(function(btn){btn.addEventListener("click",function(){submitDiagnosis(Number(btn.dataset.diagnose));});});
     wrap.querySelectorAll("[data-timer-start]").forEach(function(btn){btn.addEventListener("click",function(){workTimer(Number(btn.dataset.timerStart),"start");});});
     wrap.querySelectorAll("[data-timer-stop]").forEach(function(btn){btn.addEventListener("click",function(){workTimer(Number(btn.dataset.timerStop),"stop");});});
@@ -1105,8 +1123,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       nextBtn.disabled=true;
       workTimer(b.id,next.action);
     });
-    var a=document.querySelector("[data-detail-accept]");if(a)a.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"accept"})}).then(function(r){if(r.ok){loadBookings();showWorkerPanel("jobs");}else alert(r.data.error||"Accept failed");});});
-    var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){api("/api/worker/bookings/"+b.id+"/respond",{method:"POST",body:JSON.stringify({action:"reject",reason:""})}).then(function(x){if(x.ok){loadBookings();showWorkerPanel("jobs");}else alert(x.data.error||"Reject failed");});});
+    var a=document.querySelector("[data-detail-accept]");if(a)a.addEventListener("click",function(){openWorkerResponse(b.id,"accept");});
+    var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){openWorkerResponse(b.id,"reject");});
     var n=document.querySelector("[data-nav-job]");if(n)n.addEventListener("click",function(){openNavigation(b.id);});
     var c=document.querySelector("[data-detail-chat]");if(c)c.addEventListener("click",function(){openChat(b.id,b.hirer_name||"Hirer");});
     var rr=document.querySelector("[data-detail-receipt]");if(rr)rr.addEventListener("click",function(){window.open("/api/worker/bookings/"+b.id+"/receipt.pdf","_blank");});
