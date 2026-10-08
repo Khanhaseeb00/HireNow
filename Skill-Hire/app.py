@@ -30,6 +30,7 @@ import os
 import secrets
 import re
 import math
+import time
 import requests as _requests
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
@@ -83,10 +84,12 @@ def normalize_theme(value):
 def parse_optional_coordinates(latitude, longitude):
     if latitude in (None, "") and longitude in (None, ""):
         return None, None
+    if isinstance(latitude, bool) or isinstance(longitude, bool):
+        raise ValueError("Valid latitude and longitude are required")
     try:
         latitude = float(latitude)
         longitude = float(longitude)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         raise ValueError("Valid latitude and longitude are required")
     if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
         raise ValueError("Latitude or longitude is outside the valid range")
@@ -2890,6 +2893,35 @@ def worker_respond_booking(booking_id):
     return jsonify({"status": "confirmed", "payment_status": payment_status, "payment_method": booking["payment_method"]})
 
 
+@app.post("/api/bookings/<int:booking_id>/site-location")
+def add_booking_site_location(booking_id):
+    auth_error = require_login()
+    if auth_error:
+        return auth_error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Site location must be an object"}), 400
+    try:
+        lat, lng = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+        if lat is None:
+            raise ValueError("Select the job site pin")
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=? AND hirer_id=?"), (booking_id, current_hirer_id())).fetchone()
+    if not booking:
+        conn.close(); return jsonify({"error": "Booking not found"}), 404
+    if booking["status"] not in ("requested", "confirmed", "en_route") or booking["booking_type"] != "regular" or booking["service_latitude"] is not None or booking["service_longitude"] is not None:
+        conn.close(); return jsonify({"error": "An existing site pin or a started job cannot be changed"}), 409
+    conn.execute("UPDATE bookings SET service_latitude=?, service_longitude=? WHERE id=?", (lat, lng, booking_id))
+    conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,?,?)", (booking_id, booking["status"], "Hirer added the missing job site pin"))
+    add_in_app_notification(conn, "worker", booking["worker_id"], "site_location", "Job site pin added", f"Hirer added the site pin for booking #{booking_id}. Refresh job details before travelling.", booking_id)
+    conn.commit(); conn.close()
+    return jsonify({"ok": True})
+
+
 @app.post("/api/worker/bookings/<int:booking_id>/check-in")
 def worker_check_in(booking_id):
     """
@@ -2903,19 +2935,41 @@ def worker_check_in(booking_id):
     if auth_error:
         return auth_error
 
-    data = request.get_json(force=True) or {}
-    lat, lng = data.get("latitude"), data.get("longitude")
-    if lat is None or lng is None:
-        return jsonify({"error": "latitude and longitude are required — allow location access in your browser"}), 400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "GPS update must be an object"}), 400
+    try:
+        lat, lng = parse_optional_coordinates(data.get("latitude"), data.get("longitude"))
+        if lat is None:
+            raise ValueError("Allow location access to send latitude and longitude")
+        if any(isinstance(data.get(key), bool) for key in ("accuracy", "gps_timestamp")):
+            raise ValueError("Invalid GPS accuracy or timestamp")
+        accuracy = float(data.get("accuracy"))
+        timestamp = float(data.get("gps_timestamp"))
+        age_ms = time.time() * 1000 - timestamp
+        if not math.isfinite(accuracy) or not 0 <= accuracy <= 100:
+            raise ValueError("GPS accuracy must be within 100 metres. Move to an open area and retry.")
+        if not math.isfinite(timestamp) or not -30000 <= age_ms <= 120000:
+            raise ValueError("GPS location is stale. Get a fresh location and retry.")
+    except (ValueError, TypeError, OverflowError) as exc:
+        return jsonify({"error": str(exc) if isinstance(exc, ValueError) else "Valid GPS accuracy and timestamp are required"}), 400
+    expected_status = data.get("expected_status")
+    if expected_status not in ("confirmed", "en_route"):
+        return jsonify({"error": "Refresh booking details before sending a location update"}), 400
 
     conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
+        for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())
     ).fetchone()
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found or not assigned to you"}), 404
 
+    if booking["status"] != expected_status:
+        conn.close()
+        return jsonify({"error": "Booking status changed. Refresh before updating again."}), 409
     if booking["status"] in ("requested", "rejected", "cancelled", "completed"):
         conn.close()
         return jsonify({"error": "This booking is not eligible for GPS progress updates"}), 400
@@ -2937,6 +2991,20 @@ def worker_check_in(booking_id):
         conn.close()
         return jsonify({"error": "This booking cannot be advanced by GPS check-in"}), 409
 
+    distance_metres = None
+    if nxt == "checked_in":
+        try:
+            site_lat, site_lng = parse_optional_coordinates(booking["service_latitude"], booking["service_longitude"])
+            if site_lat is None:
+                raise ValueError("Site pin missing. Ask the hirer to add it from booking details before arrival check-in.")
+        except ValueError as exc:
+            conn.close(); return jsonify({"error": str(exc)}), 409
+        distance_metres = haversine_distance_km(lat, lng, site_lat, site_lng) * 1000
+        if distance_metres > 300:
+            conn.close()
+            return jsonify({"error": "You are too far from the site. Move within 300 metres of the job pin and retry.",
+                            "distance_metres": round(distance_metres)}), 409
+
     note_map = {
         "en_route": "Worker is heading to the job location with GPS recorded",
         "checked_in": "Worker arrived and checked in at the site with GPS",
@@ -2944,7 +3012,7 @@ def worker_check_in(booking_id):
     conn.execute("UPDATE bookings SET status = ? WHERE id = ?", (nxt, booking_id))
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
-        (booking_id, nxt, note_map.get(nxt, nxt), lat, lng),
+        (booking_id, nxt, note_map.get(nxt, nxt) + f"; GPS accuracy {accuracy:.0f}m" + (f"; site distance {distance_metres:.0f}m" if distance_metres is not None else ""), lat, lng),
     )
     hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
     add_in_app_notification(
@@ -2957,7 +3025,7 @@ def worker_check_in(booking_id):
     if hirer and hirer["phone"]:
         notify(hirer["phone"], f"HireNow: Booking #{booking_id} status — {note_map.get(nxt, nxt)}")
 
-    return jsonify({"status": nxt, "latitude": lat, "longitude": lng})
+    return jsonify({"status": nxt, "latitude": lat, "longitude": lng, "accuracy": accuracy, "distance_metres": round(distance_metres) if distance_metres is not None else None})
 
 
 @app.post("/api/bookings/<int:booking_id>/cash-otp")

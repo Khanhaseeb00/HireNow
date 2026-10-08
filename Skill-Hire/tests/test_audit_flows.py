@@ -1,5 +1,6 @@
 """Role boundaries and marketplace discovery after a verification upload."""
 import io
+import time
 import unittest
 import uuid
 from unittest.mock import patch
@@ -40,7 +41,7 @@ class HireNowAuditFlows(unittest.TestCase):
         response = self.client.post("/api/bookings", json={
             "worker_id": self.worker, "start_date": "2099-01-02",
             "start_time": "10:00", "hours": 2, "payment_method": "cash",
-            "address": "Test address",
+            "address": "Test address", "service_latitude": 28.6, "service_longitude": 77.2,
         })
         self.assertEqual(response.status_code, 201, response.get_json())
         return response.get_json()["id"]
@@ -74,7 +75,7 @@ class HireNowAuditFlows(unittest.TestCase):
         self.login("worker", self.worker)
         self.assertEqual(self.client.post(f"/api/worker/bookings/{booking_id}/respond", json={"action": "accept"}).status_code, 200)
         for status in ("en_route", "checked_in"):
-            result = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 28.6, "longitude": 77.2})
+            result = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 28.6, "longitude": 77.2, "accuracy": 10, "gps_timestamp": time.time()*1000, "expected_status": "confirmed" if status == "en_route" else "en_route"})
             self.assertEqual(result.get_json()["status"], status)
         for action in ("start", "stop"):
             self.assertEqual(self.client.post(f"/api/worker/bookings/{booking_id}/work-timer", json={"action": action}).status_code, 200)

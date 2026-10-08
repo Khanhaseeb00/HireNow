@@ -1302,8 +1302,14 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
 
     function doCheckIn(bookingId, noteId) {
     var note = document.getElementById(noteId || ("gps-" + bookingId));
+    var booking = findBooking(bookingId);
+    if (!booking || ["confirmed", "en_route"].indexOf(booking.status) < 0) { loadBookings(); return; }
+    var expectedStatus = booking.status;
+    if (note.dataset.gpsBusy === "1") return;
+    note.dataset.gpsBusy = "1";
     if (!navigator.geolocation) {
-      note.innerHTML = '<span class="pin" style="background:var(--rust);"></span> Is browser mein location support nahi hai.';
+      delete note.dataset.gpsBusy;
+      note.textContent = "Is browser mein location support nahi hai.";
       return;
     }
     note.innerHTML = '<span class="pin locating"></span> Location le rahe hain...';
@@ -1313,18 +1319,20 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
         note.innerHTML = '<span class="pin locating"></span> Location mil gayi (' + lat.toFixed(4) + ', ' + lng.toFixed(4) + ') — bhej rahe hain...';
         api("/api/worker/bookings/" + bookingId + "/check-in", {
           method: "POST",
-          body: JSON.stringify({ latitude: lat, longitude: lng })
+          body: JSON.stringify({ latitude: lat, longitude: lng, accuracy: pos.coords.accuracy, gps_timestamp: pos.timestamp, expected_status: expectedStatus })
         }).then(function (res) {
-          if (!res.ok) { note.innerHTML = '<span class="pin" style="background:var(--rust);"></span> ' + (res.data.error || "Kuch galat ho gaya"); return; }
+          delete note.dataset.gpsBusy;
+          if (!res.ok) { note.textContent = res.data.error || "Kuch galat ho gaya"; if(res.status===409)loadBookings(); return; }
           // the one deliberate moment on this page — a small stamp confirming the check-in landed
           note.innerHTML = '<span class="stamp-inline"><span class="pin done"></span><span class="stamp-mini">DONE</span></span>';
           loadBookings();
-        });
+        }).catch(function(){delete note.dataset.gpsBusy;note.textContent="Connection failed. Refresh the booking before retrying.";});
       },
       function (err) {
-        note.innerHTML = '<span class="pin" style="background:var(--rust);"></span> Location permission nahi mili: ' + err.message + '. Browser settings mein location allow karein.';
+        delete note.dataset.gpsBusy;
+        note.textContent = "Location nahi mili: " + err.message + ". Browser settings mein location allow karein aur retry karein.";
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   }
 

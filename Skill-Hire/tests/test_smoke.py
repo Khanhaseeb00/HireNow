@@ -1,3 +1,4 @@
+import time
 import os
 import tempfile
 import unittest
@@ -235,20 +236,20 @@ class HireNowSmokeTests(unittest.TestCase):
                         VALUES (?,?,?,?,?,?,?,?,?,?)""",
                      (hirer_id, worker_id, "2099-01-02", "10:00", 2, "regular", "cash", 200, "confirmed", "cash_pending"))
         booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
-        conn.execute("UPDATE bookings SET agreed_hourly_rate=100 WHERE id=?", (booking_id,))
+        conn.execute("UPDATE bookings SET agreed_hourly_rate=100,service_latitude=1.1,service_longitude=2.1 WHERE id=?", (booking_id,))
         conn.commit(); conn.close()
 
         with self.client.session_transaction() as sess:
             sess.clear()
             sess["worker_id"] = worker_id
 
-        first = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.0, "longitude": 2.0})
+        first = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.0, "longitude": 2.0, "accuracy": 10, "gps_timestamp": time.time()*1000, "expected_status": "confirmed"})
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.get_json()["status"], "en_route")
-        second = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.1, "longitude": 2.1})
+        second = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.1, "longitude": 2.1, "accuracy": 10, "gps_timestamp": time.time()*1000, "expected_status": "en_route"})
         self.assertEqual(second.status_code, 200)
         self.assertEqual(second.get_json()["status"], "checked_in")
-        third = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.2, "longitude": 2.2})
+        third = self.client.post(f"/api/worker/bookings/{booking_id}/check-in", json={"latitude": 1.2, "longitude": 2.2, "accuracy": 10, "gps_timestamp": time.time()*1000, "expected_status": "en_route"})
         self.assertEqual(third.status_code, 409)
 
         started = self.client.post(f"/api/worker/bookings/{booking_id}/work-timer", json={"action": "start"})

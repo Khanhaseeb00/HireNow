@@ -1898,6 +1898,16 @@
           ((b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
           ((b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
           ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '');
+        if(b.booking_type === "regular" && b.service_latitude == null && b.service_longitude == null && ["requested","confirmed","en_route"].indexOf(b.status)>=0){
+          var pinButton=document.createElement("button");pinButton.className="btn btn-outline btn-block";pinButton.textContent="Add missing job site pin";
+          stackBody.appendChild(pinButton);
+          pinButton.onclick=function(){openBookingMapPicker(function(lat,lng){
+            api("/api/bookings/"+b.id+"/site-location",{method:"POST",body:JSON.stringify({latitude:lat,longitude:lng})}).then(function(r){
+              if(!r.ok)window.alert(r.data.error||"Site pin could not be saved");
+              loadBookings();openBookingDetailsScreen(b.id);
+            });
+          });};
+        }
         var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
         var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
           if(!window.confirm("Cancel this booking?"))return;
