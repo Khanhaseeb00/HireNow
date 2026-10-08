@@ -636,6 +636,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     renderProfile();
     updateWorkerHomeHeader();
     applyWorkerJobLabels();
+    if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
+    if(currentWorkerPanel==="navigation" && detailBookingId!=null)openNavigation(detailBookingId);
   }
   function syncWorkerPreferences(){
     if(!state.worker)return;
@@ -933,14 +935,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 
   // ---------------- bookings + real GPS check-in ----------------
   var STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"];
-  var STATUS_LABELS_BY_LANG = {
-    hi: { requested: "Nayi Request", confirmed: "Confirmed", en_route: "Aap ja rahe hain", checked_in: "Site par check-in", in_progress: "Kaam chal raha hai", completed: "Poora hua", rejected: "Rejected", cancelled: "Cancelled" },
-    en: { requested: "New Request", confirmed: "Confirmed", en_route: "En route", checked_in: "Checked in", in_progress: "In progress", completed: "Completed", rejected: "Rejected", cancelled: "Cancelled" }
-  };
-  var NEXT_ACTION_BY_LANG = {
-    hi: { confirmed: "Nikal raha hoon", en_route: "Site pahunch gaya" },
-    en: { confirmed: "Heading out", en_route: "Arrived at site" }
-  };
+  var STATUS_LABELS_BY_LANG={"en":{"requested":"New request","confirmed":"Confirmed","en_route":"En route","checked_in":"Checked in","in_progress":"In progress","completed":"Completed","rejected":"Rejected","cancelled":"Cancelled"},"hi":{"requested":"नया अनुरोध","confirmed":"पुष्टि हो गई","en_route":"रास्ते में","checked_in":"साइट पर चेक-इन","in_progress":"काम जारी है","completed":"पूरा हुआ","rejected":"अस्वीकृत","cancelled":"रद्द"},"ar":{"requested":"طلب جديد","confirmed":"مؤكد","en_route":"في الطريق","checked_in":"تم تسجيل الوصول","in_progress":"العمل جارٍ","completed":"مكتمل","rejected":"مرفوض","cancelled":"ملغى"},"ur":{"requested":"نئی درخواست","confirmed":"تصدیق شدہ","en_route":"راستے میں","checked_in":"آمد درج","in_progress":"کام جاری ہے","completed":"مکمل","rejected":"مسترد","cancelled":"منسوخ"},"bn":{"requested":"নতুন অনুরোধ","confirmed":"নিশ্চিত","en_route":"পথে","checked_in":"পৌঁছানো নথিভুক্ত","in_progress":"কাজ চলছে","completed":"সম্পন্ন","rejected":"প্রত্যাখ্যাত","cancelled":"বাতিল"},"ta":{"requested":"புதிய கோரிக்கை","confirmed":"உறுதிசெய்யப்பட்டது","en_route":"வழியில்","checked_in":"வருகை பதிவு","in_progress":"வேலை நடைபெறுகிறது","completed":"முடிந்தது","rejected":"நிராகரிக்கப்பட்டது","cancelled":"ரத்து செய்யப்பட்டது"},"te":{"requested":"కొత్త అభ్యర్థన","confirmed":"నిర్ధారించబడింది","en_route":"దారిలో","checked_in":"చేరినట్లు నమోదు","in_progress":"పని కొనసాగుతోంది","completed":"పూర్తయింది","rejected":"తిరస్కరించబడింది","cancelled":"రద్దయింది"},"mr":{"requested":"नवीन विनंती","confirmed":"पुष्टी झाली","en_route":"वाटेत","checked_in":"आगमन नोंदवले","in_progress":"काम सुरू आहे","completed":"पूर्ण झाले","rejected":"नाकारले","cancelled":"रद्द केले"},"gu":{"requested":"નવી વિનંતી","confirmed":"પુષ્ટિ થઈ","en_route":"રસ્તામાં","checked_in":"આગમન નોંધાયું","in_progress":"કામ ચાલુ છે","completed":"પૂર્ણ થયું","rejected":"નકારેલ","cancelled":"રદ"},"kn":{"requested":"ಹೊಸ ವಿನಂತಿ","confirmed":"ದೃಢೀಕರಿಸಲಾಗಿದೆ","en_route":"ದಾರಿಯಲ್ಲಿ","checked_in":"ಆಗಮನ ದಾಖಲಾಗಿದೆ","in_progress":"ಕೆಲಸ ನಡೆಯುತ್ತಿದೆ","completed":"ಪೂರ್ಣಗೊಂಡಿದೆ","rejected":"ತಿರಸ್ಕರಿಸಲಾಗಿದೆ","cancelled":"ರದ್ದಾಗಿದೆ"},"ml":{"requested":"പുതിയ അഭ്യർഥന","confirmed":"സ്ഥിരീകരിച്ചു","en_route":"വഴിയിലാണ്","checked_in":"എത്തിയത് രേഖപ്പെടുത്തി","in_progress":"ജോലി നടക്കുന്നു","completed":"പൂർത്തിയായി","rejected":"നിരസിച്ചു","cancelled":"റദ്ദാക്കി"},"pa":{"requested":"ਨਵੀਂ ਬੇਨਤੀ","confirmed":"ਪੁਸ਼ਟੀ ਹੋਈ","en_route":"ਰਸਤੇ ਵਿੱਚ","checked_in":"ਪਹੁੰਚ ਦਰਜ","in_progress":"ਕੰਮ ਜਾਰੀ ਹੈ","completed":"ਪੂਰਾ ਹੋਇਆ","rejected":"ਅਸਵੀਕਾਰ","cancelled":"ਰੱਦ"}};
+  var NEXT_ACTION_BY_LANG={"en":{"confirmed":"Heading out","en_route":"Arrived at site"},"hi":{"confirmed":"काम के लिए निकल रहा हूँ","en_route":"साइट पर पहुँच गया"},"ar":{"confirmed":"بدأت التوجه","en_route":"وصلت إلى الموقع"},"ur":{"confirmed":"کام کے لیے نکل رہا ہوں","en_route":"مقام پر پہنچ گیا"},"bn":{"confirmed":"রওনা হচ্ছি","en_route":"কাজের স্থানে পৌঁছেছি"},"ta":{"confirmed":"புறப்படுகிறேன்","en_route":"வேலை இடத்தை அடைந்தேன்"},"te":{"confirmed":"బయలుదేరుతున్నాను","en_route":"పని స్థలానికి చేరుకున్నాను"},"mr":{"confirmed":"निघत आहे","en_route":"कामाच्या ठिकाणी पोहोचलो"},"gu":{"confirmed":"નીકળી રહ્યો છું","en_route":"કામના સ્થળે પહોંચ્યો"},"kn":{"confirmed":"ಹೊರಡುತ್ತಿದ್ದೇನೆ","en_route":"ಕೆಲಸದ ಸ್ಥಳಕ್ಕೆ ಬಂದಿದ್ದೇನೆ"},"ml":{"confirmed":"പുറപ്പെടുന്നു","en_route":"ജോലിസ്ഥലത്ത് എത്തി"},"pa":{"confirmed":"ਨਿਕਲ ਰਿਹਾ ਹਾਂ","en_route":"ਕੰਮ ਵਾਲੀ ਥਾਂ ਪਹੁੰਚ ਗਿਆ"}};
 
   function loadBookings() {
     api("/api/worker/bookings").then(function (res) {
@@ -1109,7 +1105,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     if(b.status==="requested")return {label:"Review this request and accept or reject below."};
     if(!(b.payment_status==="paid" || (b.payment_method==="cash" && b.payment_status==="cash_pending")))return {label:"Waiting for payment confirmation before work can continue."};
     if(b.work_started_at && !b.work_ended_at)return {label:"Work timer is running",action:"stop",button:"Stop & Complete Work"};
-    if(b.status==="confirmed" || b.status==="en_route")return {label:"Record your location to update this job.",action:"checkin",button:b.status==="confirmed"?"Heading Out · GPS Update":"Arrived at Site · Check In"};
+    if(b.status==="confirmed" || b.status==="en_route")return {label:"Record your location to update this job.",action:"checkin",button:(NEXT_ACTION_BY_LANG[state.lang]||NEXT_ACTION_BY_LANG.en)[b.status]};
     if(b.status==="checked_in"){
       if(b.booking_type==="diagnosis" && !b.diagnosis_notes)return {label:"Submit your findings for the hirer to review.",action:"diagnose",button:"Submit Diagnosis"};
       if(b.booking_type==="diagnosis" && !b.work_approved_at)return {label:"Diagnosis submitted. Waiting for hirer approval."};
