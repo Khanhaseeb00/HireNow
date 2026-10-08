@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="hi" data-service-timezone="{{ service_timezone }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -924,6 +924,13 @@
     if(!Number.isFinite(amount))return "—";
     return new Intl.NumberFormat(uiFormatLocale(),{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:2}).format(amount);
   }
+  var serviceTimezone = document.documentElement.dataset.serviceTimezone || "Asia/Kolkata";
+  function serviceDate(offsetDays, instant){
+    var parts = new Intl.DateTimeFormat("en-US", {timeZone:serviceTimezone, year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(instant || new Date());
+    var values={};parts.forEach(function(p){values[p.type]=p.value;});
+    var date=new Date(Date.UTC(Number(values.year),Number(values.month)-1,Number(values.day)+(offsetDays||0)));
+    return date.toISOString().slice(0,10);
+  }
   function fmtDate(d){
     var match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||""));
     if(!match)return "—";
@@ -1537,7 +1544,7 @@
     var w = state.workers.filter(function (x) { return x.id === workerId; })[0];
     if (!w) return;
     var hourly = Math.round(Number(w.daily_wage || 0) / 8 * 100) / 100;
-    var now = new Date(), today = now.toISOString().slice(0,10), tomorrowDate = new Date(now.getTime()+86400000).toISOString().slice(0,10);
+    var today = serviceDate(0), tomorrowDate = serviceDate(1);
     var selectedDate=today, selectedTime="", selectedEnd="", selectedType="regular", selectedPayment="cash",
         diagnosisDistance=null, diagnosisFee=null, diagnosisLat=null, diagnosisLng=null, diagnosisQuoteError="",
         bookingLat=state.location&&state.location.latitude!=null?state.location.latitude:null,
@@ -1556,7 +1563,7 @@
       stackBody.innerHTML='<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(w.id)+'">'+initials(w.name)+'</div><div class="body"><div class="name">'+w.name+'</div><div class="sub">'+w.skill+' · '+w.city+'</div><div class="sub"><b>'+fmtMoney(w.daily_wage)+'/day</b> · '+fmtMoney(hourly)+'/hr derived from 8-hour day</div></div></div>'+
       '<div class="ref-card"><div class="ref-label">Booking Type</div><div class="ref-service-row"><button class="ref-service-btn '+(!isDiagnosis?'active':'')+'" data-type="regular">Regular Work</button><button class="ref-service-btn '+(isDiagnosis?'active':'')+'" data-type="diagnosis">Diagnosis / Inspection</button></div>'+
       '<div class="ref-label">Date</div><div class="ref-date-tabs"><button class="ref-date-btn '+(selectedDate===today?'active':'')+'" data-date="'+today+'">Today</button><button class="ref-date-btn '+(selectedDate===tomorrowDate?'active':'')+'" data-date="'+tomorrowDate+'">Tomorrow</button><input type="date" id="bookDate" min="'+today+'" value="'+selectedDate+'"></div>'+
-      '<div class="ref-label">Start Time</div><div class="ref-time-grid">'+(slotsLoading?'Checking available times...':availableSlots.map(function(t){return '<button class="ref-time-btn '+(selectedTime===t?'active':'')+'" data-start="'+t+'">'+time24(t)+'</button>';}).join('')||'<div class="slot-state unavailable">'+(slotError||'No slots available')+'</div>')+'</div>'+
+      '<div class="ref-label">Start Time · India (IST)</div><div class="ref-time-grid">'+(slotsLoading?'Checking available times...':availableSlots.map(function(t){return '<button class="ref-time-btn '+(selectedTime===t?'active':'')+'" data-start="'+t+'">'+time24(t)+'</button>';}).join('')||'<div class="slot-state unavailable">'+(slotError||'No slots available')+'</div>')+'</div>'+
       '<div class="ref-label">End Time (24-hour)</div><input class="ref-address" type="time" id="endTime" value="'+selectedEnd+'">'+
       (isDiagnosis?'<div class="ref-label">Diagnosis Service Location</div><div class="accept-note" id="diagQuoteNote">'+(diagnosisQuoteError?diagnosisQuoteError:(diagnosisDistance!=null?'Server distance: '+diagnosisDistance+' km · fee calculated automatically':'Choose the service location below. Worker exact base coordinates are not shown.'))+'</div><div class="accept-note">Pricing is server-controlled. You cannot enter or change the distance manually.</div>':'')+
       '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="Service address" value="'+String(bookingAddress).replace(/"/g,'&quot;')+'"><div class="location-actions" style="margin:8px 0 10px"><button class="btn btn-outline" id="bookingSavedLocation">Saved Location</button><button class="btn btn-outline" id="bookingCurrentLocation">Current GPS</button></div><button class="btn btn-outline btn-block" id="bookingMapLocation" style="margin-bottom:10px">Choose on Map</button><div class="accept-note" id="bookingLocationInfo">'+(bookingLat!=null?('Selected: '+Number(bookingLat).toFixed(5)+', '+Number(bookingLng).toFixed(5)):'No map location selected')+'</div><div class="ref-label">Payment Method</div><div class="pay-choice-grid"><button class="pay-choice '+(selectedPayment==='cash'?'active':'')+'" data-pay="cash">Cash after Work</button><button class="pay-choice '+(selectedPayment==='online'?'active':'')+'" data-pay="online">Online Payment</button></div><div class="ref-label">Instructions</div><textarea class="ref-notes" id="refNotes">'+bookingNotes+'</textarea>'+
@@ -1877,7 +1884,7 @@
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+initials(b.worker_name)+'</div>' +
             '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
           '<div class="ref-detail-list">' +
-            '<div class="ref-detail-row"><div class="k">Date &amp; Time</div><div class="v">📅 '+b.start_date+' &nbsp; ◷ '+(b.start_time||"Time not set")+'</div></div>' +
+            '<div class="ref-detail-row"><div class="k">Date &amp; Time · India (IST)</div><div class="v">📅 '+b.start_date+' &nbsp; ◷ '+(b.start_time||"Time not set")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.booking_type||"regular")+'</div></div>' + (b.diagnosis_notes?'<div class="ref-detail-row"><div class="k">Diagnosis</div><div class="v">'+b.diagnosis_notes+'</div></div>':'') + (b.booking_type==='diagnosis'&&b.diagnosis_notes&&!b.work_approved_at&&!b.work_declined_at&&b.status==='checked_in'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0"><button class="btn btn-safety" onclick="approveDiagnosisWork('+b.id+')">Approve Paid Work</button><button class="btn btn-outline" onclick="declineDiagnosisWork('+b.id+')">Diagnosis Only</button></div>':'') + (b.work_declined_at?'<div class="pay-note">Repair work declined after diagnosis. Final bill is diagnosis fee only.</div>':'') +
             '<div class="ref-detail-row"><div class="k">Address</div><div class="v">'+(b.address||"Not provided")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Special Instructions</div><div class="v">'+(b.special_instructions||"None")+'</div></div>' +

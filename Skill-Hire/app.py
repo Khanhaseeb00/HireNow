@@ -25,7 +25,8 @@ in an offline sandbox — see notifications.py):
 """
 from flask import Flask, request, jsonify, session, render_template_string, render_template, Response, send_file
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 import os
 import secrets
 import re
@@ -65,6 +66,24 @@ ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
 STANDARD_WORKDAY_HOURS = 8
 BOOKING_RESPONSE_MINUTES = 30
+SERVICE_TIMEZONE = "Asia/Kolkata"
+SERVICE_ZONE = ZoneInfo(SERVICE_TIMEZONE)
+
+
+def service_now():
+    """Service wall clock for date-only schedules, independent of server TZ."""
+    return datetime.now(timezone.utc).astimezone(SERVICE_ZONE).replace(tzinfo=None)
+
+
+def schedule_utc(value):
+    """Convert an India service schedule into the existing naive UTC storage."""
+    return value.replace(tzinfo=SERVICE_ZONE).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+@app.context_processor
+def service_time_context():
+    return {"service_timezone": SERVICE_TIMEZONE}
+
 # V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
 DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
 
@@ -560,12 +579,11 @@ def booking_request_deadline(booking):
     deadline_value = explicit or booking["created_at"]
     deadline = datetime.fromisoformat(str(deadline_value).replace("Z", "+00:00"))
     if deadline.tzinfo:
-        from datetime import timezone
         deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
     if not explicit:
         deadline += timedelta(minutes=BOOKING_RESPONSE_MINUTES)
     start = parse_booking_start(booking["start_date"], booking["start_time"] or "00:00")
-    return min(deadline, datetime.utcnow() + (start - datetime.now()))
+    return min(deadline, schedule_utc(start))
 
 
 def expire_booking_request(conn, booking, now=None):
@@ -1210,7 +1228,7 @@ def worker_update_availability():
             parsed = datetime.strptime(str(value), "%Y-%m-%d").date()
         except ValueError:
             return jsonify({"error": "Unavailable dates must use YYYY-MM-DD"}), 400
-        if parsed >= datetime.now().date():
+        if parsed >= service_now().date():
             clean_dates.append(parsed.isoformat())
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
@@ -1247,8 +1265,8 @@ def worker_available_slots(worker_id):
         target_date = datetime.strptime(date_value, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "date must be YYYY-MM-DD"}), 400
-    if target_date < datetime.now().date():
-        return jsonify({"slots": []})
+    if target_date < service_now().date():
+        return jsonify({"slots": [], "date": date_value, "hours": hours, "service_timezone": SERVICE_TIMEZONE})
     conn = get_db()
     worker = conn.execute("SELECT id, is_online FROM workers WHERE id = ?", (worker_id,)).fetchone()
     if not worker:
@@ -1267,13 +1285,13 @@ def worker_available_slots(worker_id):
             close = datetime.combine(target_date, datetime.strptime(day["end_time"], "%H:%M").time())
             while cursor + timedelta(hours=hours) <= close:
                 label = cursor.strftime("%I:%M %p")
-                if cursor > datetime.now():
+                if cursor > service_now():
                     conflict = find_worker_schedule_conflict(conn, worker_id, date_value, label, hours, include_requested=True)
                     if not conflict:
                         slots.append(label)
                 cursor += timedelta(hours=1)
     conn.close()
-    return jsonify({"slots": slots, "date": date_value, "hours": hours})
+    return jsonify({"slots": slots, "date": date_value, "hours": hours, "service_timezone": SERVICE_TIMEZONE})
 
 
 # ------------------------------------------------------------ worker routes
@@ -1869,7 +1887,7 @@ def create_booking():
         booking_date = datetime.strptime(start_date, "%Y-%m-%d").date()
     except ValueError:
         return jsonify({"error": "start_date must be YYYY-MM-DD"}), 400
-    if booking_date < datetime.now().date():
+    if booking_date < service_now().date():
         return jsonify({"error": "Past dates cannot be booked"}), 400
     if not start_time:
         return jsonify({"error": "Booking start time is required"}), 400
@@ -1879,7 +1897,7 @@ def create_booking():
             booking_start = parse_booking_start(start_date, start_time)
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
-        if booking_start <= datetime.now():
+        if booking_start <= service_now():
             return jsonify({"error": "Please choose a future booking time"}), 400
         if end_time:
             try:
@@ -1967,7 +1985,7 @@ def create_booking():
     )
     booking_id = cur.lastrowid
     deadline = min(datetime.utcnow() + timedelta(minutes=BOOKING_RESPONSE_MINUTES),
-                   datetime.utcnow() + (booking_start - datetime.now()))
+                   schedule_utc(booking_start))
     conn.execute("UPDATE bookings SET agreed_hourly_rate = ?, rate_snapshot_source = 'booking_quote', scheduled_minutes = ?, request_expires_at=? WHERE id = ?",
                  (rate, minutes, deadline.isoformat(), booking_id))
     conn.execute(
@@ -1997,6 +2015,7 @@ def create_booking():
         "agreed_hourly_rate": rate,
         "scheduled_minutes": minutes,
         "request_expires_at": deadline.isoformat() + "Z",
+        "service_timezone": SERVICE_TIMEZONE,
         "booking_type": booking_type,
         "diagnosis_fee": diagnosis_fee,
         "diagnosis_distance_km": diagnosis_distance_km,
@@ -2930,7 +2949,7 @@ def worker_respond_booking(booking_id):
     available, reason = worker_available_for_slot(conn, current_worker_id(), booking["start_date"], booking["start_time"], slot_hours)
     if not available:
         conn.rollback(); conn.close(); return jsonify({"error": reason}), 409
-    if parse_booking_start(booking["start_date"], booking["start_time"]) <= datetime.now():
+    if parse_booking_start(booking["start_date"], booking["start_time"]) <= service_now():
         conn.rollback(); conn.close(); return jsonify({"error": "Booking time has passed; please request a new slot"}), 409
     conflict = find_worker_schedule_conflict(
         conn, current_worker_id(), booking["start_date"], booking["start_time"],

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="hi" data-service-timezone="{{ service_timezone }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -820,6 +820,13 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     if(!Number.isFinite(amount))return "—";
     return new Intl.NumberFormat(uiFormatLocale(),{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:2}).format(amount);
   }
+  var serviceTimezone = document.documentElement.dataset.serviceTimezone || "Asia/Kolkata";
+  function serviceDate(offsetDays, instant){
+    var parts = new Intl.DateTimeFormat("en-US", {timeZone:serviceTimezone, year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(instant || new Date());
+    var values={};parts.forEach(function(p){values[p.type]=p.value;});
+    var date=new Date(Date.UTC(Number(values.year),Number(values.month)-1,Number(values.day)+(offsetDays||0)));
+    return date.toISOString().slice(0,10);
+  }
   function fmtDate(d){
     var match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||""));
     if(!match)return "—";
@@ -983,7 +990,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       state.bookings = res.data;
       var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
       var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
-      var completedToday=state.bookings.filter(function(b){return b.status==="completed" && b.start_date===new Date().toISOString().slice(0,10);});
+      var completedToday=state.bookings.filter(function(b){return b.status==="completed" && b.start_date===serviceDate(0);});
       var earn=completedToday.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
       var a=document.getElementById("activeJobCount"); if(a)a.textContent=active;
       var e=document.getElementById("todayEarning"); if(e)e.textContent=fmtMoney(earn);
@@ -1206,7 +1213,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       '<p style="color:var(--app-muted);font-size:13px">Booking #'+Number(b.id)+' · '+earningsText(fmtDate(b.start_date))+(b.start_time?" · "+earningsText(b.start_time):"")+'</p>'+
       (mapsUrl?'<a class="btn btn-primary btn-block" style="text-decoration:none" id="workerOpenMaps" target="_blank" rel="noopener noreferrer">Open directions in Maps ↗</a>':'<div class="empty-soft">No destination is available. Message the hirer for the address before travelling.</div>')+
       '<button type="button" class="btn btn-outline btn-block" id="workerLocationChat" style="margin-top:10px">Message Hirer</button>'+
-      '<div class="detail-stage"><span class="status-pill">'+earningsText((b.request_expired_at?"Request expired":(STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en)[b.status])||b.status)+'</span><p>'+earningsText(next.label)+'</p>'+
+      '<div class="detail-stage"><p>Schedule times: India (IST)</p><span class="status-pill">'+earningsText((b.request_expired_at?"Request expired":(STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en)[b.status])||b.status)+'</span><p>'+earningsText(next.label)+'</p>'+
       (canCheck?'<button type="button" class="btn btn-safety btn-block" id="workerNavCheckIn">'+earningsText(next.button)+'</button><p style="color:var(--app-muted);font-size:12px;margin-top:10px">GPS permission is needed only for this status update. Your current coordinates will be recorded for this booking.</p>':"")+
       '<div class="gps-note" id="gps-nav-'+Number(b.id)+'" role="status" aria-live="polite"></div></div></div>';
     var link=document.getElementById("workerOpenMaps");if(link)link.href=mapsUrl;
