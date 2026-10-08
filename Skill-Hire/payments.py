@@ -105,41 +105,37 @@ def verify_webhook_signature(raw_body: bytes, signature: str) -> bool:
     return hmac.compare_digest(expected, signature)
 
 
-def fetch_order(order_id: str) -> dict:
-    """Fetch a Razorpay order from the provider for server-side reconciliation."""
+def _fetch(resource):
     _check_configured()
-    resp = requests.get(
-        f"{ORDERS_URL}/{order_id}",
-        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
-        timeout=10,
-    )
-    if resp.status_code >= 400:
-        raise RazorpayAPIError(f"Razorpay order fetch failed ({resp.status_code}): {resp.text}")
-    return resp.json()
+    try:
+        resp = requests.get(f"{API_BASE}/{resource}",
+            auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET), timeout=10)
+        if resp.status_code >= 400:
+            raise RazorpayAPIError(f"Razorpay fetch failed ({resp.status_code})")
+        result = resp.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise RazorpayAPIError("Unable to fetch payment provider state. Please retry sync.") from exc
+    if not isinstance(result, dict):
+        raise RazorpayAPIError("Invalid payment provider response")
+    return result
+
+
+def fetch_order(order_id: str) -> dict:
+    return _fetch(f"orders/{order_id}")
 
 
 def fetch_order_payments(order_id: str) -> list[dict]:
-    """Return all payments attached to a Razorpay order."""
-    _check_configured()
-    resp = requests.get(
-        f"{ORDERS_URL}/{order_id}/payments",
-        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
-        timeout=10,
-    )
-    if resp.status_code >= 400:
-        raise RazorpayAPIError(f"Razorpay order payments fetch failed ({resp.status_code}): {resp.text}")
-    data = resp.json()
-    return data.get("items", []) if isinstance(data, dict) else []
+    result = _fetch(f"orders/{order_id}/payments")
+    items = result.get("items")
+    if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+        raise RazorpayAPIError("Invalid provider payment list")
+    return items
 
 
 def fetch_payment(payment_id: str) -> dict:
-    """Fetch one payment directly from Razorpay."""
-    _check_configured()
-    resp = requests.get(
-        f"{API_BASE}/payments/{payment_id}",
-        auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET),
-        timeout=10,
-    )
-    if resp.status_code >= 400:
-        raise RazorpayAPIError(f"Razorpay payment fetch failed ({resp.status_code}): {resp.text}")
-    return resp.json()
+    return _fetch(f"payments/{payment_id}")
+
+
+def fetch_refund(refund_id: str) -> dict:
+    """Read existing refund evidence; this never initiates a refund."""
+    return _fetch(f"refunds/{refund_id}")

@@ -1980,7 +1980,7 @@
                   razorpay_signature:response.razorpay_signature
                 })}).then(function(vr){
                   if(!vr.ok){window.alert(vr.data.error||"Balance payment verify nahi hua");return;}
-                  window.alert("Remaining balance paid successfully.");
+                  window.alert(vr.data.payment_status === "paid" ? "Remaining balance paid successfully." : "Payment received. Please check the updated balance or refund status.");
                   loadBookings(); openBookingDetailsScreen(b.id);
                 });
               },

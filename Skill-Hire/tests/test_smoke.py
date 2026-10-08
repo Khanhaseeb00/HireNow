@@ -399,8 +399,8 @@ class HireNowSmokeTests(unittest.TestCase):
         booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
         booking = conn.execute("SELECT * FROM bookings WHERE id=?", (booking_id,)).fetchone()
 
-        with patch.object(app.payments, "fetch_order", return_value={"id":"order_test_1","status":"paid","amount_paid":50000}), \
-             patch.object(app.payments, "fetch_order_payments", return_value=[{"id":"pay_test_1","status":"captured","amount":50000,"created_at":1}]):
+        with patch.object(app.payments, "fetch_order", return_value={"id":"order_test_1","currency":"INR","status":"paid","amount_paid":50000}), \
+             patch.object(app.payments, "fetch_order_payments", return_value=[{"id":"pay_test_1","order_id":"order_test_1","currency":"INR","status":"captured","amount":50000,"created_at":1}]):
             result = app.reconcile_online_booking_payment(conn, booking, notify_users=False)
         conn.commit()
         refreshed = conn.execute("SELECT payment_status, paid_amount, payment_id FROM bookings WHERE id=?", (booking_id,)).fetchone()
@@ -595,7 +595,10 @@ class HireNowSmokeTests(unittest.TestCase):
 
         with self.client.session_transaction() as sess:
             sess.clear(); sess["hirer_id"] = hirer_id
-        with patch.object(app.payments, "verify_checkout_signature", return_value=True),              patch.object(app, "notify", return_value=None):
+        with patch.object(app.payments, "verify_checkout_signature", return_value=True), \
+             patch.object(app.payments, "fetch_order", return_value={"id":"order_switch_verify","currency":"INR"}), \
+             patch.object(app.payments, "fetch_order_payments", return_value=[{"id":"pay_switch_verify","order_id":"order_switch_verify","currency":"INR","status":"captured","amount":50000}]), \
+             patch.object(app, "notify", return_value=None):
             response = self.client.post("/api/payments/verify", json={
                 "razorpay_order_id":"order_switch_verify",
                 "razorpay_payment_id":"pay_switch_verify",

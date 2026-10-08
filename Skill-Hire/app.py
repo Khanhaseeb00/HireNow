@@ -45,6 +45,7 @@ import arabic_reshaper
 
 from db import get_db, init_db, row_to_dict, rows_to_list, table_columns, id_column_sql, for_update, text_timestamp_default, foreign_id_sql, binary_sql, is_postgres
 import payments
+import payment_accounting
 import notifications
 
 app = Flask(__name__)
@@ -97,6 +98,7 @@ def ensure_schema_extensions():
     """Safely add upgraded-booking fields without deleting existing rows."""
     init_db()
     conn = get_db()
+    payment_accounting.ensure_schema(conn)
     existing = table_columns(conn, "bookings")
     additions = {
         "start_time": "TEXT",
@@ -1254,70 +1256,24 @@ def get_commission_percent(conn):
         return 10.0
 
 
-def reconcile_online_booking_payment(conn, booking, notify_users=False):
-    """Reconcile a booking against Razorpay's provider-side order/payment state.
-
-    This is idempotent and only trusts captured/provider-paid amounts.
-    """
-    if not booking or not booking["razorpay_order_id"]:
-        return {"changed": False, "payment_status": booking["payment_status"] if booking else None}
-
+def reconcile_online_booking_payment(conn, booking, notify_users=False, required_order=None, required_payment=None):
+    """Use captured provider receipts across all initial and balance orders."""
+    old_status = booking["payment_status"] if booking else None
+    if not booking:
+        return {"changed": False, "payment_status": None}
     try:
-        order = payments.fetch_order(booking["razorpay_order_id"])
-        provider_payments = payments.fetch_order_payments(booking["razorpay_order_id"])
+        result = payment_accounting.reconcile(conn, booking, required_order, required_payment)
+    except payment_accounting.PaymentPending as exc:
+        return {"changed": False, "error": str(exc), "http_status": 409, "payment_status": old_status}
     except (payments.RazorpayConfigError, payments.RazorpayAPIError) as exc:
-        return {"changed": False, "error": str(exc), "payment_status": booking["payment_status"]}
-
-    captured = [p for p in provider_payments if (p.get("status") or "").lower() == "captured"]
-    captured_paise = sum(int(p.get("amount") or 0) for p in captured)
-    if captured_paise <= 0 and (order.get("status") or "").lower() == "paid":
-        captured_paise = int(order.get("amount_paid") or 0)
-    provider_paid = int(round(captured_paise / 100.0))
-    if provider_paid <= 0:
-        return {"changed": False, "payment_status": booking["payment_status"], "provider_paid_amount": 0}
-
-    total = int(booking["total_amount"] or 0)
-    if booking["status"] == "completed":
-        payment_status = "paid" if provider_paid == total else ("balance_due" if provider_paid < total else "refund_pending")
-    else:
-        payment_status = "paid"
-
-    payment_id = None
-    if captured:
-        captured.sort(key=lambda p: int(p.get("created_at") or 0))
-        payment_id = captured[-1].get("id")
-    payment_id = payment_id or booking["payment_id"]
-
-    old_status = booking["payment_status"]
-    old_paid = int(booking["paid_amount"] or 0)
-    changed = old_status != payment_status or old_paid != provider_paid or (payment_id and booking["payment_id"] != payment_id)
-    if changed:
-        conn.execute(
-            "UPDATE bookings SET payment_method='online', payment_status=?, payment_id=?, paid_amount=? WHERE id=?",
-            (payment_status, payment_id, provider_paid, booking["id"]),
-        )
-        conn.execute(
-            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, ?, ?)",
-            (booking["id"], booking["status"], f"Payment reconciled with provider: ₹{provider_paid} received; status {payment_status}."),
-        )
-        sync_booking_financials(conn, booking["id"])
-        if notify_users and old_status != payment_status and payment_status == "paid":
-            add_in_app_notification(
-                conn, "hirer", booking["hirer_id"], "payment_paid", "Payment successful",
-                f"Payment for booking #{booking['id']} was confirmed. Your PDF receipt is available in booking details.",
-                booking["id"],
-            )
-            add_in_app_notification(
-                conn, "worker", booking["worker_id"], "payment_paid", "Payment received",
-                f"Payment for booking #{booking['id']} was confirmed. Your payment receipt is available.",
-                booking["id"],
-            )
-    return {
-        "changed": changed,
-        "payment_status": payment_status,
-        "provider_paid_amount": provider_paid,
-        "payment_id": payment_id,
-    }
+        return {"changed": False, "error": str(exc), "http_status": 502, "payment_status": old_status}
+    sync_booking_financials(conn, booking["id"])
+    if result["changed"]:
+        if notify_users and old_status != "paid" and result["payment_status"] == "paid":
+            for role, owner in (("hirer", booking["hirer_id"]), ("worker", booking["worker_id"])):
+                add_in_app_notification(conn, role, owner, "payment_paid", "Payment received",
+                    f"Captured payment for booking #{booking['id']} was confirmed.", booking["id"])
+    return result
 
 
 def sync_payment_adjustment(conn, booking_id):
@@ -1394,7 +1350,9 @@ def sync_payment_adjustment(conn, booking_id):
 
 
 def sync_booking_financials(conn, booking_id):
-    booking = conn.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+    if not is_postgres() and not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+    booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ?"), (booking_id,)).fetchone()
     if not booking:
         return None
     gross = int(booking["total_amount"] or 0)
@@ -1432,7 +1390,8 @@ def sync_booking_financials(conn, booking_id):
           payment_collected=excluded.payment_collected,
           adjustment_amount=excluded.adjustment_amount,
           settlement_status=CASE
-            WHEN booking_financials.settlement_status='settled' THEN 'settled'
+            WHEN booking_financials.settlement_status='settled'
+              AND excluded.settlement_status IN ('pending','settled') THEN 'settled'
             ELSE excluded.settlement_status
           END,
           updated_at=excluded.updated_at
@@ -1729,6 +1688,8 @@ def worker_work_timer(booking_id):
     if action not in ("start", "stop"):
         return jsonify({"error": "action must be start or stop"}), 400
     conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
     if not booking:
         conn.close(); return jsonify({"error": "Booking not found"}), 404
@@ -2011,6 +1972,9 @@ def create_razorpay_order(booking_id):
         conn.close()
         return jsonify({"error": str(e)}), 502
 
+    if booking["razorpay_order_id"]:
+        payment_accounting.register_order(conn, booking_id, booking["razorpay_order_id"])
+    payment_accounting.register_order(conn, booking_id, order["id"])
     conn.execute(
         "UPDATE bookings SET razorpay_order_id = ? WHERE id = ?", (order["id"], booking_id)
     )
@@ -2522,6 +2486,10 @@ def create_balance_order(booking_id):
     except payments.RazorpayAPIError as e:
         conn.close()
         return jsonify({"error": str(e)}), 502
+    previous = conn.execute("SELECT provider_order_id FROM payment_adjustments WHERE id=?", (adjustment["id"],)).fetchone()
+    if previous and previous["provider_order_id"]:
+        payment_accounting.register_order(conn, booking_id, previous["provider_order_id"])
+    payment_accounting.register_order(conn, booking_id, order["id"])
     conn.execute(
         "UPDATE payment_adjustments SET provider_order_id=?, updated_at=? WHERE id=?",
         (order["id"], datetime.utcnow().isoformat(), adjustment["id"]),
@@ -2538,208 +2506,92 @@ def create_balance_order(booking_id):
     })
 
 
-@app.post("/api/payments/verify-balance")
-def verify_balance_payment():
+def verify_captured_checkout(balance=False):
     auth_error = require_login()
     if auth_error:
         return auth_error
-    data = request.get_json(force=True) or {}
-    order_id = data.get("razorpay_order_id")
-    payment_id = data.get("razorpay_payment_id")
-    signature = data.get("razorpay_signature")
-    if not (order_id and payment_id and signature):
+    data = request.get_json(silent=True) or {}
+    order_id, payment_id, signature = (data.get(key) for key in
+        ("razorpay_order_id", "razorpay_payment_id", "razorpay_signature"))
+    if not all(isinstance(value, str) and value for value in (order_id, payment_id, signature)):
         return jsonify({"error": "razorpay_order_id, razorpay_payment_id and razorpay_signature are required"}), 400
     conn = get_db()
-    row = conn.execute(
-        """SELECT pa.*, b.hirer_id, b.worker_id, b.total_amount, b.paid_amount, b.status, b.payment_status
-           FROM payment_adjustments pa JOIN bookings b ON b.id=pa.booking_id
-           WHERE pa.provider_order_id=? AND b.hirer_id=? AND pa.adjustment_type='balance_due'""",
-        (order_id, current_hirer_id()),
-    ).fetchone()
-    if not row:
-        conn.close()
-        return jsonify({"error": "No balance adjustment matches this order"}), 404
-    if row["status"] == "resolved":
-        conn.close()
-        return jsonify({"ok": True, "payment_status": "paid", "paid_amount": int(row["total_amount"] or 0)})
     try:
-        valid = payments.verify_checkout_signature(order_id, payment_id, signature)
-    except payments.RazorpayConfigError as e:
+        booking = payment_accounting.booking_for_order(conn, order_id, current_hirer_id())
+        if not booking:
+            return jsonify({"error": "No booking matches this order"}), 404
+        if booking["status"] == "requested":
+            return jsonify({"error": "Worker must accept before checkout verification"}), 409
+        if booking["status"] == "confirmed" and booking["payment_method"] != "online":
+            return jsonify({"error": "Cash-selected bookings can switch to online only after work completion"}), 400
+        try:
+            if not payments.verify_checkout_signature(order_id, payment_id, signature):
+                return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
+        except payments.RazorpayConfigError as exc:
+            return jsonify({"error": str(exc)}), 500
+        result = reconcile_online_booking_payment(conn, booking, notify_users=True,
+            required_order=order_id, required_payment=payment_id)
+        if result.get("error"):
+            conn.rollback()
+            return jsonify({"error": result["error"], "payment_status": result["payment_status"]}), result.get("http_status", 502)
+        conn.commit()
+        return jsonify({"ok": True, "status": booking["status"],
+            "payment_status": result["payment_status"], "paid_amount": result["provider_paid_amount"],
+            "total_amount": int(booking["total_amount"] or 0), "payment_id": result.get("payment_id"),
+            "receipt_url": f"/api/bookings/{booking['id']}/receipt.pdf"})
+    finally:
         conn.close()
-        return jsonify({"error": str(e)}), 500
-    if not valid:
-        conn.close()
-        return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
-    new_paid = int(row["paid_amount"] or 0) + int(row["amount"] or 0)
-    total = int(row["total_amount"] or 0)
-    payment_status = "paid" if new_paid == total else ("balance_due" if new_paid < total else "refund_pending")
-    now = datetime.utcnow().isoformat()
-    conn.execute(
-        "UPDATE payment_adjustments SET status='resolved', provider_payment_id=?, updated_at=? WHERE id=?",
-        (payment_id, now, row["id"]),
-    )
-    conn.execute(
-        "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
-        (new_paid, payment_status, row["booking_id"]),
-    )
-    conn.execute(
-        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
-        (row["booking_id"], f"Outstanding balance ₹{row['amount']} paid online."),
-    )
-    add_in_app_notification(
-        conn, "worker", row["worker_id"], "balance_paid", "Balance payment received",
-        f"Outstanding balance for booking #{row['booking_id']} has been paid.", row["booking_id"]
-    )
-    sync_booking_financials(conn, row["booking_id"])
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True, "payment_status": payment_status, "paid_amount": new_paid, "total_amount": total})
+
+
+@app.post("/api/payments/verify-balance")
+def verify_balance_payment():
+    return verify_captured_checkout(balance=True)
 
 
 @app.post("/api/payments/verify")
 def verify_payment():
-    """
-    Step 2: the frontend calls this right after Razorpay Checkout's success
-    handler fires, passing back the three fields Razorpay gave it. We
-    re-derive the expected signature server-side and only mark the booking
-    paid if it matches — the frontend's word alone is never trusted.
-    """
-    auth_error = require_login()
-    if auth_error:
-        return auth_error
-
-    data = request.get_json(force=True) or {}
-    order_id = data.get("razorpay_order_id")
-    payment_id = data.get("razorpay_payment_id")
-    signature = data.get("razorpay_signature")
-    if not (order_id and payment_id and signature):
-        return jsonify({"error": "razorpay_order_id, razorpay_payment_id and razorpay_signature are required"}), 400
-
-    conn = get_db()
-    booking = conn.execute(
-        "SELECT * FROM bookings WHERE razorpay_order_id = ? AND hirer_id = ?", (order_id, current_hirer_id())
-    ).fetchone()
-    if not booking:
-        conn.close()
-        return jsonify({"error": "No booking matches this order"}), 404
-    if booking["status"] == "confirmed" and booking["payment_method"] != "online":
-        conn.close()
-        return jsonify({"error": "Cash-selected bookings can switch to online only after work completion"}), 400
-    if booking["status"] not in ("confirmed", "en_route", "checked_in", "in_progress", "completed"):
-        conn.close()
-        return jsonify({"error": "Booking is not ready for payment verification"}), 400
-
-    try:
-        valid = payments.verify_checkout_signature(order_id, payment_id, signature)
-    except payments.RazorpayConfigError as e:
-        conn.close()
-        return jsonify({"error": str(e)}), 500
-
-    if not valid:
-        conn.close()
-        return jsonify({"error": "Signature verification failed — payment not trusted"}), 400
-
-    conn.execute(
-        "UPDATE bookings SET payment_method='online', payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
-        (payment_id, booking["id"]),
-    )
-    conn.execute(
-        "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment verified')",
-        (booking["id"],),
-    )
-    worker = conn.execute("SELECT name, phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
-    hirer = conn.execute("SELECT name, phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
-    add_in_app_notification(conn, "hirer", booking["hirer_id"], "payment_paid", "Payment successful", f"Online payment for booking #{booking['id']} was verified.", booking["id"])
-    add_in_app_notification(conn, "worker", booking["worker_id"], "payment_paid", "Booking paid", f"Online payment for booking #{booking['id']} is complete. You can proceed with the job.", booking["id"])
-    sync_booking_financials(conn, booking["id"])
-    conn.commit()
-    conn.close()
-
-    if worker and worker["phone"]:
-        notify(worker["phone"], f"HireNow: {hirer['name']} ne aapko {booking['start_date']} ke liye hire kiya hai. Booking #{booking['id']}.")
-    if hirer and hirer["phone"]:
-        notify(hirer["phone"], f"HireNow: Aapka payment safal raha, booking #{booking['id']} confirm ho gayi.")
-
-    return jsonify({
-        "status": booking["status"],
-        "payment_status": "paid",
-        "paid_amount": int(booking["total_amount"] or 0),
-        "payment_id": payment_id,
-        "receipt_url": f"/api/bookings/{booking['id']}/receipt.pdf",
-    })
+    return verify_captured_checkout()
 
 
 @app.post("/api/payments/webhook")
 def razorpay_webhook():
-    """
-    Step 3 (recommended, not optional in production): Razorpay calls this
-    directly from its servers when a payment is captured, independent of
-    whether the user's browser stayed open long enough to call /verify.
-    Set this URL in Razorpay dashboard > Webhooks, subscribed to
-    'payment.captured', and put the same secret in RAZORPAY_WEBHOOK_SECRET.
-    """
     signature = request.headers.get("X-Razorpay-Signature", "")
-    raw_body = request.get_data()  # must verify raw bytes, not re-parsed JSON
-
     try:
-        valid = payments.verify_webhook_signature(raw_body, signature)
-    except payments.RazorpayConfigError as e:
-        return jsonify({"error": str(e)}), 500
-
-    if not valid:
-        return jsonify({"error": "Invalid webhook signature"}), 400
-
-    event = request.get_json(force=True) or {}
-    if event.get("event") == "payment.captured":
-        payment_entity = event.get("payload", {}).get("payment", {}).get("entity", {})
-        order_id = payment_entity.get("order_id")
-        payment_id = payment_entity.get("id")
-
-        conn = get_db()
-        adjustment = conn.execute(
-            """SELECT pa.*, b.worker_id, b.total_amount, b.paid_amount
-               FROM payment_adjustments pa JOIN bookings b ON b.id=pa.booking_id
-               WHERE pa.provider_order_id=? AND pa.adjustment_type='balance_due'""",
-            (order_id,),
-        ).fetchone()
-        if adjustment and adjustment["status"] != "resolved":
-            new_paid = int(adjustment["paid_amount"] or 0) + int(adjustment["amount"] or 0)
-            total = int(adjustment["total_amount"] or 0)
-            payment_status = "paid" if new_paid == total else ("balance_due" if new_paid < total else "refund_pending")
-            now = datetime.utcnow().isoformat()
-            conn.execute(
-                "UPDATE payment_adjustments SET status='resolved', provider_payment_id=?, updated_at=? WHERE id=?",
-                (payment_id, now, adjustment["id"]),
-            )
-            conn.execute(
-                "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
-                (new_paid, payment_status, adjustment["booking_id"]),
-            )
-            conn.execute(
-                "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
-                (adjustment["booking_id"], f"Outstanding balance ₹{adjustment['amount']} confirmed via payment webhook."),
-            )
-            sync_booking_financials(conn, adjustment["booking_id"])
-            conn.commit()
-        else:
-            booking = conn.execute("SELECT * FROM bookings WHERE razorpay_order_id = ?", (order_id,)).fetchone()
-            if booking and booking["payment_status"] != "paid":
-                conn.execute(
-                    "UPDATE bookings SET payment_method='online', payment_status = 'paid', payment_id = ?, paid_amount = total_amount WHERE id = ?",
-                    (payment_id, booking["id"]),
-                )
-                conn.execute(
-                    "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'confirmed', 'Online payment confirmed via webhook')",
-                    (booking["id"],),
-                )
-                worker = conn.execute("SELECT phone FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
-                sync_booking_financials(conn, booking["id"])
-                conn.commit()
-                if worker and worker["phone"]:
-                    notify(worker["phone"], f"HireNow: Booking #{booking['id']} confirm ho gayi (payment webhook se verify hui).")
+        if not payments.verify_webhook_signature(request.get_data(), signature):
+            return jsonify({"error": "Invalid webhook signature"}), 400
+    except payments.RazorpayConfigError as exc:
+        return jsonify({"error": str(exc)}), 500
+    event = request.get_json(silent=True) or {}
+    if event.get("event") not in ("payment.captured", "refund.processed"):
+        return jsonify({"ok": True})
+    entity = event.get("payload", {}).get("payment", {}).get("entity", {})
+    order_id = entity.get("order_id")
+    if not order_id and event.get("event") == "refund.processed":
+        refund = event.get("payload", {}).get("refund", {}).get("entity", {})
+        payment_id = refund.get("payment_id")
+        if not payment_id:
+            return jsonify({"error": "Refund payment ID required"}), 400
+        try:
+            order_id = payments.fetch_payment(payment_id).get("order_id")
+        except (payments.RazorpayConfigError, payments.RazorpayAPIError) as exc:
+            return jsonify({"error": str(exc)}), 502
+    if not isinstance(order_id, str) or not order_id:
+        return jsonify({"error": "Provider order ID required"}), 400
+    conn = get_db()
+    try:
+        booking = payment_accounting.booking_for_order(conn, order_id)
+        if not booking:
+            return jsonify({"ok": True})
+        # Fetch fresh provider state even for an old capture webhook delivered
+        # after a refund. The event amount is not added to a mutable bill.
+        result = reconcile_online_booking_payment(conn, booking, notify_users=True)
+        if result.get("error"):
+            conn.rollback()
+            return jsonify({"error": result["error"]}), result.get("http_status", 502)
+        conn.commit()
+        return jsonify({"ok": True})
+    finally:
         conn.close()
-
-    return jsonify({"ok": True})
 
 
 @app.get("/api/bookings")
@@ -2799,8 +2651,10 @@ def cancel_booking(booking_id):
     data = request.get_json(silent=True) or {}
     reason = (data.get("reason") or "Cancelled by hirer").strip()
     conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?",
+        for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"),
         (booking_id, current_hirer_id()),
     ).fetchone()
     if not booking:
@@ -3067,8 +2921,10 @@ def generate_cash_payment_otp(booking_id):
         return auth_error
 
     conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?", (booking_id, current_hirer_id())
+        for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"), (booking_id, current_hirer_id())
     ).fetchone()
     if not booking:
         conn.close()
@@ -3090,12 +2946,12 @@ def generate_cash_payment_otp(booking_id):
             conn.rollback()
             conn.close()
             return jsonify({"error": reconciled["error"]}), 502
-        conn.commit()
         booking = conn.execute(
-            "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?",
+            for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"),
             (booking_id, current_hirer_id()),
         ).fetchone()
         if booking["payment_status"] == "paid" or int(booking["paid_amount"] or 0) > 0:
+            conn.commit()
             conn.close()
             return jsonify({"error": "Online payment is already confirmed for this booking"}), 409
 
@@ -3128,8 +2984,10 @@ def verify_cash_payment_otp(booking_id):
         return jsonify({"error": "OTP required"}), 400
 
     conn = get_db()
+    if not is_postgres():
+        conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND worker_id = ?", (booking_id, current_worker_id())
+        for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())
     ).fetchone()
     if not booking:
         conn.close()
@@ -3692,6 +3550,7 @@ def admin_record_worker_settlement(booking_id):
     if not reference:
         return jsonify({"error": "Settlement reference is required"}), 400
     conn = get_db()
+    sync_booking_financials(conn, booking_id)
     finance = conn.execute(
         """SELECT bf.*, b.status AS booking_status, b.payment_status, b.worker_id
            FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
@@ -3771,52 +3630,43 @@ def admin_resolve_payment_adjustment(adjustment_id):
     err = _check_admin_csrf()
     if err: return err
     data = request.get_json(silent=True) or {}
-    reference = (data.get("reference") or "").strip()
-    note = (data.get("note") or "").strip() or None
+    reference = str(data.get("reference") or "").strip()
+    note = str(data.get("note") or "").strip() or None
     if not reference:
-        return jsonify({"error": "A payment/refund reference is required"}), 400
+        return jsonify({"error": "A processed provider refund ID is required"}), 400
     conn = get_db()
-    adjustment = conn.execute(
-        "SELECT * FROM payment_adjustments WHERE id=?",
-        (adjustment_id,),
-    ).fetchone()
-    if not adjustment:
+    try:
+        if not is_postgres():
+            conn.execute("BEGIN IMMEDIATE")
+        adjustment = conn.execute("SELECT * FROM payment_adjustments WHERE id=?", (adjustment_id,)).fetchone()
+        if not adjustment:
+            return jsonify({"error": "Adjustment not found"}), 404
+        booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=?"), (adjustment["booking_id"],)).fetchone()
+        adjustment = conn.execute("SELECT * FROM payment_adjustments WHERE id=?", (adjustment_id,)).fetchone()
+        if adjustment["status"] == "resolved":
+            return jsonify({"error": "Adjustment is already resolved"}), 409
+        if adjustment["adjustment_type"] != "refund":
+            return jsonify({"error": "Balance due must be paid by the hirer through checkout"}), 400
+        if not booking:
+            return jsonify({"error": "Booking not found"}), 404
+        try:
+            payment_accounting.record_processed_refund(conn, booking["id"], reference, int(adjustment["amount"]))
+        except (payments.RazorpayConfigError, payments.RazorpayAPIError) as exc:
+            conn.rollback()
+            return jsonify({"error": str(exc)}), 409
+        conn.execute("UPDATE payment_adjustments SET status='resolved',provider_refund_id=?,note=?,updated_at=? WHERE id=?",
+            (reference, note, datetime.utcnow().isoformat(), adjustment_id))
+        result = reconcile_online_booking_payment(conn, booking)
+        if result.get("error"):
+            conn.rollback()
+            return jsonify({"error": result["error"]}), result.get("http_status", 502)
+        sync_booking_financials(conn, booking["id"])
+        add_in_app_notification(conn, "hirer", booking["hirer_id"], "refund_processed", "Refund processed",
+            f"Provider refund {reference} for booking #{booking['id']} was confirmed.", booking["id"])
+        conn.commit()
+        return jsonify({"ok": True, "adjustment_id": adjustment_id, "status": "resolved", "payment_status": result["payment_status"]})
+    finally:
         conn.close()
-        return jsonify({"error": "Adjustment not found"}), 404
-    if adjustment["status"] == "resolved":
-        conn.close()
-        return jsonify({"error": "Adjustment is already resolved"}), 409
-    booking = conn.execute("SELECT * FROM bookings WHERE id=?", (adjustment["booking_id"],)).fetchone()
-    if not booking:
-        conn.close()
-        return jsonify({"error": "Booking not found"}), 404
-    now = datetime.utcnow().isoformat()
-    if adjustment["adjustment_type"] == "refund":
-        new_paid = max(0, int(booking["paid_amount"] or 0) - int(adjustment["amount"] or 0))
-        new_status = "paid" if new_paid == int(booking["total_amount"] or 0) else "refund_pending"
-        conn.execute(
-            "UPDATE payment_adjustments SET status='resolved', provider_refund_id=?, note=?, updated_at=? WHERE id=?",
-            (reference, note, now, adjustment_id),
-        )
-        conn.execute(
-            "UPDATE bookings SET paid_amount=?, payment_status=? WHERE id=?",
-            (new_paid, new_status, booking["id"]),
-        )
-        conn.execute(
-            "INSERT INTO booking_events (booking_id, status, note) VALUES (?, ?, ?)",
-            (booking["id"], booking["status"], f"Refund ₹{adjustment['amount']} recorded. Reference: {reference}"),
-        )
-        add_in_app_notification(
-            conn, "hirer", booking["hirer_id"], "refund_processed", "Refund processed",
-            f"Refund of ₹{adjustment['amount']} for booking #{booking['id']} was processed.", booking["id"]
-        )
-    else:
-        conn.close()
-        return jsonify({"error": "Balance due must be paid by the hirer through checkout"}), 400
-    sync_booking_financials(conn, booking["id"])
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True, "adjustment_id": adjustment_id, "status": "resolved", "payment_status": new_status})
 
 
 @app.put("/api/admin/finance/commission")
