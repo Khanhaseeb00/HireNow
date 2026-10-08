@@ -421,7 +421,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       </div>
       <div class="worker-stats">
         <div class="worker-stat"><strong id="activeJobCount">0</strong><span>Active Job</span></div>
-        <div class="worker-stat"><strong id="todayEarning">₹0</strong><span>Today's Earning</span></div>
+        <div class="worker-stat"><strong id="todayEarning" title="Worker net after commission, by completion date (IST). Unpaid and held amounts are excluded.">₹0</strong><span>Today's Earning</span></div>
         <div class="worker-stat"><strong id="heroRating">—</strong><span>Rating</span></div>
       </div>
       <div class="new-jobs-banner">
@@ -990,10 +990,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       state.bookings = res.data;
       var active=state.bookings.filter(function(b){return ["confirmed","en_route","checked_in","in_progress"].indexOf(b.status)>=0;}).length;
       var requested=state.bookings.filter(function(b){return b.status==="requested";}).length;
-      var completedToday=state.bookings.filter(function(b){return b.status==="completed" && b.start_date===serviceDate(0);});
-      var earn=completedToday.reduce(function(sum,b){return sum+Number(b.total_amount||0);},0);
       var a=document.getElementById("activeJobCount"); if(a)a.textContent=active;
-      var e=document.getElementById("todayEarning"); if(e)e.textContent=fmtMoney(earn);
       var rc=document.getElementById("requestCountText"); if(rc)rc.textContent=requested ? (requested+" new job request"+(requested===1?"":"s")+" in your queue") : "No new requests right now";
       renderBookings();
       renderProfile();
@@ -1228,25 +1225,25 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
 
   var earningsPeriod="week",earningsData=null,earningsRequest=0;
   function earningsForPeriod(items,period,now){
-    var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-    var begin=new Date(today);
-    if(period==="week")begin.setDate(begin.getDate()-((begin.getDay()+6)%7));
-    if(period==="month")begin.setDate(1);
-    var finish=new Date(today);finish.setDate(finish.getDate()+1);
+    var today=new Date(serviceDate(0,now)+"T00:00:00Z"),begin=new Date(today);
+    if(period==="week")begin.setUTCDate(begin.getUTCDate()-((begin.getUTCDay()+6)%7));
+    if(period==="month")begin.setUTCDate(1);
+    var finish=new Date(today);finish.setUTCDate(finish.getUTCDate()+1);
     return items.filter(function(x){
       if(period==="all")return true;
-      if(!/^\d{4}-\d{2}-\d{2}$/.test(x.start_date||""))return false;
-      var parts=x.start_date.split("-"),d=new Date(Number(parts[0]),Number(parts[1])-1,Number(parts[2]));
-      return d>=begin && d<finish;
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(x.completion_date||""))return false;
+      var date=new Date(x.completion_date+"T00:00:00Z");
+      return date>=begin && date<finish;
     });
   }
+
   function summarizeEarnings(items){
     return items.reduce(function(t,x){
       var gross=Number(x.gross_amount)||0,commission=Number(x.platform_commission)||0,net=Number(x.worker_net)||0;
       t.gross+=gross;t.commission+=commission;t.workerNet+=net;
       if(x.settlement_status==="pending")t.pending+=net;
       else if(x.settlement_status==="settled")t.settled+=net;
-      else if(x.settlement_status==="held")t.held+=net;
+      else if(x.settlement_status==="held" || x.settlement_status==="not_ready")t.held+=net;
       else t.other+=net;
       return t;
     },{gross:0,commission:0,workerNet:0,pending:0,settled:0,held:0,other:0});
@@ -1256,13 +1253,13 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     if(!earningsData)return;
     var items=earningsForPeriod(earningsData.items,earningsPeriod,new Date()),totals=summarizeEarnings(items);
     document.getElementById("earningsTotal").textContent=fmtMoney(totals.pending+totals.settled);
-    document.getElementById("earningsPeriodCaption").textContent=(earningsPeriod==="week"?wfui("week"):earningsPeriod==="month"?wfui("month"):wfui("alltime"))+" · By booking date · "+items.length+" booking"+(items.length===1?"":"s");
+    document.getElementById("earningsPeriodCaption").textContent=(earningsPeriod==="week"?wfui("week"):earningsPeriod==="month"?wfui("month"):wfui("alltime"))+" · By work completion date (IST) · "+items.length+" booking"+(items.length===1?"":"s");
     function row(label,value){return '<div class="earn-break"><span>'+label+'</span><strong>'+fmtMoney(value)+'</strong></div>';}
     var box=document.getElementById("earningsBreakdown");
     box.innerHTML=row(wfui("gross"),totals.gross)+row(wfui("commission"),totals.commission)+row(wfui("net"),totals.workerNet)+row(wfui("pending"),totals.pending)+row(wfui("settled"),totals.settled)+row(wfui("held"),totals.held)+(totals.other?row("Other settlement statuses",totals.other):"")+
       (items.length?items.map(function(x){
-        var id=Number(x.booking_id),status=({pending:wfui("pending"),settled:wfui("settled"),held:wfui("held")}[x.settlement_status]||String(x.settlement_status||"Unknown").replace(/_/g," "));
-        return '<div class="earn-item"><div class="earn-item-head"><strong>Booking #'+id+'</strong><strong>'+fmtMoney(x.worker_net||0)+'</strong></div><small>'+earningsText(x.start_date?fmtDate(x.start_date):"Date unavailable")+' · '+earningsText(status)+'</small><div class="earn-item-values"><span>Gross<strong>'+fmtMoney(x.gross_amount||0)+'</strong></span><span>Commission<strong>'+fmtMoney(x.platform_commission||0)+'</strong></span><span>Worker net<strong>'+fmtMoney(x.worker_net||0)+'</strong></span></div>'+(x.settlement_reference?'<small>Settlement reference: '+earningsText(x.settlement_reference)+'</small>':"")+(x.payment_status==="paid"?'<button type="button" class="btn btn-outline" data-worker-receipt="'+id+'">'+wfui("receipt")+'</button>':"")+'</div>';
+        var id=Number(x.booking_id),status=({pending:wfui("pending"),settled:wfui("settled"),held:wfui("held"),not_ready:"Payment pending"}[x.settlement_status]||String(x.settlement_status||"Unknown").replace(/_/g," "));
+        return '<div class="earn-item"><div class="earn-item-head"><strong>Booking #'+id+'</strong><strong>'+fmtMoney(x.worker_net||0)+'</strong></div><small>'+earningsText(x.completion_date?fmtDate(x.completion_date):"Completion date unavailable (all-time only)")+' · '+earningsText(status)+'</small><div class="earn-item-values"><span>Gross<strong>'+fmtMoney(x.gross_amount||0)+'</strong></span><span>Commission<strong>'+fmtMoney(x.platform_commission||0)+'</strong></span><span>Worker net<strong>'+fmtMoney(x.worker_net||0)+'</strong></span></div>'+(x.settlement_reference?'<small>Settlement reference: '+earningsText(x.settlement_reference)+'</small>':"")+(x.payment_status==="paid"?'<button type="button" class="btn btn-outline" data-worker-receipt="'+id+'">'+wfui("receipt")+'</button>':"")+'</div>';
       }).join(""):'<div class="empty-soft">'+wfui("empty")+'</div>');
     box.querySelectorAll("[data-worker-receipt]").forEach(function(btn){btn.addEventListener("click",function(){window.open("/api/worker/bookings/"+btn.dataset.workerReceipt+"/receipt.pdf","_blank","noopener");});});
   }
@@ -1274,12 +1271,13 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   function renderEarningsScreen(){
     var request=++earningsRequest,box=document.getElementById("earningsBreakdown");
     earningsData=null;
+    document.getElementById("todayEarning").textContent="—";
     document.getElementById("earningsTotal").textContent="—";
     box.innerHTML='<div class="empty-soft" role="status">'+wfui("loading")+'</div>';
     api("/api/worker/earnings-summary").then(function(r){
       if(request!==earningsRequest)return;
       if(!r.ok || !r.data || !Array.isArray(r.data.items))throw Error(r.data && r.data.error || "Unable to load earnings");
-      earningsData=r.data;paintEarnings();
+      earningsData=r.data;document.getElementById("todayEarning").textContent=fmtMoney(r.data.today_net||0);paintEarnings();
     }).catch(function(e){
       if(request!==earningsRequest)return;
       document.getElementById("earningsTotal").textContent="—";

@@ -3714,6 +3714,19 @@ def admin_delete_diagnosis_pricing(rule_id):
     return jsonify({"ok": True})
 
 
+def completed_service_date(value):
+    """Completed work timestamps are stored in UTC; earnings days use IST."""
+    if not value:
+        return None
+    try:
+        instant = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if instant.tzinfo is None:
+            instant = instant.replace(tzinfo=timezone.utc)
+        return instant.astimezone(SERVICE_ZONE).date().isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
 @app.get("/api/worker/earnings-summary")
 def worker_earnings_summary():
     err = require_worker_login()
@@ -3725,20 +3738,33 @@ def worker_earnings_summary():
     ).fetchall()
     for booking in stale:
         reconcile_online_booking_payment(conn, booking, notify_users=False)
-    completed_paid = conn.execute(
-        "SELECT id FROM bookings WHERE worker_id=? AND status='completed' AND payment_status='paid'",
+    completed_jobs = conn.execute(
+        "SELECT id FROM bookings WHERE worker_id=? AND status='completed'",
         (current_worker_id(),),
     ).fetchall()
-    for row in completed_paid:
+    for row in completed_jobs:
         sync_booking_financials(conn, row["id"])
     conn.commit()
-    rows = conn.execute("""SELECT bf.*, b.start_date, b.booking_type, b.payment_status
+    rows = conn.execute("""SELECT bf.*, b.start_date, b.booking_type, b.payment_status,
+                                  b.work_ended_at, b.work_declined_at,
+                                  (SELECT MAX(e.created_at) FROM booking_events e
+                                   WHERE e.booking_id=b.id AND e.status='completed') AS completion_event_at
                            FROM booking_financials bf JOIN bookings b ON b.id=bf.booking_id
-                           WHERE bf.worker_id=? ORDER BY bf.booking_id DESC""", (current_worker_id(),)).fetchall()
+                           WHERE bf.worker_id=? AND b.status='completed' ORDER BY bf.booking_id DESC""", (current_worker_id(),)).fetchall()
     items = rows_to_list(rows)
+    for item in items:
+        item["completed_at"] = item["work_ended_at"] or item["work_declined_at"] or item["completion_event_at"]
+        item["completion_date"] = completed_service_date(item["completed_at"])
+    today = service_now().date().isoformat()
+    today_net = sum(int(x["worker_net"] or 0) for x in items
+                    if x["completion_date"] == today and x["settlement_status"] in ("pending", "settled"))
     conn.close()
     return jsonify({
         "items": items,
+        "today_net": today_net,
+        "service_date": today,
+        "service_timezone": SERVICE_TIMEZONE,
+        "unknown_completion_dates": sum(x["completion_date"] is None for x in items),
         "gross": sum(int(x["gross_amount"] or 0) for x in items),
         "commission": sum(int(x["platform_commission"] or 0) for x in items),
         "net": sum(int(x["worker_net"] or 0) for x in items if x["settlement_status"] in ("pending","settled")),
