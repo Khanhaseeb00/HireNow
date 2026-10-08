@@ -1704,6 +1704,30 @@
     document.getElementById("payBtn").addEventListener("click", function () { payBooking(bookingId); });
   }
 
+  function checkUnverifiedCheckout(button, bookingId) {
+    if (button.dataset.paymentUnverified !== "1") return false;
+    button.disabled = true;
+    button.textContent = "Checking payment...";
+    api("/api/bookings/" + Number(bookingId) + "/sync-payment", {method:"POST", body:"{}"}).then(function(result){
+      button.disabled = false;
+      button.textContent = "Check Payment Status";
+      if (!result.ok) {
+        window.alert(result.data.error || "Payment status check nahi hua. Please try again.");
+        return;
+      }
+      loadBookings();
+      openBookingDetailsScreen(bookingId);
+    });
+    return true;
+  }
+
+  function markCheckoutUnverified(button, message) {
+    button.dataset.paymentUnverified = "1";
+    button.disabled = false;
+    button.textContent = "Check Payment Status";
+    window.alert((message || "Payment verification pending.") + " If money was deducted, do not pay again. Use Check Payment Status.");
+  }
+
   function payBooking(bookingId) {
     var payMsg = document.getElementById("payMsg");
     payMsg.innerHTML = '<div class="paying"><span class="spinner"></span> Order ban raha hai...</div>';
@@ -1987,6 +2011,7 @@
         });
         var receiptBtn=stackBody.querySelector("#refReceipt"); if(receiptBtn)receiptBtn.addEventListener("click",function(){window.open("/api/bookings/"+Number(b.id)+"/receipt.pdf","_blank");});
         var payFinalOnline=stackBody.querySelector("#refPayFinalOnline"); if(payFinalOnline)payFinalOnline.addEventListener("click",function(){
+          if(checkUnverifiedCheckout(payFinalOnline,b.id))return;
           payFinalOnline.disabled=true;payFinalOnline.textContent="Opening payment...";
           api("/api/bookings/"+Number(b.id)+"/create-order",{method:"POST"}).then(function(orderRes){
             if(!orderRes.ok){
@@ -2004,17 +2029,18 @@
                   razorpay_payment_id:response.razorpay_payment_id,
                   razorpay_signature:response.razorpay_signature
                 })}).then(function(vr){
-                  if(!vr.ok){window.alert(vr.data.error||"Payment verify nahi hua");return;}
+                  if(!vr.ok){markCheckoutUnverified(payFinalOnline,vr.data.error);return;}
                   loadBookings();window.open(vr.data.receipt_url||("/api/bookings/"+Number(b.id)+"/receipt.pdf"),"_blank");openBookingDetailsScreen(b.id);
                 });
               },
-              modal:{ondismiss:function(){payFinalOnline.disabled=false;payFinalOnline.textContent="Pay Online";}}
+              modal:{ondismiss:function(){payFinalOnline.disabled=false;payFinalOnline.textContent=payFinalOnline.dataset.paymentUnverified==="1"?"Check Payment Status":"Pay Online";}}
             });
             rzp.on("payment.failed",function(resp){payFinalOnline.disabled=false;payFinalOnline.textContent="Pay Online";window.alert("Payment failed: "+(resp.error&&resp.error.description||"Unknown error"));});
             rzp.open();
           });
         });
         var payOnline=stackBody.querySelector("#refPayOnline"); if(payOnline)payOnline.addEventListener("click",function(){
+          if(checkUnverifiedCheckout(payOnline,b.id))return;
           payOnline.disabled=true; payOnline.textContent="Opening payment...";
           api("/api/bookings/"+Number(b.id)+"/create-order",{method:"POST"}).then(function(orderRes){
             if(!orderRes.ok){payOnline.disabled=false;payOnline.textContent="Pay Online Now";window.alert(orderRes.data.error||"Payment start nahi hua");return;}
@@ -2028,17 +2054,18 @@
                   razorpay_payment_id:response.razorpay_payment_id,
                   razorpay_signature:response.razorpay_signature
                 })}).then(function(vr){
-                  if(!vr.ok){window.alert(vr.data.error||"Payment verify nahi hua");return;}
+                  if(!vr.ok){markCheckoutUnverified(payOnline,vr.data.error);return;}
                   loadBookings(); window.open(vr.data.receipt_url||("/api/bookings/"+Number(b.id)+"/receipt.pdf"),"_blank"); openBookingDetailsScreen(b.id);
                 });
               },
-              modal:{ondismiss:function(){payOnline.disabled=false;payOnline.textContent="Pay Online Now";}}
+              modal:{ondismiss:function(){payOnline.disabled=false;payOnline.textContent=payOnline.dataset.paymentUnverified==="1"?"Check Payment Status":"Pay Online Now";}}
             });
             rzp.on("payment.failed",function(resp){payOnline.disabled=false;payOnline.textContent="Pay Online Now";window.alert("Payment failed: "+(resp.error&&resp.error.description||"Unknown error"));});
             rzp.open();
           });
         });
         var payBalance=stackBody.querySelector("#refPayBalance"); if(payBalance)payBalance.addEventListener("click",function(){
+          if(checkUnverifiedCheckout(payBalance,b.id))return;
           payBalance.disabled=true; payBalance.textContent="Opening balance payment...";
           api("/api/bookings/"+Number(b.id)+"/create-balance-order",{method:"POST"}).then(function(orderRes){
             if(!orderRes.ok){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";window.alert(orderRes.data.error||"Balance payment start nahi hua");return;}
@@ -2052,12 +2079,12 @@
                   razorpay_payment_id:response.razorpay_payment_id,
                   razorpay_signature:response.razorpay_signature
                 })}).then(function(vr){
-                  if(!vr.ok){window.alert(vr.data.error||"Balance payment verify nahi hua");return;}
+                  if(!vr.ok){markCheckoutUnverified(payBalance,vr.data.error);return;}
                   window.alert(vr.data.payment_status === "paid" ? "Remaining balance paid successfully." : "Payment received. Please check the updated balance or refund status.");
                   loadBookings(); openBookingDetailsScreen(b.id);
                 });
               },
-              modal:{ondismiss:function(){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";}}
+              modal:{ondismiss:function(){payBalance.disabled=false;payBalance.textContent=payBalance.dataset.paymentUnverified==="1"?"Check Payment Status":"Pay Remaining Balance";}}
             });
             rzp.on("payment.failed",function(resp){payBalance.disabled=false;payBalance.textContent="Pay Remaining Balance";window.alert("Payment failed: "+(resp.error&&resp.error.description||"Unknown error"));});
             rzp.open();
