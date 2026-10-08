@@ -1717,7 +1717,7 @@
     var b=summary.next;
     document.getElementById("homeNextWorker").textContent=b.worker_name||"Worker";
     document.getElementById("homeNextMeta").textContent=(b.worker_skill||"Service")+" · "+fmtDate(b.start_date)+(b.start_time?" · "+b.start_time:"");
-    document.getElementById("homeNextStatus").textContent=statusLabel(b.status);
+    document.getElementById("homeNextStatus").textContent=(b.request_expired_at?"Request expired":statusLabel(b.status));
     document.getElementById("homeNextAction").textContent=l[4];
     next.onclick=function(){nav(function(){openBookingDetailsScreen(b.id);});};
   }
@@ -1773,7 +1773,7 @@
         '<div class="body"><div class="name">' + hirerMessageText(b.worker_name) + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.scheduled_minutes ? b.scheduled_minutes / 60 : b.hours || 2) + ' hrs</div>' +
           '<div class="amount">' + fmtMoney(b.total_amount) + '</div>' +
           '<div class="sub">' + hirerBookingPaymentLabel(b) + '</div>' +
-          '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + statusLabel(b.status) + '</span></div>' +
+          '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + (b.request_expired_at?"Request expired":statusLabel(b.status)) + '</span></div>' +
         '<div style="color:var(--ink-soft);">›</div>' +
       '</div>';
     }).join("");
@@ -1795,7 +1795,7 @@
     var list=hirerConversationRows(state.bookings,query);
     if(!list.length){wrap.innerHTML='<div class="empty" role="status">'+ICON_NO_MESSAGES+(query.trim()?"No matching conversations. Try a worker, service or booking number.":"Your booking conversations will appear here.")+'</div>';return;}
     wrap.innerHTML=list.map(function(b){
-      return '<button type="button" class="msg-row" style="width:100%;text-align:start;color:var(--ink)" data-ref-chat="'+Number(b.id)+'"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div><div class="body"><div class="name">'+hirerMessageText(b.worker_name||"Worker")+'</div><div class="preview">'+hirerMessageText(b.worker_skill||"Service")+' · Booking #'+Number(b.id)+'</div><div class="preview">'+hirerMessageText(b.start_date?fmtDate(b.start_date):"Date unavailable")+' · '+hirerMessageText(statusLabel(b.status))+'</div></div><div class="chev" aria-hidden="true">›</div></button>';
+      return '<button type="button" class="msg-row" style="width:100%;text-align:start;color:var(--ink)" data-ref-chat="'+Number(b.id)+'"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div><div class="body"><div class="name">'+hirerMessageText(b.worker_name||"Worker")+'</div><div class="preview">'+hirerMessageText(b.worker_skill||"Service")+' · Booking #'+Number(b.id)+'</div><div class="preview">'+hirerMessageText(b.start_date?fmtDate(b.start_date):"Date unavailable")+' · '+hirerMessageText((b.request_expired_at?"Request expired":statusLabel(b.status)))+'</div></div><div class="chev" aria-hidden="true">›</div></button>';
     }).join("");
     wrap.querySelectorAll("[data-ref-chat]").forEach(function(row){row.addEventListener("click",function(){
       var id=Number(row.dataset.refChat),booking=state.bookings.find(function(x){return Number(x.id)===id;});
@@ -1841,8 +1841,9 @@
   }
 
   function hirerBookingGuidance(b){
+    if(b.request_expired_at)return {title:"Request expired",note:"The worker did not respond in time. Choose an available slot and send a new request."};
     if(b.status==="cancelled" || b.status==="rejected")return {title:b.status==="rejected"?"Worker declined this request":"Booking cancelled",note:b.payment_status==="refund_pending"?"Your refund is pending. Check the refund details below.":"This booking is closed. You can still contact the worker or view available receipts."};
-    if(b.status==="requested")return {title:"Waiting for worker response",note:"The worker needs to accept your request. Check back here for the latest status."};
+    if(b.status==="requested")return {title:"Waiting for worker response",note:"The worker has up to 30 minutes to respond, or until the scheduled start if sooner. An unanswered request then expires and releases the slot."};
     if(b.status==="completed"){
       if(b.payment_status==="paid")return {title:"Work and payment completed",note:"Your final bill is paid. Download the receipt below."};
       if(b.payment_status==="refund_pending")return {title:"Work completed · Refund pending",note:"Check your final bill and refund details below."};
@@ -1885,7 +1886,7 @@
             (b.actual_minutes?'<div class="ref-detail-row"><div class="k">Actual Work</div><div class="v">'+b.actual_minutes+' min · '+fmtMoney(b.work_amount||0)+'</div></div>':'') +
             (b.diagnosis_fee?'<div class="ref-detail-row"><div class="k">Diagnosis Fee</div><div class="v">'+fmtMoney(b.diagnosis_fee)+'</div></div>':'') +
             '<div class="ref-detail-row"><div class="k">Payment</div><div class="v"><span class="ref-status">'+((b.status==="cancelled"||b.status==="rejected")&&Number(b.paid_amount||0)===0?"No payment due":String(b.payment_status||"pending").replaceAll("_"," "))+'</span></div></div>' +
-            '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+statusLabel(b.status)+'</span></div></div>' +
+            '<div class="ref-detail-row"><div class="k">Status</div><div class="v"><span class="ref-status '+bookingStatusClass(b.status)+'">'+(b.request_expired_at?"Request expired":statusLabel(b.status))+'</span></div></div>' +
           '</div>' +
           '<div class="ref-detail-actions">' +
             ((!["completed","cancelled","in_progress","rejected"].includes(b.status))?'<button class="btn btn-outline" id="refCancelBooking">Cancel Booking</button>':'<div></div>') +

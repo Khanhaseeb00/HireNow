@@ -64,6 +64,7 @@ ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
 STANDARD_WORKDAY_HOURS = 8
+BOOKING_RESPONSE_MINUTES = 30
 # V1 diagnosis distance policy. Keep centrally configured so Admin pricing can replace it later.
 DIAGNOSIS_DISTANCE_SLABS = [(5, 100), (10, 150), (20, 250)]
 
@@ -104,6 +105,8 @@ def ensure_schema_extensions():
     payment_accounting.ensure_schema(conn)
     existing = table_columns(conn, "bookings")
     additions = {
+        "request_expires_at": "TEXT",
+        "request_expired_at": "TEXT",
         "agreed_hourly_rate": "REAL",
         "rate_snapshot_source": "TEXT",
         "scheduled_minutes": "INTEGER",
@@ -548,6 +551,68 @@ def enforce_moderated_accounts():
         if _moderated_account_blocked(row):
             session.pop("hirer_id", None)
             return _moderated_account_response(row)
+    return None
+
+
+def booking_request_deadline(booking):
+    """UTC response deadline, capped at the existing schedule clock's start."""
+    explicit = booking["request_expires_at"]
+    deadline_value = explicit or booking["created_at"]
+    deadline = datetime.fromisoformat(str(deadline_value).replace("Z", "+00:00"))
+    if deadline.tzinfo:
+        from datetime import timezone
+        deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
+    if not explicit:
+        deadline += timedelta(minutes=BOOKING_RESPONSE_MINUTES)
+    start = parse_booking_start(booking["start_date"], booking["start_time"] or "00:00")
+    return min(deadline, datetime.utcnow() + (start - datetime.now()))
+
+
+def expire_booking_request(conn, booking, now=None):
+    if booking["status"] != "requested":
+        return False
+    now = now or datetime.utcnow()
+    try:
+        expired = booking_request_deadline(booking) <= now
+    except (ValueError, TypeError):
+        expired = True  # Malformed historical schedules cannot reserve slots forever.
+    if not expired:
+        return False
+    reason = "Request expired: worker did not respond before the response deadline or scheduled start."
+    payment_status = "refund_pending" if int(booking["paid_amount"] or 0) > 0 else "cancelled"
+    result = conn.execute("""UPDATE bookings SET status='cancelled', payment_status=?, request_expired_at=?,
+        cancelled_at=?, cancellation_reason=? WHERE id=? AND status='requested'""",
+        (payment_status, now.isoformat(), now.isoformat(), reason, booking["id"]))
+    if not result.rowcount:
+        return False
+    conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'cancelled',?)", (booking["id"], reason))
+    for role, owner in (("hirer", booking["hirer_id"]), ("worker", booking["worker_id"])):
+        add_in_app_notification(conn, role, owner, "request_expired", "Booking request expired",
+            f"Request #{booking['id']} expired without a response. Its slot is available again; the hirer can request a new booking.", booking["id"])
+    sync_booking_financials(conn, booking["id"])
+    return True
+
+
+@app.before_request
+def refresh_booking_request_expiry():
+    # Lazy expiry requires no background service: every booking/slot read or
+    # action refreshes deadlines before acting. No SMS or provider requests.
+    path = request.path
+    if not (path.startswith("/api/bookings") or path.startswith("/api/worker/bookings")
+            or path.startswith("/api/admin/") or (path.startswith("/api/workers/") and path.endswith("/available-slots"))):
+        return None
+    if path.startswith("/api/admin/") and not session.get("admin_authenticated"):
+        return None
+    conn = get_db()
+    try:
+        if not is_postgres():
+            conn.execute("BEGIN IMMEDIATE")
+        rows = conn.execute(for_update("SELECT * FROM bookings WHERE status='requested' ORDER BY id")).fetchall()
+        for booking in rows:
+            expire_booking_request(conn, booking)
+        conn.commit()
+    finally:
+        conn.close()
     return None
 
 
@@ -1901,8 +1966,10 @@ def create_booking():
          special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
-    conn.execute("UPDATE bookings SET agreed_hourly_rate = ?, rate_snapshot_source = 'booking_quote', scheduled_minutes = ? WHERE id = ?",
-                 (rate, minutes, booking_id))
+    deadline = min(datetime.utcnow() + timedelta(minutes=BOOKING_RESPONSE_MINUTES),
+                   datetime.utcnow() + (booking_start - datetime.now()))
+    conn.execute("UPDATE bookings SET agreed_hourly_rate = ?, rate_snapshot_source = 'booking_quote', scheduled_minutes = ?, request_expires_at=? WHERE id = ?",
+                 (rate, minutes, deadline.isoformat(), booking_id))
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'requested', ?)",
         (booking_id, f"Booking request sent to worker. Payment method: {payment_method}."),
@@ -1929,6 +1996,7 @@ def create_booking():
         "derived_hourly_rate": rate,
         "agreed_hourly_rate": rate,
         "scheduled_minutes": minutes,
+        "request_expires_at": deadline.isoformat() + "Z",
         "booking_type": booking_type,
         "diagnosis_fee": diagnosis_fee,
         "diagnosis_distance_km": diagnosis_distance_km,
@@ -2824,6 +2892,12 @@ def worker_respond_booking(booking_id):
     if not booking:
         conn.close()
         return jsonify({"error": "Booking not found or not assigned to you"}), 404
+    if expire_booking_request(conn, booking):
+        conn.commit(); conn.close()
+        return jsonify({"error": "This request expired. Ask the hirer to request a new booking.", "request_expired": True}), 409
+    if booking["request_expired_at"]:
+        conn.close()
+        return jsonify({"error": "This request expired. Ask the hirer to request a new booking.", "request_expired": True}), 409
     if booking["status"] != "requested":
         conn.close()
         return jsonify({"error": "This request has already been answered"}), 400
