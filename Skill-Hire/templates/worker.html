@@ -596,6 +596,19 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     document.getElementById("requestCountText").textContent=count?count+" · "+wjob("new"):wjob("none");
     renderJobsScreen();
   }
+  var WORKER_FINANCE_UI={"en":{"week":"This Week","month":"This Month","alltime":"All Time","gross":"Gross","commission":"Commission","net":"Worker net","pending":"Pending settlement","settled":"Settled","held":"On hold","receipt":"PDF Receipt","loading":"Loading…","retry":"Retry","search":"Search conversations","send":"Send","empty":"No records in this period","details":"Job Details"},"hi":{"week":"इस सप्ताह","month":"इस महीने","alltime":"पूरा समय","gross":"कुल राशि","commission":"कमीशन","net":"कामगार की शुद्ध कमाई","pending":"सेटलमेंट लंबित","settled":"सेटल हो चुका","held":"रुका हुआ","receipt":"PDF रसीद","loading":"लोड हो रहा है…","retry":"फिर कोशिश करें","search":"बातचीत खोजें","send":"भेजें","empty":"इस अवधि में रिकॉर्ड नहीं","details":"जॉब की जानकारी"},"ar":{"week":"هذا الأسبوع","month":"هذا الشهر","alltime":"كل الوقت","gross":"الإجمالي","commission":"العمولة","net":"صافي العامل","pending":"تسوية معلقة","settled":"تمت التسوية","held":"موقوف","receipt":"إيصال PDF","loading":"جارٍ التحميل…","retry":"إعادة المحاولة","search":"بحث المحادثات","send":"إرسال","empty":"لا توجد سجلات في هذه الفترة","details":"تفاصيل العمل"},"ur":{"week":"اس ہفتے","month":"اس مہینے","alltime":"تمام وقت","gross":"کل رقم","commission":"کمیشن","net":"کارکن کی خالص کمائی","pending":"تصفیہ زیر التوا","settled":"تصفیہ ہو گیا","held":"روکا ہوا","receipt":"PDF رسید","loading":"لوڈ ہو رہا ہے…","retry":"دوبارہ کوشش کریں","search":"گفتگو تلاش کریں","send":"بھیجیں","empty":"اس مدت میں ریکارڈ نہیں","details":"کام کی تفصیل"},"bn":{"week":"এই সপ্তাহ","month":"এই মাস","alltime":"সব সময়","gross":"মোট","commission":"কমিশন","net":"কর্মীর নিট আয়","pending":"নিষ্পত্তি বাকি","settled":"নিষ্পত্তি হয়েছে","held":"স্থগিত","receipt":"PDF রসিদ","loading":"লোড হচ্ছে…","retry":"আবার চেষ্টা","search":"কথোপকথন খুঁজুন","send":"পাঠান","empty":"এই সময়ে রেকর্ড নেই","details":"কাজের বিবরণ"},"ta":{"week":"இந்த வாரம்","month":"இந்த மாதம்","alltime":"அனைத்து காலமும்","gross":"மொத்தம்","commission":"கமிஷன்","net":"பணியாளரின் நிகர வருமானம்","pending":"நிலுவைத் தீர்வு","settled":"தீர்வு முடிந்தது","held":"நிறுத்திவைப்பு","receipt":"PDF ரசீது","loading":"ஏற்றுகிறது…","retry":"மீண்டும் முயற்சி","search":"உரையாடல்களைத் தேடுங்கள்","send":"அனுப்பு","empty":"இந்தக் காலத்தில் பதிவுகள் இல்லை","details":"வேலை விவரங்கள்"},"te":{"week":"ఈ వారం","month":"ఈ నెల","alltime":"మొత్తం కాలం","gross":"మొత్తం","commission":"కమీషన్","net":"కార్మికుని నికర ఆదాయం","pending":"పెండింగ్ సెటిల్మెంట్","settled":"సెటిల్ అయింది","held":"నిలిపివేయబడింది","receipt":"PDF రసీదు","loading":"లోడ్ అవుతోంది…","retry":"మళ్లీ ప్రయత్నించండి","search":"సంభాషణలు వెతకండి","send":"పంపండి","empty":"ఈ కాలంలో రికార్డులు లేవు","details":"పని వివరాలు"},"mr":{"week":"या आठवड्यात","month":"या महिन्यात","alltime":"संपूर्ण काळ","gross":"एकूण","commission":"कमिशन","net":"कामगाराची निव्वळ कमाई","pending":"सेटलमेंट प्रलंबित","settled":"सेटल झाले","held":"स्थगित","receipt":"PDF पावती","loading":"लोड होत आहे…","retry":"पुन्हा प्रयत्न","search":"संभाषणे शोधा","send":"पाठवा","empty":"या कालावधीत नोंदी नाहीत","details":"कामाचा तपशील"},"gu":{"week":"આ અઠવાડિયે","month":"આ મહિને","alltime":"બધો સમય","gross":"કુલ","commission":"કમિશન","net":"કામદારની ચોખ્ખી કમાણી","pending":"સેટલમેન્ટ બાકી","settled":"સેટલ થયું","held":"રોકાયેલ","receipt":"PDF રસીદ","loading":"લોડ થઈ રહ્યું છે…","retry":"ફરી પ્રયાસ","search":"વાતચીત શોધો","send":"મોકલો","empty":"આ સમયગાળામાં રેકોર્ડ નથી","details":"કામની વિગતો"},"kn":{"week":"ಈ ವಾರ","month":"ಈ ತಿಂಗಳು","alltime":"ಎಲ್ಲಾ ಸಮಯ","gross":"ಒಟ್ಟು","commission":"ಕಮಿಷನ್","net":"ಕಾರ್ಮಿಕರ ನಿವ್ವಳ ಆದಾಯ","pending":"ಬಾಕಿ ಇತ್ಯರ್ಥ","settled":"ಇತ್ಯರ್ಥವಾಗಿದೆ","held":"ತಡೆಹಿಡಿದಿದೆ","receipt":"PDF ರಸೀದಿ","loading":"ಲೋಡ್ ಆಗುತ್ತಿದೆ…","retry":"ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ","search":"ಸಂಭಾಷಣೆಗಳನ್ನು ಹುಡುಕಿ","send":"ಕಳುಹಿಸಿ","empty":"ಈ ಅವಧಿಯಲ್ಲಿ ದಾಖಲೆಗಳಿಲ್ಲ","details":"ಕೆಲಸದ ವಿವರಗಳು"},"ml":{"week":"ഈ ആഴ്ച","month":"ഈ മാസം","alltime":"എല്ലാ കാലവും","gross":"മൊത്തം","commission":"കമ്മീഷൻ","net":"തൊഴിലാളിയുടെ അറ്റ വരുമാനം","pending":"സെറ്റിൽമെന്റ് ബാക്കി","settled":"സെറ്റിൽ ചെയ്തു","held":"തടഞ്ഞുവെച്ചത്","receipt":"PDF രസീത്","loading":"ലോഡ് ചെയ്യുന്നു…","retry":"വീണ്ടും ശ്രമിക്കുക","search":"സംഭാഷണങ്ങൾ തിരയുക","send":"അയയ്ക്കുക","empty":"ഈ കാലയളവിൽ രേഖകളില്ല","details":"ജോലി വിശദാംശങ്ങൾ"},"pa":{"week":"ਇਸ ਹਫ਼ਤੇ","month":"ਇਸ ਮਹੀਨੇ","alltime":"ਸਾਰਾ ਸਮਾਂ","gross":"ਕੁੱਲ","commission":"ਕਮਿਸ਼ਨ","net":"ਕਾਮੇ ਦੀ ਸ਼ੁੱਧ ਕਮਾਈ","pending":"ਸੈਟਲਮੈਂਟ ਬਾਕੀ","settled":"ਸੈਟਲ ਹੋਇਆ","held":"ਰੋਕਿਆ ਹੋਇਆ","receipt":"PDF ਰਸੀਦ","loading":"ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ…","retry":"ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼","search":"ਗੱਲਬਾਤ ਲੱਭੋ","send":"ਭੇਜੋ","empty":"ਇਸ ਸਮੇਂ ਵਿੱਚ ਰਿਕਾਰਡ ਨਹੀਂ","details":"ਕੰਮ ਦੇ ਵੇਰਵੇ"}};
+  function wfui(k){return (WORKER_FINANCE_UI[state.lang]||WORKER_FINANCE_UI.en)[k]||k;}
+  function applyWorkerFinanceLabels(){
+    var periods={week:"week",month:"month",all:"alltime"};
+    document.querySelectorAll("[data-earn-period]").forEach(function(btn){btn.textContent=wfui(periods[btn.dataset.earnPeriod]);});
+    document.querySelector("#panel-earnings h2").textContent=wt("nav_earnings");
+    document.querySelector("#panel-messages h2").textContent=wt("nav_messages");
+    document.getElementById("workerMessageSearch").placeholder=wfui("search");
+    document.getElementById("workerMessageSearch").setAttribute("aria-label",wfui("search"));
+    document.querySelector(".earnings-hero .earn-label").textContent=wfui("net")+" · "+wfui("pending")+" + "+wfui("settled");
+    if(earningsData)paintEarnings();
+    renderMessagesScreen();
+  }
   var workerLanguageNames={en:"English",hi:"हिन्दी",ar:"العربية",bn:"বাংলা",ta:"தமிழ்",te:"తెలుగు",mr:"मराठी",gu:"ગુજરાતી",kn:"ಕನ್ನಡ",ml:"മലയാളം",pa:"ਪੰਜਾਬੀ",ur:"اردو"};
   function wt(key) { return (W_LANG[state.lang] && W_LANG[state.lang][key]) || (W_LANG.en && W_LANG.en[key]) || key; }
   function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
@@ -637,6 +650,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     updateWorkerHomeHeader();
     applyWorkerJobLabels();
     translateWorkerResponse();
+    applyWorkerFinanceLabels();
     if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
     if(currentWorkerPanel==="navigation" && detailBookingId!=null)openNavigation(detailBookingId);
   }
@@ -1210,14 +1224,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     if(!earningsData)return;
     var items=earningsForPeriod(earningsData.items,earningsPeriod,new Date()),totals=summarizeEarnings(items);
     document.getElementById("earningsTotal").textContent=fmtMoney(totals.pending+totals.settled);
-    document.getElementById("earningsPeriodCaption").textContent=(earningsPeriod==="week"?"This week · Monday to today":earningsPeriod==="month"?"This month to today":"All time")+" · By booking date · "+items.length+" booking"+(items.length===1?"":"s");
+    document.getElementById("earningsPeriodCaption").textContent=(earningsPeriod==="week"?wfui("week"):earningsPeriod==="month"?wfui("month"):wfui("alltime"))+" · By booking date · "+items.length+" booking"+(items.length===1?"":"s");
     function row(label,value){return '<div class="earn-break"><span>'+label+'</span><strong>'+fmtMoney(value)+'</strong></div>';}
     var box=document.getElementById("earningsBreakdown");
-    box.innerHTML=row("Gross booking amount",totals.gross)+row("Platform commission",totals.commission)+row("Worker net · All statuses",totals.workerNet)+row("Pending settlement",totals.pending)+row("Settled",totals.settled)+row("On hold · Not included above",totals.held)+(totals.other?row("Other settlement statuses",totals.other):"")+
+    box.innerHTML=row(wfui("gross"),totals.gross)+row(wfui("commission"),totals.commission)+row(wfui("net"),totals.workerNet)+row(wfui("pending"),totals.pending)+row(wfui("settled"),totals.settled)+row(wfui("held"),totals.held)+(totals.other?row("Other settlement statuses",totals.other):"")+
       (items.length?items.map(function(x){
-        var id=Number(x.booking_id),status=String(x.settlement_status||"Unknown").replace(/_/g," ");
-        return '<div class="earn-item"><div class="earn-item-head"><strong>Booking #'+id+'</strong><strong>'+fmtMoney(x.worker_net||0)+'</strong></div><small>'+earningsText(x.start_date?fmtDate(x.start_date):"Date unavailable")+' · '+earningsText(status)+'</small><div class="earn-item-values"><span>Gross<strong>'+fmtMoney(x.gross_amount||0)+'</strong></span><span>Commission<strong>'+fmtMoney(x.platform_commission||0)+'</strong></span><span>Worker net<strong>'+fmtMoney(x.worker_net||0)+'</strong></span></div>'+(x.settlement_reference?'<small>Settlement reference: '+earningsText(x.settlement_reference)+'</small>':"")+(x.payment_status==="paid"?'<button type="button" class="btn btn-outline" data-worker-receipt="'+id+'">PDF Receipt</button>':"")+'</div>';
-      }).join(""):'<div class="empty-soft">No earnings records for this period. Try All Time.</div>');
+        var id=Number(x.booking_id),status=({pending:wfui("pending"),settled:wfui("settled"),held:wfui("held")}[x.settlement_status]||String(x.settlement_status||"Unknown").replace(/_/g," "));
+        return '<div class="earn-item"><div class="earn-item-head"><strong>Booking #'+id+'</strong><strong>'+fmtMoney(x.worker_net||0)+'</strong></div><small>'+earningsText(x.start_date?fmtDate(x.start_date):"Date unavailable")+' · '+earningsText(status)+'</small><div class="earn-item-values"><span>Gross<strong>'+fmtMoney(x.gross_amount||0)+'</strong></span><span>Commission<strong>'+fmtMoney(x.platform_commission||0)+'</strong></span><span>Worker net<strong>'+fmtMoney(x.worker_net||0)+'</strong></span></div>'+(x.settlement_reference?'<small>Settlement reference: '+earningsText(x.settlement_reference)+'</small>':"")+(x.payment_status==="paid"?'<button type="button" class="btn btn-outline" data-worker-receipt="'+id+'">'+wfui("receipt")+'</button>':"")+'</div>';
+      }).join(""):'<div class="empty-soft">'+wfui("empty")+'</div>');
     box.querySelectorAll("[data-worker-receipt]").forEach(function(btn){btn.addEventListener("click",function(){window.open("/api/worker/bookings/"+btn.dataset.workerReceipt+"/receipt.pdf","_blank","noopener");});});
   }
   document.querySelectorAll("[data-earn-period]").forEach(function(btn){btn.addEventListener("click",function(){
@@ -1229,7 +1243,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var request=++earningsRequest,box=document.getElementById("earningsBreakdown");
     earningsData=null;
     document.getElementById("earningsTotal").textContent="—";
-    box.innerHTML='<div class="empty-soft" role="status">Loading earnings…</div>';
+    box.innerHTML='<div class="empty-soft" role="status">'+wfui("loading")+'</div>';
     api("/api/worker/earnings-summary").then(function(r){
       if(request!==earningsRequest)return;
       if(!r.ok || !r.data || !Array.isArray(r.data.items))throw Error(r.data && r.data.error || "Unable to load earnings");
@@ -1237,7 +1251,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     }).catch(function(e){
       if(request!==earningsRequest)return;
       document.getElementById("earningsTotal").textContent="—";
-      box.innerHTML='<div class="empty-soft" role="status">'+earningsText(e.message)+'<button type="button" class="btn btn-outline btn-block" id="retryEarnings" style="margin-top:12px">Retry</button></div>';
+      box.innerHTML='<div class="empty-soft" role="status">'+earningsText(e.message)+'<button type="button" class="btn btn-outline btn-block" id="retryEarnings" style="margin-top:12px">'+wfui("retry")+'</button></div>';
       document.getElementById("retryEarnings").addEventListener("click",renderEarningsScreen);
     });
   }
