@@ -355,6 +355,14 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
 :root[data-theme="dark"] .error-box{color:#ffd1c4}
 .job-filter-row{overflow-x:auto;flex-wrap:nowrap}.job-filter-row button{flex-shrink:0;min-height:44px}.job-filter-row button:focus-visible{outline:3px solid var(--app-orange);outline-offset:-3px}
 .worker-respond-dialog{width:min(430px,calc(100vw - 28px));max-height:85vh;overflow:auto;padding:22px;border:1px solid var(--app-border);border-radius:20px;background:var(--app-card);color:var(--app-text)}.worker-respond-dialog::backdrop{background:rgba(0,10,25,.65)}.worker-respond-dialog h2{font-size:21px}.worker-respond-dialog p{font-size:14px;color:var(--app-muted);overflow-wrap:anywhere}.worker-respond-dialog input{margin-top:8px;background:var(--app-bg);color:var(--app-text);border-color:var(--app-border)}.worker-respond-actions{display:flex;gap:10px;margin-top:18px}.worker-respond-actions button{flex:1;min-height:44px}.worker-respond-dialog [hidden]{display:none}
+
+nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
+.worker-stat span,.profile-field .label,.profile-field .value{overflow-wrap:anywhere}
+.earn-item-values{grid-template-columns:repeat(3,minmax(0,1fr))}.earn-item-values span,.earn-break span,.earn-break strong{overflow-wrap:anywhere;min-width:0}
+.msg-body{min-width:0}.msg-name,.msg-preview,.detail-title{overflow-wrap:anywhere}
+.worker-respond-actions{flex-wrap:wrap}.worker-respond-actions button{flex:1 1 130px}
+:root[dir="rtl"] .worker-settings-row,:root[dir="rtl"] .worker-lang-list .choice-btn{text-align:right}
+@media(max-width:360px){.earn-item-values{grid-template-columns:1fr}.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -803,8 +811,24 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
       return { ok: false, status: 0, data: { error: "Unable to reach HireNow server" } };
     });
   }
-  function fmtMoney(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
-  function fmtDate(d) { var dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" }); }
+  function uiFormatLocale(){
+    var locales={en:"en-IN",hi:"hi-IN",ar:"ar",ur:"ur-IN",bn:"bn-IN",ta:"ta-IN",te:"te-IN",mr:"mr-IN",gu:"gu-IN",kn:"kn-IN",ml:"ml-IN",pa:"pa-IN"};
+    return locales[state.lang]||"en-IN";
+  }
+  function fmtMoney(n){
+    var amount=Number(n);
+    if(!Number.isFinite(amount))return "—";
+    return new Intl.NumberFormat(uiFormatLocale(),{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:2}).format(amount);
+  }
+  function fmtDate(d){
+    var match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||""));
+    if(!match)return "—";
+    var year=Number(match[1]),month=Number(match[2])-1,day=Number(match[3]),dt=new Date(year,month,day);
+    if(dt.getFullYear()!==year || dt.getMonth()!==month || dt.getDate()!==day)return "—";
+    return new Intl.DateTimeFormat(uiFormatLocale(),{day:"numeric",month:"short",year:"numeric"}).format(dt);
+  }
+
+
 
   var authScreen = document.getElementById("authScreen");
   var appScreen = document.getElementById("appScreen");
