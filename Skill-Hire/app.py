@@ -66,6 +66,9 @@ ADMIN_PASSWORD_HASH = os.environ.get("ADMIN_PASSWORD_HASH", "")
 STATUS_FLOW = ["requested", "confirmed", "en_route", "checked_in", "in_progress", "completed"]
 STANDARD_WORKDAY_HOURS = 8
 BOOKING_RESPONSE_MINUTES = 30
+CASH_OTP_MAX_ATTEMPTS = 5
+CASH_OTP_LOCK_MINUTES = 15
+CASH_OTP_GENERATION_COOLDOWN = 60
 SERVICE_TIMEZONE = "Asia/Kolkata"
 SERVICE_ZONE = ZoneInfo(SERVICE_TIMEZONE)
 
@@ -137,6 +140,9 @@ def ensure_schema_extensions():
         "payment_method": "TEXT NOT NULL DEFAULT 'online'",
         "worker_response_at": "TEXT",
         "worker_rejection_reason": "TEXT",
+        "cash_otp_attempts": "INTEGER NOT NULL DEFAULT 0",
+        "cash_otp_locked_until": "TEXT",
+        "cash_otp_issued_at": "TEXT",
         "cash_otp_hash": "TEXT",
         "cash_otp_expires_at": "TEXT",
         "cash_verified_at": "TEXT",
@@ -2724,6 +2730,12 @@ def razorpay_webhook():
         conn.close()
 
 
+def public_booking(row):
+    data = row_to_dict(row)
+    data.pop("cash_otp_hash", None)
+    return data
+
+
 @app.get("/api/bookings")
 def list_bookings():
     auth_error = require_login()
@@ -2750,7 +2762,7 @@ def list_bookings():
         (current_hirer_id(),),
     ).fetchall()
     conn.close()
-    return jsonify(rows_to_list(rows))
+    return jsonify([public_booking(row) for row in rows])
 
 
 @app.get("/api/bookings/<int:booking_id>")
@@ -2770,7 +2782,7 @@ def booking_detail(booking_id):
     conn.close()
     if not row:
         return jsonify({"error": "Booking not found"}), 404
-    return jsonify(row_to_dict(row))
+    return jsonify(public_booking(row))
 
 
 @app.post("/api/bookings/<int:booking_id>/cancel")
@@ -2886,7 +2898,7 @@ def worker_bookings():
         (current_worker_id(),),
     ).fetchall()
     conn.close()
-    return jsonify(rows_to_list(rows))
+    return jsonify([public_booking(row) for row in rows])
 
 
 @app.post("/api/worker/bookings/<int:booking_id>/respond")
@@ -3121,6 +3133,28 @@ def worker_check_in(booking_id):
     return jsonify({"status": nxt, "latitude": lat, "longitude": lng, "accuracy": accuracy, "distance_metres": round(distance_metres) if distance_metres is not None else None})
 
 
+def cash_otp_utc(value):
+    instant = datetime.fromisoformat(value)
+    if instant.tzinfo:
+        instant = instant.astimezone(timezone.utc).replace(tzinfo=None)
+    return instant
+
+
+def cash_otp_lock_remaining(booking, now):
+    if not booking["cash_otp_locked_until"]:
+        return 0
+    try:
+        return max(0, math.ceil((cash_otp_utc(booking["cash_otp_locked_until"]) - now).total_seconds()))
+    except (ValueError, TypeError):
+        return CASH_OTP_LOCK_MINUTES * 60
+
+
+def cash_otp_throttled(message, seconds):
+    response = jsonify({"error": message, "retry_after": seconds})
+    response.headers["Retry-After"] = str(seconds)
+    return response, 429
+
+
 @app.post("/api/bookings/<int:booking_id>/cash-otp")
 def generate_cash_payment_otp(booking_id):
     """Hirer generates a short-lived OTP only after a cash job is completed."""
@@ -3147,6 +3181,20 @@ def generate_cash_payment_otp(booking_id):
         conn.close()
         return jsonify({"error": "Cash can be selected only when no online amount has already been paid"}), 409
 
+    now = datetime.utcnow()
+    remaining = cash_otp_lock_remaining(booking, now)
+    if remaining:
+        conn.close()
+        return cash_otp_throttled(f"Cash OTP verification is locked. Wait {math.ceil(remaining/60)} minute(s), then generate a fresh OTP.", remaining)
+    if booking["cash_otp_issued_at"]:
+        try:
+            cooldown = max(0, math.ceil(CASH_OTP_GENERATION_COOLDOWN - (now - cash_otp_utc(booking["cash_otp_issued_at"])).total_seconds()))
+        except (ValueError, TypeError):
+            cooldown = CASH_OTP_GENERATION_COOLDOWN
+        if cooldown:
+            conn.close()
+            return cash_otp_throttled(f"Wait {cooldown} seconds before generating another cash OTP. Use the current code if it is still valid.", cooldown)
+
     # If checkout was previously opened, reconcile first so we never accept cash after an already captured online payment.
     if booking["razorpay_order_id"]:
         reconciled = reconcile_online_booking_payment(conn, booking, notify_users=True)
@@ -3164,11 +3212,13 @@ def generate_cash_payment_otp(booking_id):
             return jsonify({"error": "Online payment is already confirmed for this booking"}), 409
 
     otp = f"{__import__('secrets').randbelow(1000000):06d}"
-    expires = datetime.now() + timedelta(minutes=10)
+    expires = now + timedelta(minutes=10)
     conn.execute(
         """UPDATE bookings SET payment_method='cash', cash_otp_hash = ?, cash_otp_expires_at = ?,
-           payment_status = 'cash_pending' WHERE id = ?""",
-        (generate_password_hash(otp), expires.isoformat(), booking_id),
+           payment_status = 'cash_pending', cash_otp_issued_at=?, cash_otp_locked_until=NULL,
+           cash_otp_attempts=? WHERE id = ?""",
+        (generate_password_hash(otp), expires.isoformat(), now.isoformat(),
+         0 if booking["cash_otp_locked_until"] else int(booking["cash_otp_attempts"] or 0), booking_id),
     )
     hirer = conn.execute("SELECT phone FROM hirers WHERE id = ?", (booking["hirer_id"],)).fetchone()
     conn.commit()
@@ -3186,10 +3236,10 @@ def verify_cash_payment_otp(booking_id):
     auth_error = require_worker_login()
     if auth_error:
         return auth_error
-    data = request.get_json(force=True) or {}
-    otp = (data.get("otp") or "").strip()
-    if not otp:
-        return jsonify({"error": "OTP required"}), 400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("otp"), str) or not re.fullmatch(r"[0-9]{6}", data["otp"].strip()):
+        return jsonify({"error": "Enter a valid 6-digit cash OTP"}), 400
+    otp = data["otp"].strip()
 
     conn = get_db()
     if not is_postgres():
@@ -3206,24 +3256,42 @@ def verify_cash_payment_otp(booking_id):
     if booking["payment_status"] == "paid":
         conn.close()
         return jsonify({"error": "Payment already verified"}), 400
+    now = datetime.utcnow()
+    remaining = cash_otp_lock_remaining(booking, now)
+    if remaining:
+        conn.close()
+        return cash_otp_throttled(f"Too many wrong OTP attempts. Wait {math.ceil(remaining/60)} minute(s), then ask the hirer for a fresh OTP.", remaining)
     if not booking["cash_otp_hash"] or not booking["cash_otp_expires_at"]:
         conn.close()
-        return jsonify({"error": "Hirer has not generated a cash OTP yet"}), 400
+        return jsonify({"error": "Ask the hirer to generate a fresh cash OTP"}), 400
     try:
-        expired = datetime.now() > datetime.fromisoformat(booking["cash_otp_expires_at"])
+        expired = now >= cash_otp_utc(booking["cash_otp_expires_at"])
     except ValueError:
         expired = True
     if expired:
         conn.close()
         return jsonify({"error": "OTP expired — ask hirer to generate a new OTP"}), 400
     if not check_password_hash(booking["cash_otp_hash"], otp):
-        conn.close()
-        return jsonify({"error": "Invalid OTP"}), 400
+        attempts = int(booking["cash_otp_attempts"] or 0) + 1
+        if attempts >= CASH_OTP_MAX_ATTEMPTS:
+            locked_until = now + timedelta(minutes=CASH_OTP_LOCK_MINUTES)
+            conn.execute("UPDATE bookings SET cash_otp_attempts=?, cash_otp_locked_until=?, cash_otp_hash=NULL, cash_otp_expires_at=NULL WHERE id=?",
+                         (attempts, locked_until.isoformat(), booking_id))
+            conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'cash_otp_locked','Cash OTP verification locked after repeated wrong attempts; payment remains unverified')", (booking_id,))
+            for role, owner in (("hirer", booking["hirer_id"]), ("worker", booking["worker_id"])):
+                add_in_app_notification(conn, role, owner, "cash_otp_locked", "Cash OTP temporarily locked",
+                    f"Booking #{booking_id}: cash OTP locked for 15 minutes after wrong attempts. Payment is not verified. Ask the hirer for a fresh OTP after the wait.", booking_id)
+            conn.commit(); conn.close()
+            return cash_otp_throttled("Too many wrong OTP attempts. Wait 15 minutes, then ask the hirer for a fresh OTP.", CASH_OTP_LOCK_MINUTES * 60)
+        conn.execute("UPDATE bookings SET cash_otp_attempts=? WHERE id=?", (attempts, booking_id))
+        conn.commit(); conn.close()
+        left = CASH_OTP_MAX_ATTEMPTS - attempts
+        return jsonify({"error": f"Invalid OTP. {left} attempt(s) remaining before a temporary lock.", "attempts_remaining": left}), 400
 
-    verified_at = datetime.now().isoformat()
+    verified_at = now.isoformat()
     conn.execute(
         """UPDATE bookings SET payment_status = 'paid', cash_verified_at = ?, paid_amount = total_amount,
-           cash_otp_hash = NULL, cash_otp_expires_at = NULL WHERE id = ?""",
+           cash_otp_hash = NULL, cash_otp_expires_at = NULL, cash_otp_attempts=0, cash_otp_locked_until=NULL WHERE id = ?""",
         (verified_at, booking_id),
     )
     conn.execute(
