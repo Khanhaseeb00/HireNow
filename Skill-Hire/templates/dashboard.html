@@ -585,6 +585,13 @@
 :root[data-theme="dark"] .ref-chat-bubble .time{opacity:1;color:#cfdeec}
 :root[data-theme="dark"] button:focus-visible,:root[data-theme="dark"] a:focus-visible{outline:3px solid #ffca78;outline-offset:3px}
 .hirer-job-guidance{margin-bottom:14px}.hirer-job-guidance>strong{font-size:17px;color:var(--ink)}.hirer-job-guidance p{font-size:13px;color:var(--ink-soft);margin:8px 0 14px}.hirer-job-progress{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.hirer-job-progress li{display:flex;gap:7px;align-items:center;font-size:12px;color:var(--ink-soft)}.hirer-job-progress li>span{display:flex;align-items:center;justify-content:center;width:25px;height:25px;flex-shrink:0;border:1px solid var(--line);border-radius:50%}.hirer-job-progress li.done>span{background:var(--ok-tint);color:var(--ok)}.hirer-job-progress li.current{color:var(--ink);font-weight:700}.hirer-job-progress li.current>span{background:var(--orange);color:var(--orange-ink)}
+
+.nav-item{min-width:0;white-space:normal;overflow-wrap:anywhere}
+.msg-row .body,.schedule-card .body{min-width:0}.msg-row .name,.msg-row .preview,.schedule-card .name{overflow-wrap:anywhere}
+.ref-detail-row .v,.hirer-job-guidance strong,.home-next-booking strong{overflow-wrap:anywhere}
+.ref-detail-actions{grid-template-columns:repeat(2,minmax(0,1fr))}.ref-detail-actions button{white-space:normal;overflow-wrap:anywhere}
+:root[dir="rtl"] .ref-chat-bubble .time{text-align:left}
+@media(max-width:360px){.ref-detail-actions{grid-template-columns:1fr}.hirer-job-progress{grid-template-columns:1fr}}
 </style>
 </head>
 
@@ -908,11 +915,23 @@
     opts.credentials = "same-origin";
     return fetch(path, opts).then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); });
   }
-  function fmtMoney(n) { return "₹" + Number(n).toLocaleString("en-IN"); }
-  function fmtDate(d) {
-    var dt = new Date(d + "T00:00:00");
-    return dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+  function uiFormatLocale(){
+    var locales={en:"en-IN",hi:"hi-IN",ar:"ar",ur:"ur-IN",bn:"bn-IN",ta:"ta-IN",te:"te-IN",mr:"mr-IN",gu:"gu-IN",kn:"kn-IN",ml:"ml-IN",pa:"pa-IN"};
+    return locales[state.lang]||"en-IN";
   }
+  function fmtMoney(n){
+    var amount=Number(n);
+    if(!Number.isFinite(amount))return "—";
+    return new Intl.NumberFormat(uiFormatLocale(),{style:"currency",currency:"INR",minimumFractionDigits:0,maximumFractionDigits:2}).format(amount);
+  }
+  function fmtDate(d){
+    var match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||""));
+    if(!match)return "—";
+    var year=Number(match[1]),month=Number(match[2])-1,day=Number(match[3]),dt=new Date(year,month,day);
+    if(dt.getFullYear()!==year || dt.getMonth()!==month || dt.getDate()!==day)return "—";
+    return new Intl.DateTimeFormat(uiFormatLocale(),{day:"numeric",month:"short",year:"numeric"}).format(dt);
+  }
+
   function initials(name) { return (name || "").split(" ").map(function (p) { return p[0]; }).join("").slice(0, 2).toUpperCase(); }
   var COLORS = ["#2B5F8F", "#C77F1E", "#4A7A95", "#3E8F63", "#8B5FA8", "#B0872F"];
   function colorFor(id) { return COLORS[id % COLORS.length]; }
