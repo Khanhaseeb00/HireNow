@@ -636,6 +636,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     renderProfile();
     updateWorkerHomeHeader();
     applyWorkerJobLabels();
+    translateWorkerResponse();
     if(currentWorkerPanel==="job-detail" && detailBookingId!=null)openJobDetail(detailBookingId);
     if(currentWorkerPanel==="navigation" && detailBookingId!=null)openNavigation(detailBookingId);
   }
@@ -959,17 +960,30 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     });
   }
 
+  var WORKER_RESPONSE_UI={"en":{"accept_title":"Accept this job?","reject_title":"Decline this request?","accept":"Accept Job","reject":"Decline Job","keep":"Keep Request","reason":"Reason (optional)","placeholder":"Why are you declining?","sending":"Sending…","error":"Unable to save your response. Please try again."},"hi":{"accept_title":"यह जॉब स्वीकार करें?","reject_title":"यह अनुरोध अस्वीकार करें?","accept":"जॉब स्वीकार करें","reject":"जॉब अस्वीकार करें","keep":"अनुरोध रहने दें","reason":"कारण (वैकल्पिक)","placeholder":"अस्वीकार करने का कारण","sending":"भेज रहे हैं…","error":"जवाब सेव नहीं हुआ। फिर कोशिश करें।"},"ar":{"accept_title":"قبول هذا العمل؟","reject_title":"رفض هذا الطلب؟","accept":"قبول العمل","reject":"رفض العمل","keep":"الإبقاء على الطلب","reason":"السبب (اختياري)","placeholder":"لماذا ترفض الطلب؟","sending":"جارٍ الإرسال…","error":"تعذر حفظ ردك. أعد المحاولة."},"ur":{"accept_title":"یہ کام قبول کریں؟","reject_title":"یہ درخواست مسترد کریں؟","accept":"کام قبول کریں","reject":"کام مسترد کریں","keep":"درخواست رہنے دیں","reason":"وجہ (اختیاری)","placeholder":"مسترد کرنے کی وجہ","sending":"بھیج رہے ہیں…","error":"جواب محفوظ نہیں ہوا۔ دوبارہ کوشش کریں۔"},"bn":{"accept_title":"এই কাজ গ্রহণ করবেন?","reject_title":"এই অনুরোধ প্রত্যাখ্যান করবেন?","accept":"কাজ গ্রহণ করুন","reject":"কাজ প্রত্যাখ্যান করুন","keep":"অনুরোধ রাখুন","reason":"কারণ (ঐচ্ছিক)","placeholder":"প্রত্যাখ্যানের কারণ","sending":"পাঠানো হচ্ছে…","error":"উত্তর সংরক্ষণ হয়নি। আবার চেষ্টা করুন।"},"ta":{"accept_title":"இந்த வேலையை ஏற்கவா?","reject_title":"இந்தக் கோரிக்கையை நிராகரிக்கவா?","accept":"வேலையை ஏற்கவும்","reject":"வேலையை நிராகரிக்கவும்","keep":"கோரிக்கையை வைத்திருக்கவும்","reason":"காரணம் (விருப்பம்)","placeholder":"நிராகரிப்பதற்கான காரணம்","sending":"அனுப்பப்படுகிறது…","error":"பதில் சேமிக்கப்படவில்லை. மீண்டும் முயற்சிக்கவும்."},"te":{"accept_title":"ఈ పనిని అంగీకరించాలా?","reject_title":"ఈ అభ్యర్థనను తిరస్కరించాలా?","accept":"పనిని అంగీకరించండి","reject":"పనిని తిరస్కరించండి","keep":"అభ్యర్థనను ఉంచండి","reason":"కారణం (ఐచ్ఛికం)","placeholder":"తిరస్కరించడానికి కారణం","sending":"పంపుతోంది…","error":"సమాధానం సేవ్ కాలేదు. మళ్లీ ప్రయత్నించండి."},"mr":{"accept_title":"हे काम स्वीकारायचे?","reject_title":"ही विनंती नाकारायची?","accept":"काम स्वीकारा","reject":"काम नाकारा","keep":"विनंती ठेवून द्या","reason":"कारण (ऐच्छिक)","placeholder":"नाकारण्याचे कारण","sending":"पाठवत आहे…","error":"उत्तर जतन झाले नाही. पुन्हा प्रयत्न करा."},"gu":{"accept_title":"આ કામ સ્વીકારવું?","reject_title":"આ વિનંતી નકારવી?","accept":"કામ સ્વીકારો","reject":"કામ નકારો","keep":"વિનંતી રાખો","reason":"કારણ (વૈકલ્પિક)","placeholder":"નકારવાનું કારણ","sending":"મોકલી રહ્યા છીએ…","error":"જવાબ સેવ થયો નથી. ફરી પ્રયાસ કરો."},"kn":{"accept_title":"ಈ ಕೆಲಸವನ್ನು ಒಪ್ಪಿಕೊಳ್ಳಬೇಕೇ?","reject_title":"ಈ ವಿನಂತಿಯನ್ನು ತಿರಸ್ಕರಿಸಬೇಕೇ?","accept":"ಕೆಲಸವನ್ನು ಒಪ್ಪಿಕೊಳ್ಳಿ","reject":"ಕೆಲಸವನ್ನು ತಿರಸ್ಕರಿಸಿ","keep":"ವಿನಂತಿಯನ್ನು ಉಳಿಸಿ","reason":"ಕಾರಣ (ಐಚ್ಛಿಕ)","placeholder":"ತಿರಸ್ಕರಿಸುವ ಕಾರಣ","sending":"ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…","error":"ಉತ್ತರ ಉಳಿಸಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ."},"ml":{"accept_title":"ഈ ജോലി സ്വീകരിക്കണോ?","reject_title":"ഈ അഭ്യർഥന നിരസിക്കണോ?","accept":"ജോലി സ്വീകരിക്കുക","reject":"ജോലി നിരസിക്കുക","keep":"അഭ്യർഥന നിലനിർത്തുക","reason":"കാരണം (ഐച്ഛികം)","placeholder":"നിരസിക്കുന്നതിന്റെ കാരണം","sending":"അയയ്ക്കുന്നു…","error":"മറുപടി സേവ് ആയില്ല. വീണ്ടും ശ്രമിക്കുക."},"pa":{"accept_title":"ਇਹ ਕੰਮ ਸਵੀਕਾਰ ਕਰਨਾ ਹੈ?","reject_title":"ਇਹ ਬੇਨਤੀ ਅਸਵੀਕਾਰ ਕਰਨੀ ਹੈ?","accept":"ਕੰਮ ਸਵੀਕਾਰ ਕਰੋ","reject":"ਕੰਮ ਅਸਵੀਕਾਰ ਕਰੋ","keep":"ਬੇਨਤੀ ਰਹਿਣ ਦਿਓ","reason":"ਕਾਰਨ (ਵਿਕਲਪਿਕ)","placeholder":"ਅਸਵੀਕਾਰ ਕਰਨ ਦਾ ਕਾਰਨ","sending":"ਭੇਜ ਰਹੇ ਹਾਂ…","error":"ਜਵਾਬ ਸੇਵ ਨਹੀਂ ਹੋਇਆ। ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।"}};
+  function wresponse(key){return (WORKER_RESPONSE_UI[state.lang]||WORKER_RESPONSE_UI.en)[key]||key;}
+  function translateWorkerResponse(){
+    document.getElementById("workerRespondCancel").textContent=wresponse("keep");
+    document.querySelector('label[for="workerRejectReason"]').textContent=wresponse("reason");
+    document.getElementById("workerRejectReason").placeholder=wresponse("placeholder");
+    if(pendingWorkerResponse){
+      var action=pendingWorkerResponse.action;
+      document.getElementById("workerRespondTitle").textContent=wresponse(action==="accept"?"accept_title":"reject_title");
+      document.getElementById("workerRespondSubmit").textContent=wresponse(workerResponseBusy?"sending":action);
+    }
+  }
   var pendingWorkerResponse=null,workerResponseBusy=false;
   var respondDialog=document.getElementById("workerRespondDialog");
   function openWorkerResponse(id,action){
     var booking=findBooking(Number(id));if(!booking || booking.status!=="requested" || workerResponseBusy)return;
     pendingWorkerResponse={id:Number(id),action:action};
-    document.getElementById("workerRespondTitle").textContent=action==="accept"?"Accept this job?":"Decline this request?";
+    document.getElementById("workerRespondTitle").textContent=wresponse(action==="accept"?"accept_title":"reject_title");
     document.getElementById("workerRespondDescription").textContent="Booking #"+id+" · "+jobTitle(booking)+" · "+(booking.hirer_name||"Hirer")+(booking.start_date?" · "+fmtDate(booking.start_date):"");
     document.getElementById("workerRejectReasonWrap").hidden=action!=="reject";
     document.getElementById("workerRejectReason").value="";
     document.getElementById("workerRespondFeedback").textContent="";
-    document.getElementById("workerRespondSubmit").textContent=action==="accept"?"Accept Job":"Decline Job";
+    document.getElementById("workerRespondSubmit").textContent=wresponse(action);
+    translateWorkerResponse();
     respondDialog.showModal();
   }
   document.getElementById("workerRespondCancel").addEventListener("click",function(){if(!workerResponseBusy)respondDialog.close();});
@@ -978,12 +992,12 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
   document.getElementById("workerRespondForm").addEventListener("submit",function(e){
     e.preventDefault();if(!pendingWorkerResponse || workerResponseBusy)return;
     var request=pendingWorkerResponse,submit=document.getElementById("workerRespondSubmit"),cancel=document.getElementById("workerRespondCancel"),feedback=document.getElementById("workerRespondFeedback");
-    workerResponseBusy=true;submit.disabled=true;cancel.disabled=true;submit.textContent="Sending…";feedback.textContent="";
+    workerResponseBusy=true;submit.disabled=true;cancel.disabled=true;submit.textContent=wresponse("sending");feedback.textContent="";
     api("/api/worker/bookings/"+request.id+"/respond",{method:"POST",body:JSON.stringify({action:request.action,reason:request.action==="reject"?document.getElementById("workerRejectReason").value.trim():""})}).then(function(res){
-      if(!res.ok)throw Error(res.data.error||"Unable to save your response. Please try again.");
+      if(!res.ok)throw Error(res.data.error||wresponse("error"));
       respondDialog.close();loadBookings();
-    }).catch(function(e){feedback.textContent=e.message||"Unable to save your response. Please try again.";}).finally(function(){
-      workerResponseBusy=false;submit.disabled=false;cancel.disabled=false;submit.textContent=request.action==="accept"?"Accept Job":"Decline Job";
+    }).catch(function(e){feedback.textContent=e.message||wresponse("error");}).finally(function(){
+      workerResponseBusy=false;submit.disabled=false;cancel.disabled=false;submit.textContent=wresponse(request.action);
     });
   });
 
@@ -1018,8 +1032,8 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
           '<span class="status-pill">' + (statusMap[b.status] || b.status) + ' · ' + paymentText + '</span>' +
           (b.status === "requested" ?
             '<div style="display:flex;gap:8px;margin:10px 0;">' +
-              '<button class="btn btn-safety" data-accept="' + b.id + '" style="flex:1;">Accept</button>' +
-              '<button class="btn btn-outline" data-reject="' + b.id + '" style="flex:1;">Reject</button>' +
+              '<button class="btn btn-safety" data-accept="' + b.id + '" style="flex:1;">' + wresponse("accept") + '</button>' +
+              '<button class="btn btn-outline" data-reject="' + b.id + '" style="flex:1;">' + wresponse("reject") + '</button>' +
             '</div>' : '') +
           (nodes ? '<div class="timeline">' + nodes + '</div>' : '') +
           (canAct ? '<button class="btn btn-safety" data-checkin="' + b.id + '">' + actionLabel + '</button>' : '') +
@@ -1120,7 +1134,7 @@ nav.tabs button.active:after{content:"";position:absolute;bottom:1px;left:50%;tr
     var statusLabels=STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en;
     var canAccept=b.status==="requested";
     var canNavigate=["confirmed","en_route"].indexOf(b.status)>=0;
-    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-stage"><span class="status-pill">'+(statusLabels[b.status]||b.status)+'</span><p>'+next.label+'</p>'+(next.action?'<button class="btn btn-safety btn-block" data-detail-next="'+next.action+'">'+next.button+'</button>':'')+'<div class="gps-note" id="gps-detail-'+b.id+'" role="status" aria-live="polite"></div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">Accept Job</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">Reject</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+b.id+'">PDF Receipt</button>':'')+'</div></div>';
+    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-stage"><span class="status-pill">'+(statusLabels[b.status]||b.status)+'</span><p>'+next.label+'</p>'+(next.action?'<button class="btn btn-safety btn-block" data-detail-next="'+next.action+'">'+next.button+'</button>':'')+'<div class="gps-note" id="gps-detail-'+b.id+'" role="status" aria-live="polite"></div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">'+wresponse("accept")+'</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">'+wresponse("reject")+'</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+b.id+'">PDF Receipt</button>':'')+'</div></div>';
     showWorkerPanel("job-detail");
     var nextBtn=document.querySelector("[data-detail-next]");
     if(nextBtn)nextBtn.addEventListener("click",function(){
