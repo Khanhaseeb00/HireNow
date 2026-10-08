@@ -1067,9 +1067,9 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
              b.payment_status === "refund_pending" ? "Refund pending" : "Online payment pending"));
 
       return (
-        '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + b.hirer_name + '">' +
-          '<div class="bcard-head"><div><div class="name">' + b.hirer_name + '</div>' +
-          '<div class="meta">' + fmtDate(b.start_date) + ' · ' + (b.hours || 2) + ' hrs</div></div>' +
+        '<div class="bcard tick" data-booking="' + b.id + '" data-hirer-name="' + earningsText(b.hirer_name) + '">' +
+          '<div class="bcard-head"><div><div class="name">' + earningsText(b.hirer_name) + '</div>' +
+          '<div class="meta">' + fmtDate(b.start_date) + ' · ' + (b.scheduled_minutes ? b.scheduled_minutes / 60 : b.hours || 2) + ' hrs</div></div>' +
           '<div class="num">' + fmtMoney(b.total_amount) + '</div></div>' +
           '<span class="status-pill">' + (b.request_expired_at ? "Request expired" : statusMap[b.status] || b.status) + ' · ' + paymentText + '</span>' +
           (b.status === "requested" ?
@@ -1103,15 +1103,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       btn.addEventListener("click", function () {
         var id=Number(btn.dataset.verifyCash);
         var input=document.getElementById("cash-otp-"+id);
-        var otp=(input.value||"").trim();
-        if(otp.length!==6){ window.alert("6-digit OTP enter karein."); return; }
-        api("/api/worker/bookings/"+id+"/verify-cash-otp", {
-          method:"POST", body:JSON.stringify({otp:otp})
-        }).then(function(res){
-          if(!res.ok){ window.alert(res.data.error || "OTP verify nahi hua"); return; }
-          window.alert("Cash payment verified ✓");
-          loadBookings();
-        });
+        verifyWorkerCashPayment(id,input,btn,null,null);
       });
     });
     wrap.querySelectorAll("[data-open-chat]").forEach(function (btn) {
@@ -1149,7 +1141,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     var hints={all:"All assigned jobs",requests:"New requests waiting for your response",ongoing:"Travelling, checked in or working",upcoming:"Accepted and confirmed jobs before travel",completed:"Finished jobs",cancelled:"Cancelled and rejected jobs"};
     document.getElementById("workerJobsSummary").textContent=wjob(jobFilter)+" · "+rows.length+" "+wjob("jobs");
     if(!rows.length){wrap.innerHTML='<div class="empty-soft">'+wjob("empty")+'</div>';return;}
-    wrap.innerHTML=rows.map(function(b){return '<div class="bcard" data-detail-job="'+b.id+'"><div class="bcard-head"><div><div class="name">'+jobTitle(b)+'</div><div class="meta">'+fmtDate(b.start_date)+' · '+(b.hours||2)+' '+wjob("hours")+' · '+(b.hirer_name||"Hirer")+'</div></div><div class="num">'+fmtMoney(b.total_amount)+'</div></div><span class="status-pill">'+(STATUS_LABELS_BY_LANG[state.lang]&&STATUS_LABELS_BY_LANG[state.lang][b.status]||b.status)+'</span><button class="btn btn-outline btn-block" data-detail-open="'+b.id+'">'+wjob("details")+'</button></div>';}).join("");
+    wrap.innerHTML=rows.map(function(b){var id=Number(b.id);return '<div class="bcard" data-detail-job="'+id+'"><div class="bcard-head"><div><div class="name">'+earningsText(jobTitle(b))+'</div><div class="meta">'+earningsText(fmtDate(b.start_date))+' · '+earningsText(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' '+earningsText(wjob("hours"))+' · '+earningsText(b.hirer_name||"Hirer")+'</div></div><div class="num">'+earningsText(fmtMoney(b.total_amount))+'</div></div><span class="status-pill">'+earningsText(b.request_expired_at?"Request expired":STATUS_LABELS_BY_LANG[state.lang]&&STATUS_LABELS_BY_LANG[state.lang][b.status]||b.status)+'</span><button class="btn btn-outline btn-block" data-detail-open="'+id+'">'+earningsText(wjob("details"))+'</button></div>';}).join("");
     wrap.querySelectorAll("[data-detail-open]").forEach(function(btn){btn.addEventListener("click",function(){openJobDetail(Number(btn.dataset.detailOpen));});});
   }
   document.querySelectorAll("[data-job-filter]").forEach(function(btn){btn.addEventListener("click",function(){jobFilter=btn.dataset.jobFilter;document.querySelectorAll("[data-job-filter]").forEach(function(x){x.classList.toggle("active",x===btn);});renderJobsScreen();});});
@@ -1160,7 +1152,12 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   function wguide(key){return (WORKER_GUIDANCE_UI[state.lang]||WORKER_GUIDANCE_UI.en)[key]||key;}
   function detailNextAction(b){
     if(b.request_expired_at)return {label:"Request expired — ask the hirer for a new booking"};
-    if(["completed","cancelled","rejected"].indexOf(b.status)>=0)return {label:b.status==="completed"?(STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en).completed:wguide("closed")};
+    if(b.status==="completed"){
+      if(b.payment_status==="paid")return {label:"Work complete · Payment confirmed. Your receipt is available below."};
+      if(b.payment_method==="cash")return {label:"Work complete · Cash payment pending. Receive the full cash amount, then verify the hirer's OTP below."};
+      return {label:"Work complete · Online payment or adjustment is pending. Check payment details with the hirer."};
+    }
+    if(["cancelled","rejected"].indexOf(b.status)>=0)return {label:wguide("closed")};
     if(b.status==="requested")return {label:"Respond within 30 minutes, or before the scheduled start if sooner"};
     if(!(b.payment_status==="paid" || (b.payment_method==="cash" && b.payment_status==="cash_pending")))return {label:wguide("payment")};
     if(b.work_started_at && !b.work_ended_at)return {label:wguide("running"),action:"stop",button:wguide("stop")};
@@ -1172,15 +1169,46 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     }
     return {label:wguide("waiting")};
   }
+  function canVerifyWorkerCash(b){return b.status==="completed" && b.payment_method==="cash" && b.payment_status!=="paid";}
+  function workerJobDetailHtml(b,next){
+    var id=Number(b.id),statusLabels=STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en;
+    if(!Number.isSafeInteger(id)||id<1)return '<div class="empty-soft">Job unavailable. Refresh your jobs.</div>';
+    var canAccept=b.status==="requested",canNavigate=["confirmed","en_route"].indexOf(b.status)>=0;
+    var instructions=String(b.special_instructions||"").trim()||"No special instructions were provided. Message the hirer if anything is unclear.";
+    var payment=String(b.payment_method||"unknown")+" · "+String(b.payment_status||"pending").replace(/_/g," ");
+    var cash=canVerifyWorkerCash(b)?'<form id="detailCashForm" style="margin-top:16px"><h3>Confirm cash payment</h3><p>Receive the full '+earningsText(fmtMoney(b.total_amount))+' in cash first. Ask the hirer to generate a fresh 6-digit cash OTP from their booking details.</p><label for="detailCashOtp">Hirer cash OTP</label><input id="detailCashOtp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required aria-describedby="detailCashFeedback" placeholder="6-digit OTP"><label style="display:block;margin-top:10px"><input id="detailCashReceived" type="checkbox" required> I received the full cash amount.</label><button id="detailCashVerify" type="submit" class="btn btn-safety btn-block" disabled style="margin-top:10px">Verify Cash OTP</button><div id="detailCashFeedback" role="status" aria-live="polite" style="margin-top:8px"></div></form>':"";
+    return '<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+earningsText(jobTitle(b))+'</div><div class="detail-amount">'+earningsText(fmtMoney(b.total_amount))+'</div></div><div class="detail-stage"><span class="status-pill">'+earningsText(b.request_expired_at?"Request expired":statusLabels[b.status]||b.status)+'</span><p>'+earningsText(next.label)+'</p>'+(next.action?'<button class="btn btn-safety btn-block" data-detail-next="'+earningsText(next.action)+'">'+earningsText(next.button)+'</button>':'')+'<div class="gps-note" id="gps-detail-'+id+'" role="status" aria-live="polite"></div></div><div class="detail-line">📍 '+earningsText(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+earningsText(fmtDate(b.start_date))+' · '+earningsText(b.start_time||'')+(b.end_time?' → '+earningsText(b.end_time):'')+' · India (IST)</div><div class="detail-line">👤 '+earningsText(b.hirer_name||"Hirer")+'</div><div class="detail-line">Payment: '+earningsText(payment)+'</div><div style="margin-top:15px;font-weight:800">Hirer instructions</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;color:var(--app-muted);margin-top:5px">'+earningsText(instructions)+'</div>'+cash+'<div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+id+'">'+earningsText(wresponse("accept"))+'</button><button class="btn btn-outline" data-detail-reject="'+id+'">'+earningsText(wresponse("reject"))+'</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+id+'">PDF Receipt</button>':'')+'</div></div>';
+  }
+  function verifyWorkerCashPayment(id,input,button,feedback,received){
+    if(button.dataset.busy==="1")return Promise.resolve();
+    var otp=String(input.value||"").trim();
+    function message(value){if(feedback)feedback.textContent=value;else window.alert(value);}
+    if(!/^[0-9]{6}$/.test(otp)){message("Enter the hirer's 6-digit cash OTP.");input.focus();return Promise.resolve();}
+    if(received && !received.checked){message("Confirm that you received the full cash amount first.");return Promise.resolve();}
+    button.dataset.busy="1";button.disabled=true;button.textContent="Verifying...";
+    return api("/api/worker/bookings/"+Number(id)+"/verify-cash-otp",{method:"POST",body:JSON.stringify({otp:otp})}).then(function(res){
+      if(!res.ok)throw Error(res.data.error||"Cash OTP could not be verified. Ask the hirer for a fresh OTP if it expired.");
+      input.value="";message("Cash payment confirmed. Refreshing receipt and earnings...");loadBookings();
+    }).catch(function(error){message(error.message||"Connection failed. Refresh the booking before retrying.");}).finally(function(){
+      delete button.dataset.busy;button.disabled=received?!received.checked:false;button.textContent="Verify Cash OTP";
+    });
+  }
   function openJobDetail(id){
     var b=findBooking(id); if(!b)return;
     detailBookingId=b.id;
     var next=detailNextAction(b);
-    var statusLabels=STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en;
-    var canAccept=b.status==="requested";
-    var canNavigate=["confirmed","en_route"].indexOf(b.status)>=0;
-    document.getElementById("jobDetailContent").innerHTML='<div class="detail-card"><div style="display:flex;justify-content:space-between;gap:10px"><div class="detail-title">'+jobTitle(b)+'</div><div class="detail-amount">'+fmtMoney(b.total_amount)+'</div></div><div class="detail-stage"><span class="status-pill">'+(statusLabels[b.status]||b.status)+'</span><p>'+next.label+'</p>'+(next.action?'<button class="btn btn-safety btn-block" data-detail-next="'+next.action+'">'+next.button+'</button>':'')+'<div class="gps-note" id="gps-detail-'+b.id+'" role="status" aria-live="polite"></div></div><div class="detail-line">📍 '+(b.address||b.city||"Job location")+'</div><div class="detail-line">📅 '+fmtDate(b.start_date)+' · '+(b.start_time||'')+(b.end_time?' → '+b.end_time:'')+'</div><div class="detail-line">👤 '+(b.hirer_name||"Hirer")+'</div><div style="margin-top:15px;font-weight:800">Job Description</div><div style="color:var(--app-muted);margin-top:5px">'+(b.description||"Job details provided by the hirer.")+'</div><div class="detail-actions">'+(canAccept?'<button class="btn btn-safety" data-detail-accept="'+b.id+'">'+wresponse("accept")+'</button><button class="btn btn-outline" data-detail-reject="'+b.id+'">'+wresponse("reject")+'</button>':'')+(canNavigate?'<button class="btn btn-primary" data-nav-job="'+b.id+'">Navigation & Check-in</button>':'')+'<button class="btn btn-outline" data-detail-chat="'+b.id+'">Message Hirer</button>'+(Number(b.paid_amount||0)>0?'<button class="btn btn-outline" data-detail-receipt="'+b.id+'">PDF Receipt</button>':'')+'</div></div>';
+    document.getElementById("jobDetailContent").innerHTML=workerJobDetailHtml(b,next);
     showWorkerPanel("job-detail");
+    var cashForm=document.getElementById("detailCashForm");
+    if(cashForm){
+      var received=document.getElementById("detailCashReceived"),verify=document.getElementById("detailCashVerify");
+      received.addEventListener("change",function(){verify.disabled=!received.checked || verify.dataset.busy==="1";});
+      cashForm.addEventListener("submit",function(event){
+        event.preventDefault();
+        if(!received.checked)return;
+        verifyWorkerCashPayment(b.id,document.getElementById("detailCashOtp"),verify,document.getElementById("detailCashFeedback"),received);
+      });
+    }
     var nextBtn=document.querySelector("[data-detail-next]");
     if(nextBtn)nextBtn.addEventListener("click",function(){
       if(next.action==="checkin"){doCheckIn(b.id,"gps-detail-"+b.id);return;}
@@ -1193,7 +1221,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     var r=document.querySelector("[data-detail-reject]");if(r)r.addEventListener("click",function(){openWorkerResponse(b.id,"reject");});
     var n=document.querySelector("[data-nav-job]");if(n)n.addEventListener("click",function(){openNavigation(b.id);});
     var c=document.querySelector("[data-detail-chat]");if(c)c.addEventListener("click",function(){openChat(b.id,b.hirer_name||"Hirer");});
-    var rr=document.querySelector("[data-detail-receipt]");if(rr)rr.addEventListener("click",function(){window.open("/api/worker/bookings/"+b.id+"/receipt.pdf","_blank");});
+    var rr=document.querySelector("[data-detail-receipt]");if(rr)rr.addEventListener("click",function(){window.open("/api/worker/bookings/"+b.id+"/receipt.pdf","_blank","noopener");});
   }
 
   function workerMapsUrl(booking){
