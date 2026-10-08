@@ -1194,13 +1194,30 @@ def worker_available_slots(worker_id):
 
 
 # ------------------------------------------------------------ worker routes
+# Public discovery uses an allowlist so KYC blobs and future private columns
+# cannot enter JSON responses or be loaded for marketplace requests.
+PUBLIC_WORKER_SELECT = """id, name, skill, skills_detail, city, daily_wage,
+    hourly_wage, overtime_wage, background_checked, about, distance_km,
+    availability, rating, jobs_completed, experience_years,
+    verification_status, is_online,
+    CASE WHEN service_latitude IS NOT NULL AND service_longitude IS NOT NULL
+         THEN 1 ELSE 0 END AS service_location_configured"""
+
+
+def public_worker_payload(row):
+    result = dict(row)
+    result["skill"] = normalize_worker_skill(result.get("skill"))
+    result["service_location_configured"] = bool(result["service_location_configured"])
+    return result
+
+
 @app.get("/api/workers")
 def list_workers():
     skill = request.args.get("skill")
     city = request.args.get("city")
     q = request.args.get("q")
 
-    query = "SELECT * FROM workers WHERE account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"
+    query = f"SELECT {PUBLIC_WORKER_SELECT} FROM workers WHERE account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"
     params = []
     if skill:
         query += " AND skill = ?"
@@ -1216,36 +1233,17 @@ def list_workers():
     conn = get_db()
     workers = conn.execute(query, params).fetchall()
     conn.close()
-    result = rows_to_list(workers)
-    for w in result:
-        w["skill"] = normalize_worker_skill(w.get("skill"))
-        w.pop("password_hash", None)
-        w.pop("phone", None)
-        w.pop("id_document_path", None)
-        w["service_location_configured"] = w.get("service_latitude") is not None and w.get("service_longitude") is not None
-        w.pop("service_latitude", None)
-        w.pop("service_longitude", None)
-        w.pop("service_location_updated_at", None)
-    return jsonify(result)
+    return jsonify([public_worker_payload(w) for w in workers])
 
 
 @app.get("/api/workers/<int:worker_id>")
 def get_worker(worker_id):
     conn = get_db()
-    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"), (worker_id,)).fetchone()
+    worker = conn.execute(f"SELECT {PUBLIC_WORKER_SELECT} FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'", (worker_id,)).fetchone()
     conn.close()
     if not worker:
         return jsonify({"error": "Worker not found"}), 404
-    result = row_to_dict(worker)
-    result["skill"] = normalize_worker_skill(result.get("skill"))
-    result.pop("password_hash", None)
-    result.pop("phone", None)
-    result.pop("id_document_path", None)
-    result["service_location_configured"] = result.get("service_latitude") is not None and result.get("service_longitude") is not None
-    result.pop("service_latitude", None)
-    result.pop("service_longitude", None)
-    result.pop("service_location_updated_at", None)
-    return jsonify(result)
+    return jsonify(public_worker_payload(worker))
 
 
 def get_commission_percent(conn):
