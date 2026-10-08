@@ -726,10 +726,45 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   document.getElementById("openServiceLocationBtn").addEventListener("click",function(){showWorkerPanel("service-location");loadServiceLocation().catch(function(e){document.getElementById("serviceLocationStatus").textContent=e.message;});});
   document.getElementById("serviceLocationBackBtn").addEventListener("click",function(){workerGoBack();});
   document.getElementById("captureServiceLocationBtn").addEventListener("click",function(){var btn=this,el=document.getElementById("serviceLocationStatus");if(!navigator.geolocation){el.textContent="Location is not supported in this browser.";return;}btn.disabled=true;btn.textContent="Getting location...";navigator.geolocation.getCurrentPosition(function(p){api("/api/worker/service-location",{method:"PUT",body:JSON.stringify({latitude:p.coords.latitude,longitude:p.coords.longitude})}).then(function(r){btn.disabled=false;btn.textContent="Use My Current Location";if(!r.ok){el.textContent=r.data.error||"Unable to save location";return;}el.textContent="Service location saved successfully.";api("/api/worker-auth/me").then(function(me){if(me.ok&&me.data.logged_in){state.worker=me.data;renderProfile();}});});},function(err){btn.disabled=false;btn.textContent="Use My Current Location";el.textContent="Location permission failed: "+err.message;},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});});
-  function loadPayout(){return api("/api/worker/payout-account").then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to load payout account");var d=r.data||{};document.getElementById("payoutHolder").value=d.account_holder_name||"";document.getElementById("payoutIfsc").value=d.ifsc||"";document.getElementById("payoutBank").value=d.bank_name||"";document.getElementById("payoutUpi").value=d.upi_id||"";document.getElementById("payoutAccount").value="";document.getElementById("payoutAccount").placeholder=d.account_number_last4?"Saved account ••••"+d.account_number_last4:"Enter account number";document.getElementById("payoutSaved").textContent=d.verification_status?"Verification: "+d.verification_status:"No payout account saved";});}
+  var payoutLoadVersion=0;
+  function loadPayout(){
+    if(!state.worker)return Promise.resolve();
+    var version=++payoutLoadVersion,session=workerJobsSession,owner=state.worker.id;
+    ["payoutHolder","payoutAccount","payoutIfsc","payoutBank","payoutUpi"].forEach(function(id){document.getElementById(id).value="";});
+    document.getElementById("payoutAccount").placeholder="Enter account number";
+    document.getElementById("payoutSaved").textContent="Loading saved payout details...";
+    return api("/api/worker/payout-account").then(function(r){
+      if(version!==payoutLoadVersion || session!==workerJobsSession || !state.worker || state.worker.id!==owner)return;
+      if(!r.ok)throw Error(r.data.error||"Unable to load payout account");
+      var d=r.data||{};
+      document.getElementById("payoutHolder").value=d.account_holder_name||"";
+      document.getElementById("payoutIfsc").value=d.ifsc||"";
+      document.getElementById("payoutBank").value=d.bank_name||"";
+      document.getElementById("payoutUpi").value=d.upi_id||"";
+      document.getElementById("payoutAccount").placeholder=d.account_number_last4?"Saved account ••••"+d.account_number_last4:"Enter account number";
+      document.getElementById("payoutSaved").textContent=d.verification_status?"Verification: "+d.verification_status:"No payout account saved";
+    });
+  }
+
   document.getElementById("openPayoutBtn").addEventListener("click",function(){showWorkerPanel("payout");loadPayout().catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
   document.getElementById("payoutBackBtn").addEventListener("click",function(){workerGoBack();});
-  document.getElementById("savePayoutBtn").addEventListener("click",function(){var payload={account_holder_name:document.getElementById("payoutHolder").value,account_number:document.getElementById("payoutAccount").value,ifsc:document.getElementById("payoutIfsc").value,bank_name:document.getElementById("payoutBank").value,upi_id:document.getElementById("payoutUpi").value};api("/api/worker/payout-account",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).then(function(r){if(!r.ok)throw Error(r.data.error||"Unable to save payout account");document.getElementById("payoutMessage").textContent="Saved. Pending admin verification.";loadPayout();}).catch(function(e){document.getElementById("payoutMessage").textContent=e.message;});});
+  document.getElementById("savePayoutBtn").addEventListener("click",function(){
+    var button=this,message=document.getElementById("payoutMessage");
+    if(button.disabled || !state.worker)return;
+    var session=workerJobsSession,owner=state.worker.id,label=button.textContent;
+    var payload={account_holder_name:document.getElementById("payoutHolder").value,account_number:document.getElementById("payoutAccount").value,ifsc:document.getElementById("payoutIfsc").value,bank_name:document.getElementById("payoutBank").value,upi_id:document.getElementById("payoutUpi").value};
+    button.disabled=true;button.textContent="Saving...";message.textContent="";
+    api("/api/worker/payout-account",{method:"PUT",body:JSON.stringify(payload)}).then(function(r){
+      if(session!==workerJobsSession || !state.worker || state.worker.id!==owner)return;
+      if(!r.ok)throw Error(r.data.error||"Unable to save payout account. Check saved details before retrying.");
+      document.getElementById("payoutAccount").value="";
+      message.textContent="Saved. Pending admin verification.";
+      return loadPayout();
+    }).catch(function(e){
+      if(session===workerJobsSession && state.worker && state.worker.id===owner)message.textContent=e.message||"Unable to refresh saved payout details.";
+    }).finally(function(){button.disabled=false;button.textContent=label;});
+  });
+
   var availabilityState={days:[],unavailable_dates:[],is_online:null};
   function updateWorkerHomeHeader(){
     var hour=new Date().getHours();
@@ -906,14 +941,16 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
   });
 
   document.getElementById("logoutBtn").addEventListener("click", function () {
-    workerJobsSession++;
-    api("/api/worker-auth/logout", { method: "POST" }).then(function () {
+    var button=this;if(button.disabled)return;button.disabled=true;
+    api("/api/worker-auth/logout", {method:"POST"}).then(function(result){
+      if(!result.ok){window.alert(result.data.error||"Logout could not be confirmed. Please retry logout.");return;}
+      workerJobsSession++;earningsRequest++;
       if(workerNotificationTimer){clearInterval(workerNotificationTimer);workerNotificationTimer=null;}
-      state.worker=null;state.bookings=[];
-      appScreen.style.display = "none";
-      appScreen.classList.remove("enter");
-      authScreen.style.display = "block";
-    });
+      state.worker=null;state.bookings=[];earningsData=null;detailBookingId=null;
+      ["bookingsList","jobsScreenList","jobDetailContent","earningsBreakdown","messagesScreenList"].forEach(function(id){var el=document.getElementById(id);if(el)el.textContent="";});
+      ["payoutHolder","payoutAccount","payoutIfsc","payoutBank","payoutUpi"].forEach(function(id){document.getElementById(id).value="";});
+      appScreen.style.display="none";appScreen.classList.remove("enter");authScreen.style.display="block";
+    }).finally(function(){button.disabled=false;});
   });
 
   function startApp(worker) {
@@ -1350,17 +1387,19 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     if(earningsData)paintEarnings();else renderEarningsScreen();
   });});
   function renderEarningsScreen(){
+    if(!state.worker)return;
+    var session=workerJobsSession,owner=state.worker.id;
     var request=++earningsRequest,box=document.getElementById("earningsBreakdown");
     earningsData=null;
     document.getElementById("todayEarning").textContent="—";
     document.getElementById("earningsTotal").textContent="—";
     box.innerHTML='<div class="empty-soft" role="status">'+wfui("loading")+'</div>';
     api("/api/worker/earnings-summary").then(function(r){
-      if(request!==earningsRequest)return;
+      if(request!==earningsRequest || session!==workerJobsSession || !state.worker || state.worker.id!==owner)return;
       if(!r.ok || !r.data || !Array.isArray(r.data.items))throw Error(r.data && r.data.error || "Unable to load earnings");
       earningsData=r.data;document.getElementById("todayEarning").textContent=fmtMoney(r.data.today_net||0);paintEarnings();
     }).catch(function(e){
-      if(request!==earningsRequest)return;
+      if(request!==earningsRequest || session!==workerJobsSession || !state.worker || state.worker.id!==owner)return;
       document.getElementById("earningsTotal").textContent="—";
       box.innerHTML='<div class="empty-soft" role="status">'+earningsText(e.message)+'<button type="button" class="btn btn-outline btn-block" id="retryEarnings" style="margin-top:12px">'+wfui("retry")+'</button></div>';
       document.getElementById("retryEarnings").addEventListener("click",renderEarningsScreen);

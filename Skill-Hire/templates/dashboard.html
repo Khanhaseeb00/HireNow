@@ -714,7 +714,7 @@
         <button type="button" class="booking-filter-btn" data-booking-filter="cancelled">Cancelled / Rejected</button>
       </div>
       <p id="hirerBookingFilterSummary" role="status" aria-live="polite" style="font-size:13px;color:var(--ink-soft)"></p>
-      <div id="bookingsList"></div>
+      <div id="hirerBookingsStatus" role="status" aria-live="polite"></div><div id="bookingsList"></div>
     </div>
   </section>
 
@@ -1110,7 +1110,11 @@
   });
 
   document.getElementById("logoutBtn").addEventListener("click", function () {
-    api("/api/auth/logout", { method: "POST" }).then(function () { window.location.reload(); });
+    var button=this;if(button.disabled)return;button.disabled=true;
+    api("/api/auth/logout", { method: "POST" }).then(function(result){
+      if(!result.ok){window.alert(result.data.error||"Logout could not be confirmed. Please retry logout.");return;}
+      hirerBookingsSession++;state.hirer=null;state.bookings=[];window.location.reload();
+    }).finally(function(){button.disabled=false;});
   });
   var profileBookingsBtn = document.getElementById("profileMyBookings");
   if (profileBookingsBtn) profileBookingsBtn.addEventListener("click", function () {
@@ -1480,6 +1484,7 @@
 
   // ---------------- boot ----------------
   function startApp(hirer) {
+    hirerBookingsSession++;
     state.hirer = hirer;
     if(hirer.preferred_language && LANG[hirer.preferred_language]) state.lang=hirer.preferred_language;
     if(hirer.preferred_theme) state.theme=hirer.preferred_theme;
@@ -1806,15 +1811,24 @@
   }
   document.getElementById("homeViewBookings").addEventListener("click",function(){state.bookingFilter="active";document.querySelector('.nav-item[data-tab="bookings"]').click();renderBookings();});
   document.getElementById("homeBookingsRetry").addEventListener("click",loadBookings);
+  var hirerBookingsRequest=0,hirerBookingsSession=0;
   function loadBookings() {
-    api("/api/bookings").then(function (res) {
-      if(!res.ok || !Array.isArray(res.data)){renderHomeBookingSummary(true);return;}
-      state.bookings = res.data;
-      renderHomeBookingSummary(false);
-      renderBookings();
-      renderMessages();
-      renderProfile();
-    }).catch(function(){renderHomeBookingSummary(true);});
+    if(!state.hirer)return Promise.resolve(false);
+    var version=++hirerBookingsRequest,session=hirerBookingsSession,owner=state.hirer.id;
+    var notice=document.getElementById("hirerBookingsStatus");
+    notice.textContent="Updating bookings...";
+    return api("/api/bookings").then(function(res){
+      if(version!==hirerBookingsRequest || session!==hirerBookingsSession || !state.hirer || state.hirer.id!==owner)return false;
+      if(!res.ok || !Array.isArray(res.data)){
+        renderHomeBookingSummary(true);
+        showHirerLoadError(notice,(res.data && res.data.error || "Bookings could not be loaded.")+" Last loaded bookings may be outdated. Retry before taking an action.",loadBookings);
+        return false;
+      }
+      notice.textContent="";
+      state.bookings=res.data;
+      renderHomeBookingSummary(false);renderBookings();renderMessages();renderProfile();
+      return true;
+    });
   }
 
   function bookingStatusClass(status) {
@@ -1978,7 +1992,7 @@
             '<button class="btn btn-primary" id="refContactWorker">Contact Worker</button>' +
           '</div>' +
           ((b.payment_method==="online" && b.status==="confirmed" && b.payment_status!=="paid") ? '<button class="btn btn-safety btn-block" id="refPayOnline" style="margin-top:10px;">Pay Online Now</button>' : '') +
-          ((b.razorpay_order_id && ["pending","cash_pending"].includes(b.payment_status)) ? '<button class="btn btn-outline btn-block" id="refSyncPayment" style="margin-top:8px;">Check Payment Status</button>' : '') +
+          ((b.razorpay_order_id && ["pending","cash_pending","balance_due"].includes(b.payment_status)) ? '<button class="btn btn-outline btn-block" id="refSyncPayment" style="margin-top:8px;">Check Payment Status</button>' : '') +
           ((b.status==="completed" && Number(b.paid_amount||0)===0 && !["paid","refund_pending","balance_due"].includes(b.payment_status)) ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Choose final payment method</div><div class="accept-note">Work is complete. You can now pay the final amount online or pay cash and verify it with OTP.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"><button class="btn btn-safety" id="refPayFinalOnline">Pay Online</button><button class="btn btn-outline" id="refCashOtp">Pay Cash / OTP</button></div><div id="refOtpBox"></div></div>' : '') +
           ((b.status==="completed" && b.payment_status==="balance_due") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Additional payment required</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.total_amount||0)-Number(b.paid_amount||0)))+'</div><div class="accept-note">Actual work amount final estimate se zyada hai. Remaining balance pay karke booking fully settled karein.</div></div><button class="btn btn-safety btn-block" id="refPayBalance" style="margin-top:8px;">Pay Remaining Balance</button>' : '') +
           ((b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
@@ -1996,11 +2010,13 @@
         }
         var contact=stackBody.querySelector("#refContactWorker"); if(contact)contact.addEventListener("click",function(){nav(function(){openChatScreen(b.id,b.worker_name);});});
         var cancel=stackBody.querySelector("#refCancelBooking"); if(cancel)cancel.addEventListener("click",function(){
+          if(cancel.disabled)return;
           if(!window.confirm("Cancel this booking?"))return;
+          cancel.disabled=true;cancel.textContent="Cancelling...";
           api("/api/bookings/"+Number(b.id)+"/cancel",{method:"POST",body:JSON.stringify({reason:"Cancelled by hirer"})}).then(function(cr){
-            if(!cr.ok){window.alert(cr.data.error||"Cancel nahi hui");return;}
+            if(!cr.ok){window.alert((cr.data.error||"Cancellation could not be confirmed.")+" Check the latest booking status before retrying.");loadBookings();openBookingDetailsScreen(b.id);return;}
             loadBookings(); goBack();
-          });
+          }).finally(function(){cancel.disabled=false;cancel.textContent="Cancel Booking";});
         });
         var syncPayment=stackBody.querySelector("#refSyncPayment"); if(syncPayment)syncPayment.addEventListener("click",function(){
           syncPayment.disabled=true;syncPayment.textContent="Checking provider...";
