@@ -231,11 +231,51 @@ class PaymentAccountingTests(unittest.TestCase):
     def test_order_creation_archives_old_order_before_replacing_it(self):
         conn = get_db(); conn.execute("UPDATE bookings SET status='confirmed',paid_amount=0,payment_status='pending' WHERE id=?",(self.booking_id,)); conn.commit(); conn.close()
         self.fixture.login('hirer', self.fixture.hirer)
-        with patch.object(app.payments,'create_order',return_value={'id':'order_replacement','currency':'INR','amount':30000}):
+        with patch.object(app.payments,'fetch_order',return_value={'id':self.order,'currency':'INR','amount':20000,'status':'created'}), patch.object(app.payments,'fetch_order_payments',return_value=[]), patch.object(app.payments,'create_order',return_value={'id':'order_replacement','currency':'INR','amount':30000}):
             self.assertEqual(self.client.post(f'/api/bookings/{self.booking_id}/create-order').status_code,200)
         self.provider['order_replacement'] = []
         self.assertEqual(self.verify().get_json()['paid_amount'],200)
         self.assertEqual(self.booking()['payment_status'],'pending')
+
+    def test_checkout_retry_reuses_initial_order(self):
+        conn=get_db();conn.execute("UPDATE bookings SET status='confirmed',paid_amount=0,payment_status='pending' WHERE id=?",(self.booking_id,));conn.commit();conn.close()
+        self.fixture.login('hirer', self.fixture.hirer)
+        with patch.object(app.payments,'fetch_order',return_value={'id':self.order,'currency':'INR','amount':30000,'status':'created'}), patch.object(app.payments,'fetch_order_payments',return_value=[]), patch.object(app.payments,'create_order') as create:
+            for _ in range(2):
+                r=self.client.post(f'/api/bookings/{self.booking_id}/create-order')
+                self.assertEqual(r.status_code,200,r.get_json());self.assertEqual(r.get_json()['order_id'],self.order)
+            create.assert_not_called()
+
+    def test_checkout_retry_reuses_balance_order(self):
+        self.balance();self.fixture.login('hirer', self.fixture.hirer)
+        with patch.object(app.payments,'fetch_order',return_value={'id':self.balance_order,'currency':'INR','amount':10000,'status':'attempted'}), patch.object(app.payments,'fetch_order_payments',return_value=[]), patch.object(app.payments,'create_order') as create:
+            for _ in range(2):
+                r=self.client.post(f'/api/bookings/{self.booking_id}/create-balance-order')
+                self.assertEqual(r.status_code,200,r.get_json());self.assertEqual(r.get_json()['order_id'],self.balance_order)
+            create.assert_not_called()
+
+    def test_concurrent_checkout_creates_one_order(self):
+        conn=get_db();conn.execute("UPDATE bookings SET status='confirmed',paid_amount=0,payment_status='pending',razorpay_order_id=NULL WHERE id=?",(self.booking_id,));conn.commit();conn.close()
+        order={'id':'order_concurrent','currency':'INR','amount':30000,'status':'created'}
+        def checkout(_):
+            client=app.app.test_client()
+            with client.session_transaction() as session:
+                session['hirer_id']=self.fixture.hirer
+            response=client.post(f'/api/bookings/{self.booking_id}/create-order')
+            return response.status_code,response.get_json()
+        with patch.object(app.payments,'fetch_order',return_value=order), patch.object(app.payments,'fetch_order_payments',return_value=[]), patch.object(app.payments,'create_order',return_value=order) as create:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                results=list(pool.map(checkout,range(2)))
+            for status,body in results:
+                self.assertEqual(status,200,body);self.assertEqual(body['order_id'],order['id'])
+            self.assertEqual(create.call_count,1)
+
+    def test_pending_payment_blocks_new_initial_order(self):
+        conn=get_db();conn.execute("UPDATE bookings SET status='confirmed',paid_amount=0,payment_status='pending' WHERE id=?",(self.booking_id,));conn.commit();conn.close()
+        self.fixture.login('hirer',self.fixture.hirer)
+        with patch.object(app.payments,'fetch_order',return_value={'id':self.order,'currency':'INR','amount':30000,'status':'attempted'}), patch.object(app.payments,'fetch_order_payments',return_value=[{'status':'authorized'}]), patch.object(app.payments,'create_order') as create:
+            self.assertEqual(self.client.post(f'/api/bookings/{self.booking_id}/create-order').status_code,502)
+            create.assert_not_called()
 
     def test_uncaptured_order_does_not_supply_proof_for_legacy_paid_flag(self):
         conn=get_db();conn.execute("UPDATE bookings SET status='confirmed',payment_status='paid' WHERE id=?",(self.booking_id,));conn.commit();conn.close()

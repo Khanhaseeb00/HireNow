@@ -2089,6 +2089,21 @@ def create_booking():
     }), 201
 
 
+def reusable_checkout_order(order_id, amount_rupees):
+    """Fail closed on pending/captured provider payments before opening checkout again."""
+    if not order_id:
+        return None
+    order = payments.fetch_order(order_id)
+    if order.get("id") != order_id or order.get("currency") != "INR":
+        raise payments.RazorpayAPIError("Invalid checkout order returned by provider")
+    receipts = payments.fetch_order_payments(order_id)
+    if any(item.get("status") in ("authorized", "captured", "refunded") for item in receipts) or order.get("status") == "paid":
+        raise payments.RazorpayAPIError("Payment already exists or is processing. Sync payment before retrying checkout.")
+    if type(order.get("amount")) is not int or order.get("status") not in ("created", "attempted"):
+        raise payments.RazorpayAPIError("Unable to validate existing checkout order. Please retry payment sync.")
+    return order if order["amount"] == amount_rupees * 100 else None
+
+
 @app.post("/api/bookings/<int:booking_id>/create-order")
 def create_razorpay_order(booking_id):
     """Create an online-payment order only after the worker accepts the request."""
@@ -2097,8 +2112,9 @@ def create_razorpay_order(booking_id):
         return auth_error
 
     conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id = ? AND hirer_id = ?", (booking_id, current_hirer_id())
+        for_update("SELECT * FROM bookings WHERE id = ? AND hirer_id = ?"), (booking_id, current_hirer_id())
     ).fetchone()
     if not booking:
         conn.close()
@@ -2127,7 +2143,6 @@ def create_razorpay_order(booking_id):
                 conn.rollback()
                 conn.close()
                 return jsonify({"error": reconciled["error"]}), 502
-            conn.commit()
             booking = conn.execute(
                 "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
                 (booking_id, current_hirer_id()),
@@ -2149,15 +2164,17 @@ def create_razorpay_order(booking_id):
         return jsonify({"error": "There is no amount due for this booking"}), 400
 
     try:
-        order = payments.create_order(
-            amount_rupees=amount_due,
-            receipt=f"booking_{booking_id}_{secrets.token_hex(4)}",
-            notes={
-                "booking_id": str(booking_id),
-                "hirer_id": str(current_hirer_id()),
-                "payment_stage": "post_work" if booking["status"] == "completed" else "pre_work",
-            },
-        )
+        order = reusable_checkout_order(booking["razorpay_order_id"], amount_due)
+        if order is None:
+            order = payments.create_order(
+                amount_rupees=amount_due,
+                receipt=f"booking_{booking_id}_{secrets.token_hex(4)}",
+                notes={
+                    "booking_id": str(booking_id),
+                    "hirer_id": str(current_hirer_id()),
+                    "payment_stage": "post_work" if booking["status"] == "completed" else "pre_work",
+                },
+            )
     except payments.RazorpayConfigError as e:
         conn.close()
         return jsonify({"error": str(e)}), 500
@@ -2648,8 +2665,9 @@ def create_balance_order(booking_id):
     if auth_error:
         return auth_error
     conn = get_db()
+    conn.execute("BEGIN IMMEDIATE")
     booking = conn.execute(
-        "SELECT * FROM bookings WHERE id=? AND hirer_id=?",
+        for_update("SELECT * FROM bookings WHERE id=? AND hirer_id=?"),
         (booking_id, current_hirer_id()),
     ).fetchone()
     if not booking:
@@ -2666,13 +2684,15 @@ def create_balance_order(booking_id):
         conn.close()
         return jsonify({"error": "No outstanding balance remains"}), 400
     adjustment = sync_payment_adjustment(conn, booking_id)
-    conn.commit()
     try:
-        order = payments.create_order(
-            amount_rupees=due,
-            receipt=f"balance_{booking_id}_{adjustment['id']}",
-            notes={"booking_id": str(booking_id), "adjustment_id": str(adjustment["id"]), "type": "balance_due"},
-        )
+        previous_order = conn.execute("SELECT provider_order_id FROM payment_adjustments WHERE id=?", (adjustment["id"],)).fetchone()
+        order = reusable_checkout_order(previous_order["provider_order_id"] if previous_order else None, due)
+        if order is None:
+            order = payments.create_order(
+                amount_rupees=due,
+                receipt=f"balance_{booking_id}_{adjustment['id']}",
+                notes={"booking_id": str(booking_id), "adjustment_id": str(adjustment["id"]), "type": "balance_due"},
+            )
     except payments.RazorpayConfigError as e:
         conn.close()
         return jsonify({"error": str(e)}), 500
