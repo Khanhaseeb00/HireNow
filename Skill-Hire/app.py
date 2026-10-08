@@ -101,6 +101,9 @@ def ensure_schema_extensions():
     payment_accounting.ensure_schema(conn)
     existing = table_columns(conn, "bookings")
     additions = {
+        "agreed_hourly_rate": "REAL",
+        "rate_snapshot_source": "TEXT",
+        "scheduled_minutes": "INTEGER",
         "start_time": "TEXT",
         "hours": "INTEGER NOT NULL DEFAULT 2",
         "service_type": "TEXT NOT NULL DEFAULT 'regular'",
@@ -134,6 +137,16 @@ def ensure_schema_extensions():
     for column, definition in additions.items():
         if column not in existing:
             conn.execute(f"ALTER TABLE bookings ADD COLUMN {column} {definition}")
+
+    # Historical diagnosis quotes do not contain an hourly rate. Preserve their
+    # current rate once, and distinguish this fallback from a new agreed quote.
+    conn.execute("""UPDATE bookings SET agreed_hourly_rate =
+        CASE WHEN booking_type = 'regular' AND work_ended_at IS NULL AND hours > 0
+             THEN total_amount * 1.0 / hours
+             ELSE (SELECT ROUND(daily_wage / 8.0, 2) FROM workers WHERE workers.id = bookings.worker_id) END,
+        rate_snapshot_source = CASE WHEN booking_type = 'regular' AND work_ended_at IS NULL AND hours > 0
+             THEN 'legacy_estimate' ELSE 'legacy_current_rate' END
+        WHERE agreed_hourly_rate IS NULL""")
 
     worker_columns = table_columns(conn, "workers")
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
@@ -599,7 +612,7 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
         (worker_id, start_date),
     ).fetchall()
     new_start = parse_booking_start(start_date, start_time) if start_time else None
-    new_end = new_start + timedelta(hours=int(hours)) if new_start else None
+    new_end = new_start + timedelta(hours=float(hours)) if new_start else None
     for row in rows:
         if exclude_booking_id is not None and int(row["id"]) == int(exclude_booking_id):
             continue
@@ -679,7 +692,7 @@ def worker_available_for_slot(conn, worker_id, start_date, start_time, hours):
     if not worker or not int(worker["is_online"]):
         return False, "Worker is currently not accepting new bookings"
     if not start_time:
-        return True, None
+        return False, "Booking start time is required"
     try:
         start = parse_booking_start(start_date, start_time)
     except ValueError:
@@ -701,7 +714,7 @@ def worker_available_for_slot(conn, worker_id, start_date, start_time, hours):
         return False, "Worker availability schedule is invalid"
     day_open = datetime.combine(start.date(), open_time)
     day_close = datetime.combine(start.date(), close_time)
-    end = start + timedelta(hours=int(hours))
+    end = start + timedelta(hours=float(hours))
     if start < day_open or end > day_close:
         return False, "Selected time is outside the worker's working hours"
     return True, None
@@ -1722,8 +1735,9 @@ def worker_work_timer(booking_id):
         conn.close(); return jsonify({"error": "Work timer is already completed"}), 409
     started = datetime.fromisoformat(booking["work_started_at"])
     minutes = max(1, int((now - started).total_seconds() // 60))
-    worker = conn.execute("SELECT daily_wage FROM workers WHERE id = ?", (booking["worker_id"],)).fetchone()
-    hourly = derived_hourly_rate(worker)
+    hourly = booking["agreed_hourly_rate"]
+    if hourly is None:
+        conn.close(); return jsonify({"error": "Booking rate requires review before billing"}), 409
     work_amount = round(hourly * minutes / 60)
     total = int(booking["diagnosis_fee"] or 0) + int(work_amount)
     paid_amount = int(booking["paid_amount"] or 0)
@@ -1757,6 +1771,9 @@ def create_booking():
         return auth_error
 
     data = request.get_json(force=True) or {}
+    if not isinstance(data, dict) or any(data.get(key) is not None and not isinstance(data[key], str)
+            for key in ("start_date", "start_time", "end_time", "booking_type", "payment_method", "special_instructions", "address")):
+        return jsonify({"error": "Booking fields have invalid types"}), 400
     worker_id = data.get("worker_id")
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
@@ -1786,6 +1803,9 @@ def create_booking():
         return jsonify({"error": "start_date must be YYYY-MM-DD"}), 400
     if booking_date < datetime.now().date():
         return jsonify({"error": "Past dates cannot be booked"}), 400
+    if not start_time:
+        return jsonify({"error": "Booking start time is required"}), 400
+    minutes = hours * 60
     if start_time:
         try:
             booking_start = parse_booking_start(start_date, start_time)
@@ -1803,23 +1823,32 @@ def create_booking():
                 return jsonify({"error": "End time must be after start time"}), 400
             minutes = int((booking_end - booking_start).total_seconds() // 60)
             hours = max(1, int((minutes + 59) // 60))
+    if minutes < 1 or minutes > 720:
+        return jsonify({"error": "Booking duration must be between 1 minute and 12 hours"}), 400
+    if not end_time:
+        booking_end = booking_start + timedelta(minutes=minutes)
+        if booking_end.date() != booking_date:
+            return jsonify({"error": "Booking must end on the selected date"}), 400
+        end_time = booking_end.strftime("%H:%M")
+    start_time = booking_start.strftime("%H:%M")
+    slot_hours = minutes / 60
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
-    worker = conn.execute("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'", (worker_id,)).fetchone()
+    worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"), (worker_id,)).fetchone()
     if not worker:
         conn.rollback()
         conn.close()
         return jsonify({"error": "Worker not found"}), 404
 
-    available, unavailable_reason = worker_available_for_slot(conn, worker_id, start_date, start_time, hours)
+    available, unavailable_reason = worker_available_for_slot(conn, worker_id, start_date, start_time, slot_hours)
     if not available:
         conn.rollback()
         conn.close()
         return jsonify({"error": unavailable_reason}), 409
 
     conflict = find_worker_schedule_conflict(
-        conn, worker_id, start_date, start_time, hours, include_requested=True
+        conn, worker_id, start_date, start_time, slot_hours, include_requested=True
     )
     if conflict:
         conn.rollback()
@@ -1829,6 +1858,13 @@ def create_booking():
         }), 409
 
     rate = derived_hourly_rate(worker)
+    if "expected_hourly_rate" in data:
+        try:
+            quoted_rate = float(data["expected_hourly_rate"])
+        except (TypeError, ValueError):
+            conn.rollback(); conn.close(); return jsonify({"error": "Invalid quoted rate"}), 400
+        if quoted_rate != rate:
+            conn.rollback(); conn.close(); return jsonify({"error": "Worker rate changed. Refresh the worker details and review the new rate before booking."}), 409
     diagnosis_fee = 0
     diagnosis_distance_km = None
     diagnosis_pricing_rule_id = None
@@ -1849,7 +1885,7 @@ def create_booking():
         except ValueError as exc:
             conn.rollback(); conn.close()
             return jsonify({"error": str(exc)}), 400
-        total = round(rate * hours)
+        total = round(rate * minutes / 60)
 
     cur = conn.execute(
         """INSERT INTO bookings
@@ -1862,6 +1898,8 @@ def create_booking():
          special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
+    conn.execute("UPDATE bookings SET agreed_hourly_rate = ?, rate_snapshot_source = 'booking_quote', scheduled_minutes = ? WHERE id = ?",
+                 (rate, minutes, booking_id))
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'requested', ?)",
         (booking_id, f"Booking request sent to worker. Payment method: {payment_method}."),
@@ -1869,7 +1907,7 @@ def create_booking():
     hirer = conn.execute("SELECT name FROM hirers WHERE id = ?", (current_hirer_id(),)).fetchone()
     add_in_app_notification(
         conn, "worker", worker_id, "booking_request", "New booking request",
-        f"{hirer['name'] if hirer else 'A hirer'} requested {hours} hr on {start_date} {start_time or ''}.",
+        f"{hirer['name'] if hirer else 'A hirer'} requested {slot_hours:g} hr on {start_date} {start_time or ''}.",
         booking_id,
     )
     conn.commit()
@@ -1879,13 +1917,15 @@ def create_booking():
         notify(
             worker["phone"],
             f"HireNow: Nayi booking request #{booking_id} — {hirer['name'] if hirer else 'Hirer'}, "
-            f"{start_date} {start_time or ''}, {hours} hr. Worker portal me Accept/Reject karein."
+            f"{start_date} {start_time or ''}, {slot_hours:g} hr. Worker portal me Accept/Reject karein."
         )
 
     return jsonify({
         "id": booking_id,
         "total_amount": total,
         "derived_hourly_rate": rate,
+        "agreed_hourly_rate": rate,
+        "scheduled_minutes": minutes,
         "booking_type": booking_type,
         "diagnosis_fee": diagnosis_fee,
         "diagnosis_distance_km": diagnosis_distance_km,
@@ -2774,6 +2814,7 @@ def worker_respond_booking(booking_id):
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
+    conn.execute(for_update("SELECT id FROM workers WHERE id = ?"), (current_worker_id(),)).fetchone()
     booking = conn.execute(
         for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())
     ).fetchone()
@@ -2808,9 +2849,15 @@ def worker_respond_booking(booking_id):
             notify(hirer["phone"], f"HireNow: {worker['name'] if worker else 'Worker'} ne booking #{booking_id} reject kar di.")
         return jsonify({"status": "rejected"})
 
+    slot_hours = (booking["scheduled_minutes"] / 60 if booking["scheduled_minutes"] else booking["hours"] or 2)
+    available, reason = worker_available_for_slot(conn, current_worker_id(), booking["start_date"], booking["start_time"], slot_hours)
+    if not available:
+        conn.rollback(); conn.close(); return jsonify({"error": reason}), 409
+    if parse_booking_start(booking["start_date"], booking["start_time"]) <= datetime.now():
+        conn.rollback(); conn.close(); return jsonify({"error": "Booking time has passed; please request a new slot"}), 409
     conflict = find_worker_schedule_conflict(
         conn, current_worker_id(), booking["start_date"], booking["start_time"],
-        booking["hours"] or 2, exclude_booking_id=booking_id, include_requested=False
+        slot_hours, exclude_booking_id=booking_id, include_requested=False
     )
     if conflict:
         conn.rollback()

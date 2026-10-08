@@ -235,6 +235,7 @@ class HireNowSmokeTests(unittest.TestCase):
                         VALUES (?,?,?,?,?,?,?,?,?,?)""",
                      (hirer_id, worker_id, "2099-01-02", "10:00", 2, "regular", "cash", 200, "confirmed", "cash_pending"))
         booking_id = conn.execute("SELECT id FROM bookings ORDER BY id DESC LIMIT 1").fetchone()["id"]
+        conn.execute("UPDATE bookings SET agreed_hourly_rate=100 WHERE id=?", (booking_id,))
         conn.commit(); conn.close()
 
         with self.client.session_transaction() as sess:

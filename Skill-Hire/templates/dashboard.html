@@ -1536,7 +1536,7 @@
   function openBookingScreen(workerId) {
     var w = state.workers.filter(function (x) { return x.id === workerId; })[0];
     if (!w) return;
-    var hourly = Number(w.daily_wage || 0) / 8;
+    var hourly = Math.round(Number(w.daily_wage || 0) / 8 * 100) / 100;
     var now = new Date(), today = now.toISOString().slice(0,10), tomorrowDate = new Date(now.getTime()+86400000).toISOString().slice(0,10);
     var selectedDate=today, selectedTime="", selectedEnd="", selectedType="regular", selectedPayment="cash",
         diagnosisDistance=null, diagnosisFee=null, diagnosisLat=null, diagnosisLng=null, diagnosisQuoteError="",
@@ -1584,7 +1584,7 @@
           });
         },function(err){diagnosisFee=null;diagnosisDistance=null;diagnosisLat=null;diagnosisLng=null;diagnosisQuoteError="Location permission failed: "+err.message;renderBooking();},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
       };
-      stackBody.querySelector('#refProceed').onclick=function(){var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),hrs2=calcHours();bookingAddress=address;bookingNotes=notes;if(!address){stackBody.querySelector('#refBookingMsg').innerHTML='<div class="pay-note">Work address enter karein.</div>';return;}createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(hrs2),booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,service_latitude:isDiagnosis?diagnosisLat:bookingLat,service_longitude:isDiagnosis?diagnosisLng:bookingLng});};
+      stackBody.querySelector('#refProceed').onclick=function(){var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),hrs2=calcHours();bookingAddress=address;bookingNotes=notes;if(!address){stackBody.querySelector('#refBookingMsg').innerHTML='<div class="pay-note">Work address enter karein.</div>';return;}createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(hrs2),expected_hourly_rate:Math.round(Number(w.daily_wage||0)/8*100)/100,booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,service_latitude:isDiagnosis?diagnosisLat:bookingLat,service_longitude:isDiagnosis?diagnosisLng:bookingLng});};
     }
     function loadSlots(){slotsLoading=true;availableSlots=[];renderBooking();api('/api/workers/'+w.id+'/available-slots?date='+encodeURIComponent(selectedDate)+'&hours=1').then(function(r){slotsLoading=false;if(r.ok)availableSlots=r.data.slots||[];else slotError=r.data.error||'Availability unavailable';renderBooking();});}
     loadSlots();
@@ -1770,7 +1770,7 @@
       return '<div class="schedule-card" data-ref-booking="' + b.id + '">' +
         '<div class="schedule-date"><b>' + String(dt.getDate()).padStart(2,"0") + '</b>' + dt.toLocaleDateString("en",{month:"short"}) + '</div>' +
         '<div class="avatar" style="width:42px;height:42px;background:' + colorFor(b.worker_id) + '">' + initials(b.worker_name) + '</div>' +
-        '<div class="body"><div class="name">' + hirerMessageText(b.worker_name) + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.hours || 2) + ' hrs</div>' +
+        '<div class="body"><div class="name">' + hirerMessageText(b.worker_name) + '</div><div class="sub">' + b.worker_skill + ' · ' + (b.scheduled_minutes ? b.scheduled_minutes / 60 : b.hours || 2) + ' hrs</div>' +
           '<div class="amount">' + fmtMoney(b.total_amount) + '</div>' +
           '<div class="sub">' + hirerBookingPaymentLabel(b) + '</div>' +
           '<span class="ref-status ' + bookingStatusClass(b.status) + '">Status: ' + statusLabel(b.status) + '</span></div>' +
@@ -1874,7 +1874,7 @@
         stackBody.innerHTML =
           '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+hirerBookingProgress(b)+'</section>' +
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+initials(b.worker_name)+'</div>' +
-            '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
+            '<div class="body"><div class="name">'+b.worker_name+'</div><div class="sub">'+b.worker_skill+' · '+(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
           '<div class="ref-detail-list">' +
             '<div class="ref-detail-row"><div class="k">Date &amp; Time</div><div class="v">📅 '+b.start_date+' &nbsp; ◷ '+(b.start_time||"Time not set")+'</div></div>' +
             '<div class="ref-detail-row"><div class="k">Service</div><div class="v">'+b.worker_skill+' · '+(b.booking_type||"regular")+'</div></div>' + (b.diagnosis_notes?'<div class="ref-detail-row"><div class="k">Diagnosis</div><div class="v">'+b.diagnosis_notes+'</div></div>':'') + (b.booking_type==='diagnosis'&&b.diagnosis_notes&&!b.work_approved_at&&!b.work_declined_at&&b.status==='checked_in'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0"><button class="btn btn-safety" onclick="approveDiagnosisWork('+b.id+')">Approve Paid Work</button><button class="btn btn-outline" onclick="declineDiagnosisWork('+b.id+')">Diagnosis Only</button></div>':'') + (b.work_declined_at?'<div class="pay-note">Repair work declined after diagnosis. Final bill is diagnosis fee only.</div>':'') +
