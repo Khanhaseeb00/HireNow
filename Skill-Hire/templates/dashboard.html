@@ -1643,18 +1643,43 @@
   function approveDiagnosisWork(bookingId){api("/api/bookings/"+bookingId+"/approve-work",{method:"POST",body:"{}"}).then(function(r){if(!r.ok){alert(r.data.error||"Approval failed");return;}alert("Work approved. Worker can now start the paid work timer.");loadBookings();});}
   function declineDiagnosisWork(bookingId){var reason=prompt("Why do you want to stop after diagnosis?","Repair not required");if(reason===null)return;api("/api/bookings/"+bookingId+"/decline-work",{method:"POST",body:JSON.stringify({reason:reason})}).then(function(r){if(!r.ok){alert(r.data.error||"Unable to close diagnosis booking");return;}alert("Diagnosis visit completed. Only the diagnosis fee remains payable.");loadBookings();openBookingDetailsScreen(bookingId);});}
 
-  function createReferenceBooking(worker, payload) {
+  var pendingBookingKeys={};
+  async function bookingRequestIdentity(payload){
+    var encoded=JSON.stringify(payload,Object.keys(payload).sort());
+    var hash=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(encoded));
+    var fingerprint=Array.from(new Uint8Array(hash)).map(function(x){return x.toString(16).padStart(2,"0");}).join("");
+    var storageKey="hirenow_booking_pending_"+Number(state.hirer&&state.hirer.id)+"_"+fingerprint,key=pendingBookingKeys[storageKey];
+    try{key=key||localStorage.getItem(storageKey);}catch(error){}
+    if(!key){key=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(function(x){return x.toString(16).padStart(2,"0");}).join("");}
+    pendingBookingKeys[storageKey]=key;
+    try{localStorage.setItem(storageKey,key);}catch(error){}
+    return {key:key,storageKey:storageKey};
+  }
+  function acknowledgeBookingRequest(identity){delete pendingBookingKeys[identity.storageKey];try{localStorage.removeItem(identity.storageKey);}catch(error){}}
+  async function createReferenceBooking(worker, payload) {
     var msg = stackBody.querySelector("#refBookingMsg");
     var btn = stackBody.querySelector("#refProceed");
-    if (btn) { btn.disabled = true; btn.textContent = "Request bheji ja rahi hai..."; }
+    if(btn && (btn.disabled || btn.dataset.bookingBusy==="1"))return;
+    if (btn) { btn.dataset.bookingBusy="1";btn.disabled = true; btn.textContent = "Request bheji ja rahi hai..."; }
     payload.worker_id = worker.id;
     var revision=stackRevision;
-    api("/api/bookings", { method: "POST", body: JSON.stringify(payload) }).then(function (res) {
+    var identity;
+    try{identity=await bookingRequestIdentity(payload);}catch(error){
+      if(btn){delete btn.dataset.bookingBusy;btn.disabled=false;btn.textContent="Send Booking Request";}
+      msg.textContent="Secure request setup failed. Refresh this browser and check your bookings before retrying.";return;
+    }
+    return api("/api/bookings", { method: "POST", headers:{"Idempotency-Key":identity.key}, body: JSON.stringify(payload) }).then(function (res) {
+      if(btn)delete btn.dataset.bookingBusy;
+      if(res.ok)acknowledgeBookingRequest(identity);
       if(revision!==stackRevision){if(res.ok)loadBookings();return;}
       if (!res.ok) {
         if (btn) { btn.disabled = false; btn.textContent = "Send Booking Request"; }
         msg.innerHTML = '<div class="pay-note">' + hirerMessageText(res.data.error || "Booking request nahi bani") + '</div>';
         return;
+      }
+      if(res.data.replayed && res.data.status!=="requested"){
+        msg.textContent="Your original booking #"+Number(res.data.id)+" was found. Opening its current details; no duplicate booking was created.";
+        loadBookings();openBookingDetailsScreen(Number(res.data.id));return;
       }
       var methodLabel = res.data.payment_method === "cash" ? "Cash after work" : "Online payment after acceptance";
       msg.innerHTML = '<div style="color:var(--ok);font-weight:800;margin-top:10px;">Request sent ✓</div>' +

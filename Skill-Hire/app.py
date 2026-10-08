@@ -29,6 +29,8 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import os
 import secrets
+import hashlib
+import json
 import re
 import math
 import time
@@ -178,6 +180,14 @@ def ensure_schema_extensions():
         rate_snapshot_source = CASE WHEN booking_type = 'regular' AND work_ended_at IS NULL AND hours > 0
              THEN 'legacy_estimate' ELSE 'legacy_current_rate' END
         WHERE agreed_hourly_rate IS NULL""")
+
+    conn.execute(f"""CREATE TABLE IF NOT EXISTS booking_request_keys (
+        hirer_id {foreign_id_sql()} NOT NULL REFERENCES hirers(id),
+        request_key TEXT NOT NULL,
+        payload_hash TEXT NOT NULL,
+        booking_id {foreign_id_sql()} NOT NULL REFERENCES bookings(id),
+        PRIMARY KEY (hirer_id, request_key)
+    )""")
 
     worker_columns = table_columns(conn, "workers")
     for column, definition in {"account_status": "TEXT NOT NULL DEFAULT 'active'", "account_status_reason": "TEXT", "deleted_at": "TEXT"}.items():
@@ -1856,6 +1866,27 @@ def worker_work_timer(booking_id):
 
 
 # ----------------------------------------------------------- booking routes
+def replay_booking_request(conn, request_key, payload_hash):
+    if not request_key:
+        return None
+    saved = conn.execute("SELECT payload_hash,booking_id FROM booking_request_keys WHERE hirer_id=? AND request_key=?",
+                         (current_hirer_id(), request_key)).fetchone()
+    if not saved:
+        return None
+    if saved["payload_hash"] != payload_hash:
+        return jsonify({"error": "This request key already belongs to different booking details. Review your booking before starting a new request."}), 409
+    booking = conn.execute("SELECT * FROM bookings WHERE id=? AND hirer_id=?", (saved["booking_id"], current_hirer_id())).fetchone()
+    if not booking:
+        return jsonify({"error": "The original booking needs review. No new booking was created."}), 409
+    return jsonify({"id": booking["id"], "total_amount": booking["total_amount"],
+        "derived_hourly_rate": booking["agreed_hourly_rate"], "agreed_hourly_rate": booking["agreed_hourly_rate"],
+        "booking_type": booking["booking_type"], "diagnosis_fee": booking["diagnosis_fee"],
+        "diagnosis_distance_km": booking["diagnosis_distance_km"], "hours": booking["hours"],
+        "scheduled_minutes": booking["scheduled_minutes"], "service_timezone": SERVICE_TIMEZONE,
+        "request_expires_at": booking["request_expires_at"], "payment_method": booking["payment_method"],
+        "status": booking["status"], "payment_status": booking["payment_status"], "replayed": True}), 200
+
+
 @app.post("/api/bookings")
 def create_booking():
     auth_error = require_login()
@@ -1866,6 +1897,22 @@ def create_booking():
     if not isinstance(data, dict) or any(data.get(key) is not None and not isinstance(data[key], str)
             for key in ("start_date", "start_time", "end_time", "booking_type", "payment_method", "special_instructions", "address")):
         return jsonify({"error": "Booking fields have invalid types"}), 400
+    request_key = request.headers.get("Idempotency-Key")
+    if request_key is not None and not re.fullmatch(r"[A-Za-z0-9_-]{16,128}", request_key):
+        return jsonify({"error": "Idempotency-Key must contain 16-128 letters, digits, hyphens or underscores"}), 400
+    payload_hash = None
+    if request_key:
+        try:
+            payload_hash = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+        except (TypeError, ValueError):
+            return jsonify({"error": "Booking details contain invalid values"}), 400
+        lookup = get_db()
+        try:
+            replay = replay_booking_request(lookup, request_key, payload_hash)
+        finally:
+            lookup.close()
+        if replay:
+            return replay
     worker_id = data.get("worker_id")
     start_date = (data.get("start_date") or "").strip()
     start_time = (data.get("start_time") or "").strip() or None
@@ -1927,6 +1974,13 @@ def create_booking():
 
     conn = get_db()
     conn.execute("BEGIN IMMEDIATE")
+    if request_key:
+        # The hirer row serializes identical keys even when their payloads name
+        # different workers. Booking and key commit in the same transaction.
+        conn.execute(for_update("SELECT id FROM hirers WHERE id=?"), (current_hirer_id(),)).fetchone()
+        replay = replay_booking_request(conn, request_key, payload_hash)
+        if replay:
+            conn.rollback(); conn.close(); return replay
     worker = conn.execute(for_update("SELECT * FROM workers WHERE id = ? AND account_status = 'active' AND deleted_at IS NULL AND rate_status = 'approved'"), (worker_id,)).fetchone()
     if not worker:
         conn.rollback()
@@ -1990,6 +2044,9 @@ def create_booking():
          special_instructions, address, payment_method, total),
     )
     booking_id = cur.lastrowid
+    if request_key:
+        conn.execute("INSERT INTO booking_request_keys(hirer_id,request_key,payload_hash,booking_id) VALUES (?,?,?,?)",
+                     (current_hirer_id(), request_key, payload_hash, booking_id))
     deadline = min(datetime.utcnow() + timedelta(minutes=BOOKING_RESPONSE_MINUTES),
                    schedule_utc(booking_start))
     conn.execute("UPDATE bookings SET agreed_hourly_rate = ?, rate_snapshot_source = 'booking_quote', scheduled_minutes = ?, request_expires_at=? WHERE id = ?",

@@ -1,9 +1,10 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),crypto=require('node:crypto').webcrypto;
 const source=fs.readFileSync('templates/dashboard.html','utf8');
 let nodes={},timerCallback,timerCleared=0;
 function element(){return {textContent:'',innerHTML:'',children:[],appendChild(child){this.children.push(child);},setAttribute(){},addEventListener(type,fn){this.listener=fn;},querySelectorAll(){return [];}};}
 const document={getElementById:id=>nodes[id]||(nodes[id]=element()),createElement:element};
-const context={document,AbortController,setTimeout:fn=>(timerCallback=fn,1),clearTimeout:()=>timerCleared++,state:{lang:'en',workers:[]},fmtMoney:n=>'₹'+Number(n),colorFor:()=> '#123',initials:name=>String(name).slice(0,2),t:k=>k,skillIcon:()=>'',catColors:()=>['#123','#fff'],nav:()=>{},openWorkerProfileScreen:()=>{},openWorkerListScreen:()=>{}};
+const storage=new Map();const localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)};
+const context={document,crypto,TextEncoder,localStorage,AbortController,setTimeout:fn=>(timerCallback=fn,1),clearTimeout:()=>timerCleared++,state:{lang:'en',workers:[]},fmtMoney:n=>'₹'+Number(n),colorFor:()=> '#123',initials:name=>String(name).slice(0,2),t:k=>k,skillIcon:()=>'',catColors:()=>['#123','#fff'],nav:()=>{},openWorkerProfileScreen:()=>{},openWorkerListScreen:()=>{}};
 vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('  function api('),source.indexOf('  function uiFormatLocale('))+source.slice(source.indexOf('  function hirerMessageText('),source.indexOf('\n',source.indexOf('  function hirerMessageText('))),context);
 vm.runInContext(source.slice(source.indexOf('  function renderCategories(skills)'),source.indexOf('  document.getElementById("fCity").addEventListener')),context);
@@ -31,9 +32,9 @@ const errorBox=element();let retried=false;context.showHirerLoadError(errorBox,a
  let resolve;context.api=()=>new Promise(r=>resolve=r);context.stackBody=element();context.openBookingDetailsScreen(1);context.stackRevision++;resolve({ok:true,data:{}});await Promise.resolve();assert.equal(context.stackBody.children.length,0);
  vm.runInContext(source.slice(source.indexOf('  function openNotificationsScreen('),source.indexOf('  document.getElementById("notifBtn")',source.indexOf('  function openNotificationsScreen('))),context);
  let notificationCalls=0;context.api=async()=>{notificationCalls++;return {ok:false,data:{error:'Unavailable'}};};context.stackBody=element();context.openNotificationsScreen();await Promise.resolve();assert.equal(notificationCalls,1);assert.match(context.stackBody.children[0].textContent,/Unavailable/);
- vm.runInContext(source.slice(source.indexOf('  function createReferenceBooking('),source.indexOf('  function showPayStep(')),context);
- const msg=element(),button={disabled:false,textContent:''};context.stackBody={querySelector:id=>id==='#refProceed'?button:msg};context.api=async()=>({ok:false,data:{error:attack}});
- context.createReferenceBooking({id:1},{});assert.equal(button.disabled,true);await Promise.resolve();assert.equal(button.disabled,false);assert.doesNotMatch(msg.innerHTML,/<img/);
+ vm.runInContext(source.slice(source.indexOf('  var pendingBookingKeys='),source.indexOf('  function showPayStep(')),context);
+ const msg=element(),button={dataset:{},disabled:false,textContent:''};context.stackBody={querySelector:id=>id==='#refProceed'?button:msg};context.api=async()=>({ok:false,data:{error:attack}});
+ const bookingTask=context.createReferenceBooking({id:1},{});assert.equal(button.disabled,true);await bookingTask;assert.equal(button.disabled,false);assert.doesNotMatch(msg.innerHTML,/<img/);
  context.api=realApi;
  let count=0;context.fetch=async()=>{count++;return {ok:true,status:200,json:async()=>({id:1})};};
  let result=await context.api('/api/bookings');assert.equal(result.ok,true);assert.equal(result.status,200);assert.equal(count,1);
