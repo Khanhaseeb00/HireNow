@@ -1,0 +1,29 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync('templates/admin.html','utf8');
+const script=source.slice(source.indexOf('var adminAuthEpoch='),source.indexOf('var loginBusy=false;'));
+class Element{constructor(){this.children=[];this.style={display:''};this.value='';this.disabled=false;this.attributes={};this._text='';this._html='';}set textContent(v){this.children=[];this._text=v;this._html='';}get textContent(){return this._text;}set innerHTML(v){this.children=[];this._html=v;this._text='';}get innerHTML(){return this._html;}setAttribute(k,v){this.attributes[k]=v;}appendChild(c){this.children.push(c);}addEventListener(type,fn){this.listener=fn;}}
+const elements={},document={getElementById:id=>elements[id]||(elements[id]=new Element()),createElement:()=>new Element()};
+let timerCallback;
+const context={document,AbortController,setTimeout:fn=>(timerCallback=fn,1),clearTimeout:()=>{},alert:()=>{},confirm:()=>false,console,fetch:()=>Promise.reject(Error('network'))};
+vm.createContext(context);vm.runInContext(script,context);const realApi=context.api;
+const good={overview:{workers:3,hirers:4,pending_verifications:0,active_bookings:2,completed_bookings:1,paid_value:100},pending:[],workers:[],bookings:[],accounts:[],finance:{items:[],adjustments:[],commission_percent:10},payouts:[],diagnosis:[]};
+function nameOf(path){return Object.keys(context.adminSections).find(name=>context.adminSections[name].path===path);}
+function tick(){return new Promise(resolve=>setImmediate(resolve));}
+(async()=>{
+ const calls=[];context.api=async path=>{const name=nameOf(path);calls.push(name);return name==='finance'?{ok:false,status:502,data:{error:'<img src=x onerror=bad> Finance unavailable'}}:{ok:true,status:200,data:good[name]};};
+ await context.loadAll();assert.equal(context.sectionStates.workers,'ready');assert.equal(context.sectionStates.finance,'error');assert.equal(document.getElementById('sWorkers').textContent,3);
+ assert.match(document.getElementById('finance').children[0].textContent,/Finance unavailable/);assert.equal(document.getElementById('finance').children[0].innerHTML,'');assert.equal(document.getElementById('saveCommissionBtn').disabled,true);
+ const before=document.getElementById('finance').children[0];context.renderFinance();assert.equal(document.getElementById('finance').children[0],before);
+ context.api=async path=>{calls.push(nameOf(path));return {ok:true,data:good[nameOf(path)]};};
+ document.getElementById('finance').children[1].listener();await tick();assert.equal(context.sectionStates.finance,'ready');assert.equal(document.getElementById('saveCommissionBtn').disabled,false);assert.equal(calls.length,9);assert.equal(calls[8],'finance');assert.match(document.getElementById('finance').innerHTML,/No finance ledger entries/);
+ context.api=async path=>nameOf(path)==='overview'?{ok:false,data:{error:'Overview unavailable'}}:{ok:true,data:good[nameOf(path)]};await context.loadAll();assert.equal(document.getElementById('sWorkers').textContent,'—');assert.equal(context.sectionStates.workers,'ready');assert.equal(document.getElementById('overviewStatus').children[1].textContent,'Retry this section');
+ context.api=async()=>({ok:true,data:{error:'Wrong shape'}});await context.loadAdminSection('workers');assert.equal(context.sectionStates.workers,'error');const workerError=document.getElementById('workers').children[0];context.renderWorkers();assert.equal(document.getElementById('workers').children[0],workerError);
+ const pending=[];context.api=()=>new Promise(resolve=>pending.push(resolve));const old=context.loadAdminSection('workers'),latest=context.loadAdminSection('workers');pending[1]({ok:true,data:[]});await latest;pending[0]({ok:false,data:{error:'Old response'}});await old;assert.equal(context.sectionStates.workers,'ready');
+ const stale=context.loadAdminSection('workers');context.adminAuthEpoch++;pending[2]({ok:true,data:[{}]});await stale;assert.equal(context.workerRows.length,0);
+ context.api=realApi;context.fetch=async()=>({ok:true,status:200,text:async()=>'<html>502 proxy</html>'});let result=await context.api('/api/admin/workers');assert.equal(result.ok,false);assert.match(result.data.error,/unreadable/);
+ let request;context.csrfToken='test-token';context.fetch=async(path,opts)=>{request=opts;return {ok:true,status:200,text:async()=>'{"ok":true}'};};await context.api('/api/admin/finance/commission',{method:'PUT'});assert.equal(request.headers['X-CSRF-Token'],'test-token');assert.equal(request.credentials,'same-origin');
+ context.fetch=async()=>({ok:false,status:401,text:async()=>'{"error":"Login required"}'});document.getElementById('app').style.display='block';await context.api('/api/admin/workers');assert.equal(document.getElementById('app').style.display,'none');assert.equal(context.csrfToken,'');assert.match(document.getElementById('loginMsg').textContent,/Session expired/);
+ let resolve;context.fetch=()=>new Promise(r=>resolve=r);const stale401=context.api('/api/admin/workers');context.adminAuthEpoch++;context.csrfToken='new-token';document.getElementById('app').style.display='block';resolve({ok:false,status:401,text:async()=>'{"error":"Old session"}'});await stale401;assert.equal(context.csrfToken,'new-token');assert.equal(document.getElementById('app').style.display,'block');
+ context.fetch=(_,opts)=>new Promise((resolve,reject)=>opts.signal.addEventListener('abort',()=>{const error=new Error();error.name='AbortError';reject(error);}));const timeout=context.api('/api/admin/workers');timerCallback();result=await timeout;assert.equal(result.status,0);assert.match(result.data.error,/timed out/);
+ console.log('Admin independent loading, retry, session and API failure tests passed');
+})().catch(error=>{console.error(error);process.exitCode=1;});
