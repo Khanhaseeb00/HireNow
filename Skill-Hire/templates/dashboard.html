@@ -1314,79 +1314,76 @@
 
   // ---- Worker List screen ----
   var SORT_CHIPS = ["All", "Nearby", "Top Rated", "Price: Low to High"];
-  function openWorkerListScreen(skill, opts) {
-    opts = opts || {};
-    var currentSort = "All";
-    var title = skill || opts.title || t("hire_heading");
-    var city = document.getElementById("fCity").value;
-    openStack("worker-list", title, function () { render(currentSort); }, {
-      subtitle: city || t("all_cities"),
-      search: !skill,
-      onSearch: function () { render(currentSort); },
-      rightIcon: "⚙",
-      onRightIcon: openSortSheet
+  function workerHourlyPrice(worker) {
+    var rate=worker.booking_hourly_rate;
+    if(rate==null)rate=Number(worker.daily_wage)/8;
+    rate=Number(rate);
+    return Number.isFinite(rate)&&rate>0?Math.round((rate+Number.EPSILON)*100)/100:null;
+  }
+  function selectDiscoveryWorkers(workers, filters, query, sortMode) {
+    var q=String(query||"").trim().toLocaleLowerCase();
+    var ceiling=filters.maxHourly===""?null:Number(filters.maxHourly);
+    var list=workers.filter(function(w){
+      if(filters.skill && w.skill!==filters.skill)return false;
+      if(filters.city && w.city!==filters.city)return false;
+      if(filters.online && Number(w.is_online)!==1)return false;
+      if(filters.verified && w.verification_status!=="verified")return false;
+      if(q && [w.name,w.skill,w.skills_detail,w.city].join(" ").toLocaleLowerCase().indexOf(q)<0)return false;
+      var price=workerHourlyPrice(w);
+      if(ceiling!=null && (!Number.isFinite(ceiling)||ceiling<0||price==null||price>ceiling))return false;
+      return true;
     });
-    function openSortSheet() {
-      modalBody.innerHTML = '<button class="modal-close" data-close>&times;</button><h3>Filter &amp; Sort</h3>' +
-        SORT_CHIPS.map(function (s) { return '<button class="btn btn-outline btn-block" style="margin-top:9px;" data-sort-opt="' + hirerMessageText(s) + '">' + hirerMessageText(s) + '</button>'; }).join("");
-      modalBody.querySelector("[data-close]").addEventListener("click", closeModal);
-      modalBody.querySelectorAll("[data-sort-opt]").forEach(function (b) {
-        b.addEventListener("click", function () { currentSort = b.dataset.sortOpt; render(currentSort); closeModal(); });
-      });
+    function value(number){return number==null||!Number.isFinite(Number(number))?Infinity:Number(number);}
+    if(sortMode==="Nearby")list.sort(function(a,b){return value(a.distance_km)-value(b.distance_km);});
+    else if(sortMode==="Top Rated")list.sort(function(a,b){return (Number(b.rating)||0)-(Number(a.rating)||0);});
+    else if(sortMode==="Price: Low to High")list.sort(function(a,b){return value(workerHourlyPrice(a))-value(workerHourlyPrice(b));});
+    return list;
+  }
+  function openWorkerListScreen(skill, opts) {
+    opts=opts||{};
+    var currentSort="All",filters={skill:skill||"",city:document.getElementById("fCity").value,maxHourly:"",online:false,verified:false};
+    var title=skill||opts.title||t("hire_heading");
+    openStack("worker-list",title,function(){render(currentSort);},{
+      subtitle:filters.city||t("all_cities"),search:true,onSearch:function(){render(currentSort);},rightIcon:"⚙",onRightIcon:openSortSheet
+    });
+    function openSortSheet(){
+      modalBody.innerHTML='<button class="modal-close" data-close>&times;</button><h3>Sort workers</h3>'+SORT_CHIPS.map(function(mode){return '<button class="btn btn-outline btn-block" style="margin-top:9px" data-sort-opt="'+hirerMessageText(mode)+'">'+hirerMessageText(mode)+'</button>';}).join("");
+      modalBody.querySelector("[data-close]").addEventListener("click",closeModal);
+      modalBody.querySelectorAll("[data-sort-opt]").forEach(function(button){button.onclick=function(){render(button.dataset.sortOpt);closeModal();};});
       overlay.classList.add("open");
     }
-    function render(sortMode) {
-      currentSort = sortMode;
-      var q = (stackSearchInput.value || "").trim().toLowerCase();
-      var list = state.workers.filter(function (w) {
-        if (skill && w.skill !== skill) return false;
-        var ct = document.getElementById("fCity").value;
-        if (ct && w.city !== ct) return false;
-        if (q && w.name.toLowerCase().indexOf(q) === -1 && w.skill.toLowerCase().indexOf(q) === -1) return false;
-        return true;
-      });
-      if (sortMode === "Nearby") list = list.slice().sort(function (a, b) { return (a.distance_km == null ? 999 : a.distance_km) - (b.distance_km == null ? 999 : b.distance_km); });
-      else if (sortMode === "Top Rated") list = list.slice().sort(function (a, b) { return b.rating - a.rating; });
-      else if (sortMode === "Price: Low to High") list = list.slice().sort(function (a, b) { return a.daily_wage - b.daily_wage; });
-
-      var chipsHtml = SORT_CHIPS.map(function (s) {
-        return '<button class="chip ' + (s === sortMode ? "active" : "") + '" data-sort="' + hirerMessageText(s) + '">' + hirerMessageText(s) + '</button>';
+    function optionsFor(field,current,allLabel){
+      var values=Array.from(new Set(state.workers.map(function(w){return w[field];}).filter(Boolean))).sort();
+      return '<option value="">'+allLabel+'</option>'+values.map(function(value){return '<option value="'+hirerMessageText(value)+'"'+(value===current?' selected':'')+'>'+hirerMessageText(value)+'</option>';}).join("");
+    }
+    function render(sortMode){
+      currentSort=sortMode;
+      stackTitle.textContent=filters.skill||opts.title||t("hire_heading");
+      stackSubtitle.textContent=filters.city||t("all_cities");stackSubtitle.style.display="block";
+      var query=stackSearchInput.value||"";
+      var list=selectDiscoveryWorkers(state.workers,filters,query,sortMode);
+      var controls='<div class="ref-card" style="margin-bottom:12px"><div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'+
+        '<label>Skill<select class="loc-select" style="width:100%" data-worker-filter="skill">'+optionsFor("skill",filters.skill,"All skills")+'</select></label>'+
+        '<label>City<select class="loc-select" style="width:100%" data-worker-filter="city">'+optionsFor("city",filters.city,"All cities")+'</select></label>'+
+        '<label style="grid-column:1/-1">Maximum hourly price (₹)<input type="number" min="0" step="0.01" inputmode="decimal" placeholder="Any budget" style="width:100%" data-worker-filter="maxHourly" value="'+hirerMessageText(filters.maxHourly)+'"></label></div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:12px"><label><input type="checkbox" data-worker-filter="online"'+(filters.online?' checked':'')+'> Online now</label><label><input type="checkbox" data-worker-filter="verified"'+(filters.verified?' checked':'')+'> Verified ID</label></div></div>';
+      var chips=SORT_CHIPS.map(function(mode){return '<button class="chip '+(mode===sortMode?'active':'')+'" data-sort="'+hirerMessageText(mode)+'">'+hirerMessageText(mode)+'</button>';}).join("");
+      var rows=list.map(function(w){
+        var hourly=workerHourlyPrice(w),verified=w.verification_status==="verified",online=Number(w.is_online)===1;
+        return '<div class="wl-row" data-worker="'+Number(w.id)+'"><div class="avatar" style="background:'+colorFor(w.id)+'">'+hirerMessageText(initials(w.name))+'</div><div class="wl-body">'+
+          '<div class="wl-name">'+hirerMessageText(w.name)+'</div><div class="wl-dist">'+hirerMessageText(w.skill)+' · '+hirerMessageText(w.city)+'</div>'+
+          '<div class="wl-rating">★ '+hirerMessageText(w.rating||0)+' <span class="count">· '+hirerMessageText(w.jobs_completed||0)+' completed jobs</span></div>'+
+          (w.distance_km!=null?'<div class="wl-dist">📍 Listed distance: '+hirerMessageText(w.distance_km)+' km</div>':'')+
+          '<div class="wl-badges">'+(verified?'<span class="wl-badge verified">✓ '+t("verified")+'</span>':'')+'<span class="wl-badge '+(online?'avail-today':'')+'">'+(online?'Online now':'Offline')+'</span></div></div>'+
+          '<div class="wl-side"><button class="wl-heart" data-heart="'+Number(w.id)+'" aria-label="Save worker">♥</button><div class="wl-price num">'+(hourly==null?'Rate unavailable':fmtMoney(hourly)+'<small>/hour</small>')+'</div><button class="btn btn-outline" data-view-worker="'+Number(w.id)+'" style="margin-top:8px">View &amp; Book</button></div></div>';
       }).join("");
-      var rowsHtml = list.map(function (w) {
-        var isVerified = w.verification_status === "verified";
-        var priceHtml = '<div class="wl-price num">' + fmtMoney(w.daily_wage) + '<small>' + t("per_day") + '</small></div>';
-        return '<div class="wl-row" data-worker="' +Number(w.id)+ '">' +
-          '<div class="avatar" style="background:' + colorFor(w.id) + '">' +hirerMessageText(initials(w.name))+ '</div>' +
-          '<div class="wl-body">' +
-            '<div class="wl-name">' +hirerMessageText(w.name)+ '</div>' +
-            '<div class="wl-rating">★ ' +hirerMessageText(w.rating)+ ' <span class="count">(' +hirerMessageText(w.jobs_completed)+ ' reviews)</span></div>' +
-            (w.distance_km != null ? '<div class="wl-dist">📍 ' +hirerMessageText(w.distance_km)+ ' km away</div>' : '<div class="wl-dist">📍 ' +hirerMessageText(w.city)+ '</div>') +
-            '<div class="wl-badges">' +
-              (isVerified ? '<span class="wl-badge verified">✓ ' + t("verified") + '</span>' : '') +
-              (w.availability === "today" ? '<span class="wl-badge avail-today">Available Today</span>' : (w.availability === "tomorrow" ? '<span class="wl-badge avail-tmrw">Available Tomorrow</span>' : '')) +
-            '</div>' +
-          '</div>' +
-          '<div class="wl-side"><button class="wl-heart" data-heart="' +Number(w.id)+ '">♥</button>' + priceHtml + '</div>' +
-        '</div>';
-      }).join("") || '<div class="empty">' + ICON_NO_WORKERS + t("no_workers") + '</div>';
-
-      stackBody.innerHTML = '<div class="filter-chips">' + chipsHtml + '</div><div id="wlRows">' + rowsHtml + '</div>' +
-        '<div class="filter-sort-bar"><button class="btn btn-primary" id="filterSortBtn">⚙ Filter &amp; Sort</button></div>';
-      stackBody.querySelectorAll(".chip").forEach(function (chip) {
-        chip.addEventListener("click", function () { render(chip.dataset.sort); });
-      });
-      stackBody.querySelectorAll("[data-heart]").forEach(function (btn) {
-        btn.addEventListener("click", function (e) {
-          e.stopPropagation();
-          state.favorites[btn.dataset.heart] = !state.favorites[btn.dataset.heart];
-          btn.classList.toggle("active", !!state.favorites[btn.dataset.heart]);
-        });
-        if (state.favorites[btn.dataset.heart]) btn.classList.add("active");
-      });
-      stackBody.querySelectorAll("[data-worker]").forEach(function (row) {
-        row.addEventListener("click", function () { nav(function () { openWorkerProfileScreen(Number(row.dataset.worker)); }); });
-      });
-      document.getElementById("filterSortBtn").addEventListener("click", openSortSheet);
+      if(!rows)rows='<div class="empty" role="status">No workers match these filters.<p>Try another city, a higher budget or fewer filters.</p><button class="btn btn-outline" id="resetWorkerFilters">Reset filters</button></div>';
+      stackBody.innerHTML=controls+'<div class="filter-chips">'+chips+'</div><p role="status" aria-live="polite" style="color:var(--app-muted);font-size:13px">'+list.length+' worker'+(list.length===1?'':'s')+' found. Hourly rate uses an 8-hour workday. Confirm your date and time before booking.</p><div id="wlRows">'+rows+'</div>';
+      stackBody.querySelectorAll("[data-worker-filter]").forEach(function(input){input.onchange=function(){filters[input.dataset.workerFilter]=input.type==="checkbox"?input.checked:input.value;render(currentSort);};});
+      stackBody.querySelectorAll("[data-sort]").forEach(function(button){button.onclick=function(){render(button.dataset.sort);};});
+      var reset=stackBody.querySelector("#resetWorkerFilters");if(reset)reset.onclick=function(){filters={skill:skill||"",city:"",maxHourly:"",online:false,verified:false};stackSearchInput.value="";render("All");};
+      stackBody.querySelectorAll("[data-heart]").forEach(function(button){button.classList.toggle("active",!!state.favorites[button.dataset.heart]);button.onclick=function(event){event.stopPropagation();state.favorites[button.dataset.heart]=!state.favorites[button.dataset.heart];button.classList.toggle("active",!!state.favorites[button.dataset.heart]);};});
+      stackBody.querySelectorAll("[data-worker],[data-view-worker]").forEach(function(element){element.onclick=function(event){event.stopPropagation();var id=Number(element.dataset.viewWorker||element.dataset.worker);nav(function(){openWorkerProfileScreen(id);});};});
     }
   }
 
@@ -1428,7 +1425,7 @@
     function renderWorkerProfile() {
       var isVerified = w.verification_status === "verified";
       var isFav = !!state.favorites[w.id];
-      var derivedHourly = Number(w.daily_wage || 0) / 8;
+      var derivedHourly = workerHourlyPrice(w);
       var tags = (w.skills_detail || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
 
       stackBody.innerHTML =
@@ -1441,7 +1438,7 @@
         '</div>' +
         '<div class="wp-card">' +
           '<div class="wp-name" style="font-family:\'Archivo\',sans-serif;font-weight:800;">' +hirerMessageText(w.name)+ '</div>' +
-          '<div class="wp-meta"><span class="stars">★ ' +hirerMessageText(w.rating)+ '</span><span>(' +hirerMessageText(w.jobs_completed)+ ' reviews)</span>' +
+          '<div class="wp-meta"><span class="stars">★ ' +hirerMessageText(w.rating)+ '</span><span>(' +hirerMessageText(w.jobs_completed)+ ' completed jobs)</span>' +
             (w.distance_km != null ? '<span>📍 ' +hirerMessageText(w.distance_km)+ ' km away</span>' : '<span>📍 ' +hirerMessageText(w.city)+ '</span>') + '</div>' +
           '<div class="wp-badges">' +
             (isVerified ? '<span class="wp-badge">✓ ' + t("verified") + '</span>' : '') +
@@ -1451,7 +1448,7 @@
           '<div class="wp-divider"></div>' +
           '<div class="wp-price-row">' +
             '<div class="wp-price-box"><div class="amt num">' + fmtMoney(w.daily_wage) + '/day</div><div class="lbl">(Daily Rate)</div></div>' +
-            '<div class="wp-price-box right"><div class="amt num">' + fmtMoney(derivedHourly) + '/hr</div><div class="lbl">(Derived · 8 hr day)</div></div>' +
+            '<div class="wp-price-box right"><div class="amt num">' + (derivedHourly==null?'Rate unavailable':fmtMoney(derivedHourly)+'/hr') + '</div><div class="lbl">(Derived · 8 hr day)</div></div>' +
           '</div>' +
           '<div class="wp-divider"></div>' +
           '<div class="wp-section-title">Skills &amp; Experience</div>' +
@@ -1535,7 +1532,8 @@
 
   function renderFeatured() {
     var wrap = document.getElementById("featuredScroll");
-    var top = state.workers.slice().sort(function (a, b) { return b.rating - a.rating; }).slice(0, 8);
+    var selectedCity=document.getElementById("fCity").value;
+    var top=state.workers.filter(function(w){return !selectedCity || w.city===selectedCity;}).sort(function(a,b){return (Number(b.rating)||0)-(Number(a.rating)||0);}).slice(0,8);
     wrap.innerHTML = top.map(function (w) {
       return '<div class="fcard" data-hire="' +Number(w.id)+ '">' +
         '<div class="avatar" style="background:' + colorFor(w.id) + '">' +hirerMessageText(initials(w.name))+ '</div>' +

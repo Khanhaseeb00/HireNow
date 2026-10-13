@@ -1324,6 +1324,7 @@ PUBLIC_WORKER_SELECT = """id, name, skill, skills_detail, city, daily_wage,
 def public_worker_payload(row):
     result = dict(row)
     result["skill"] = normalize_worker_skill(result.get("skill"))
+    result["booking_hourly_rate"] = derived_hourly_rate(result)
     result["service_location_configured"] = bool(result["service_location_configured"])
     return result
 
