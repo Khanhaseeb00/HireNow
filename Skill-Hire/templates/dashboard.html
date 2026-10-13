@@ -14,7 +14,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/booking-tracking.css?v=1">
-<script src="/static/booking-tracking.js?v=1"></script>
+<script src="/static/booking-tracking.js?v=2"></script>
+<script src="/static/work-overtime.js?v=1"></script>
 <script src="/static/booking-issues.js?v=1"></script>
 <script src="/static/hirer-travel.js?v=1"></script>
 <style>
@@ -1582,7 +1583,7 @@
       '<div class="ref-card"><div class="ref-label">Estimated charges</div>'+
       (diagnosis?row("Diagnosis / visit fee",fmtMoney(estimate)):row("Hourly rate × duration",fmtMoney(rate)+" × "+Number(hours.toFixed(2))+" hours"))+
       '<div class="ref-total"><span>'+ (diagnosis?'Estimated visit fee':'Estimated work amount')+'</span><span class="amt">'+fmtMoney(estimate)+'</span></div>'+
-      '<p class="accept-note">'+(diagnosis?'The visit fee covers diagnosis. Repair work is charged separately at the agreed hourly rate and starts only after your approval.':'Final work charges use actual timer duration at the agreed hourly rate. A longer job can increase the final bill; the estimate is not a fixed-price promise.')+'</p>'+
+      '<p class="accept-note">'+(diagnosis?'The visit fee covers diagnosis. Repair work is charged separately at the agreed hourly rate and starts only after your approval.':'Final work charges use actual timer duration at the agreed hourly rate. The booked duration is the billing limit. Extra minutes need your approval at the agreed hourly rate.')+'</p>'+
       '<p class="accept-note">Materials and other extras are not included in this estimate. Agree on them with the worker before proceeding.</p></div>'+
       '<div class="ref-card"><div class="ref-label">Cancellation</div><p class="accept-note">You can cancel before work starts. Once work has started or completed, cancellation is unavailable. If payment was received, the booking goes into refund review; the refund is not instant.</p></div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn btn-outline" id="editBookingReview">Edit Details</button><button class="btn btn-safety" id="refProceed">Confirm &amp; Send Request</button></div><div id="refBookingMsg" role="status" aria-live="polite"></div>';
@@ -2024,6 +2025,7 @@
         stackBody.innerHTML =
           (typeof HireNowTracking!=="undefined"?HireNowTracking.html(b):"") +
           (typeof HireNowLiveTravel!=="undefined"?HireNowLiveTravel.html(b):"") +
+          (typeof HireNowOvertime!=="undefined"?HireNowOvertime.html(b,"hirer"):"") +
           '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+(typeof HireNowTracking==="undefined"?hirerBookingProgress(b):"")+'</section>' +
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div>' +
             '<div class="body"><div class="name">'+hirerMessageText(b.worker_name)+'</div><div class="sub">'+hirerMessageText(b.worker_skill)+' · '+(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
@@ -2051,6 +2053,7 @@
           ((b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
           (typeof HireNowIssues!=="undefined"?HireNowIssues.html():"") +
           ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '');
+        if(typeof HireNowOvertime!=="undefined")HireNowOvertime.mount(stackBody,b,{role:"hirer",api:api,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");},changed:function(){openBookingDetailsScreen(b.id);loadBookings();}});
         if(typeof HireNowLiveTravel!=="undefined")HireNowLiveTravel.mount(stackBody,b,{api:api,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");}});
         if(typeof HireNowIssues!=="undefined")HireNowIssues.mount(stackBody,{role:"hirer",bookingId:b.id,api:api,active:function(){return revision===stackRevision;}});
         if(typeof HireNowTracking!=="undefined")HireNowTracking.mount(stackBody,b,{

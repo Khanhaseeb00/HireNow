@@ -140,6 +140,12 @@ def ensure_schema_extensions():
         "agreed_hourly_rate": "REAL",
         "rate_snapshot_source": "TEXT",
         "scheduled_minutes": "INTEGER",
+        "approved_work_minutes": "INTEGER",
+        "billable_minutes": "INTEGER",
+        "overtime_requested_minutes": "INTEGER",
+        "overtime_request_id": "TEXT",
+        "overtime_state": "TEXT",
+        "overtime_reason": "TEXT",
         "start_time": "TEXT",
         "hours": "INTEGER NOT NULL DEFAULT 2",
         "service_type": "TEXT NOT NULL DEFAULT 'regular'",
@@ -716,7 +722,7 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
     if include_requested:
         blocked.add("requested")
     rows = conn.execute(
-        "SELECT id, start_date, start_time, end_time, hours, status FROM bookings WHERE worker_id = ? AND start_date = ?",
+        "SELECT id, start_date, start_time, end_time, hours, status, approved_work_minutes FROM bookings WHERE worker_id = ? AND start_date = ?",
         (worker_id, start_date),
     ).fetchall()
     new_start = parse_booking_start(start_date, start_time) if start_time else None
@@ -739,6 +745,8 @@ def find_worker_schedule_conflict(conn, worker_id, start_date, start_time, hours
                 old_end = old_start + timedelta(hours=int(row["hours"] or 2))
         else:
             old_end = old_start + timedelta(hours=int(row["hours"] or 2))
+        if row["approved_work_minutes"] is not None:
+            old_end = max(old_end, old_start + timedelta(minutes=row["approved_work_minutes"]))
         if new_start < old_end and old_start < new_end:
             return row
     return None
@@ -1806,12 +1814,15 @@ def worker_work_timer(booking_id):
     auth_error = require_worker_login()
     if auth_error:
         return auth_error
-    action = ((request.get_json(force=True) or {}).get("action") or "").lower()
+    data = request.get_json(silent=True)
+    action = data.get("action") if isinstance(data, dict) else None
+    action = action.lower() if isinstance(action, str) else ""
     if action not in ("start", "stop"):
         return jsonify({"error": "action must be start or stop"}), 400
     conn = get_db()
     if not is_postgres():
         conn.execute("BEGIN IMMEDIATE")
+    conn.execute(for_update("SELECT id FROM workers WHERE id=?"), (current_worker_id(),)).fetchone()
     booking = conn.execute(for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())).fetchone()
     if not booking:
         conn.close(); return jsonify({"error": "Booking not found"}), 404
@@ -1827,7 +1838,11 @@ def worker_work_timer(booking_id):
             conn.close(); return jsonify({"error": "Worker must check in at the site before starting the work timer"}), 409
         if booking["work_started_at"]:
             conn.close(); return jsonify({"error": "Work timer already started"}), 409
-        conn.execute("UPDATE bookings SET work_started_at = ?, status = 'in_progress' WHERE id = ?", (now.isoformat(), booking_id))
+        other = conn.execute("SELECT id FROM bookings WHERE worker_id=? AND id<>? AND status='in_progress' AND work_started_at IS NOT NULL AND work_ended_at IS NULL", (current_worker_id(), booking_id)).fetchone()
+        if other:
+            conn.close(); return jsonify({"error": "Complete your other running work timer before starting this job"}), 409
+        limit = int(booking["scheduled_minutes"] or (booking["hours"] or 2) * 60)
+        conn.execute("UPDATE bookings SET work_started_at = ?, approved_work_minutes = ?, status = 'in_progress' WHERE id = ?", (now.isoformat(), limit, booking_id))
         conn.execute(
             "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'in_progress', 'Paid work timer started by worker')",
             (booking_id,),
@@ -1847,7 +1862,8 @@ def worker_work_timer(booking_id):
     hourly = booking["agreed_hourly_rate"]
     if hourly is None:
         conn.close(); return jsonify({"error": "Booking rate requires review before billing"}), 409
-    work_amount = round(hourly * minutes / 60)
+    billable_minutes = min(minutes, booking["approved_work_minutes"]) if booking["approved_work_minutes"] is not None else minutes
+    work_amount = round(hourly * billable_minutes / 60)
     total = int(booking["diagnosis_fee"] or 0) + int(work_amount)
     paid_amount = int(booking["paid_amount"] or 0)
     payment_status = booking["payment_status"]
@@ -1856,11 +1872,11 @@ def worker_work_timer(booking_id):
             payment_status = "balance_due"
         elif paid_amount > total:
             payment_status = "refund_pending"
-    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed', payment_status = ? WHERE id = ?""",
-                 (now.isoformat(), minutes, work_amount, total, payment_status, booking_id))
+    conn.execute("""UPDATE bookings SET work_ended_at = ?, actual_minutes = ?, billable_minutes = ?, work_amount = ?, total_amount = ?, status = 'completed', payment_status = ? WHERE id = ?""",
+                 (now.isoformat(), minutes, billable_minutes, work_amount, total, payment_status, booking_id))
     conn.execute(
         "INSERT INTO booking_events (booking_id, status, note) VALUES (?, 'completed', ?)",
-        (booking_id, f"Paid work timer stopped after {minutes} minute(s); final work amount ₹{work_amount}."),
+        (booking_id, f"Paid work timer stopped after {minutes} minute(s); {billable_minutes} billable minute(s); final work amount ₹{work_amount}."),
     )
     add_in_app_notification(
         conn, "hirer", booking["hirer_id"], "work_completed", "Work completed",
@@ -1868,8 +1884,78 @@ def worker_work_timer(booking_id):
     )
     finance = sync_booking_financials(conn, booking_id)
     conn.commit(); conn.close()
-    return jsonify({"status": "completed", "actual_minutes": minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total, "payment_status": payment_status, "finance": finance})
+    return jsonify({"status": "completed", "actual_minutes": minutes, "billable_minutes": billable_minutes, "derived_hourly_rate": hourly, "work_amount": work_amount, "diagnosis_fee": booking["diagnosis_fee"], "total_amount": total, "payment_status": payment_status, "finance": finance})
 
+
+
+@app.post("/api/worker/bookings/<int:booking_id>/overtime")
+def request_overtime(booking_id):
+    error = require_worker_login()
+    if error:
+        return error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or type(data.get("minutes")) is not int or data["minutes"] not in (15, 30, 60, 120):
+        return jsonify(error="Choose 15, 30, 60 or 120 extra minutes"), 400
+    reason = data.get("reason", "")
+    if not isinstance(reason, str) or not reason.strip() or len(reason) > 500:
+        return jsonify(error="Explain why extra time is needed (1–500 characters)"), 400
+    conn = get_db()
+    try:
+        if not is_postgres():
+            conn.execute("BEGIN IMMEDIATE")
+        booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=? AND worker_id=?"), (booking_id, current_worker_id())).fetchone()
+        if not booking:
+            return jsonify(error="Booking not found"), 404
+        if booking["status"] != "in_progress" or booking["approved_work_minutes"] is None:
+            return jsonify(error="Overtime requests are available for new running timers only"), 409
+        if booking["overtime_state"] == "pending":
+            return jsonify(error="An overtime request is already awaiting hirer review"), 409
+        if booking["approved_work_minutes"] + data["minutes"] > 1440:
+            return jsonify(error="Approved work cannot exceed 24 hours"), 400
+        token = secrets.token_hex(16)
+        conn.execute("UPDATE bookings SET overtime_requested_minutes=?,overtime_request_id=?,overtime_state='pending',overtime_reason=? WHERE id=?", (data["minutes"], token, reason.strip(), booking_id))
+        conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'in_progress',?)", (booking_id, f"Worker requested {data['minutes']} extra minutes: {reason.strip()}"))
+        add_in_app_notification(conn, "hirer", booking["hirer_id"], "overtime_requested", "Extra time requested", f"Booking #{booking_id}: review {data['minutes']} extra minutes at the agreed hourly rate before approving.", booking_id)
+        conn.commit()
+        return jsonify(ok=True, overtime_request_id=token)
+    finally:
+        conn.close()
+
+
+@app.post("/api/bookings/<int:booking_id>/overtime")
+def review_overtime(booking_id):
+    error = require_login()
+    if error:
+        return error
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or data.get("decision") not in ("approve", "decline") or not isinstance(data.get("request_id"), str):
+        return jsonify(error="A current request and approve/decline decision are required"), 400
+    conn = get_db()
+    try:
+        if not is_postgres():
+            conn.execute("BEGIN IMMEDIATE")
+        # Match acceptance lock order so an extension cannot race another booking acceptance.
+        owner = conn.execute("SELECT worker_id FROM bookings WHERE id=? AND hirer_id=?", (booking_id, current_hirer_id())).fetchone()
+        if not owner:
+            return jsonify(error="Booking not found"), 404
+        conn.execute(for_update("SELECT id FROM workers WHERE id=?"), (owner["worker_id"],)).fetchone()
+        booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=? AND hirer_id=?"), (booking_id, current_hirer_id())).fetchone()
+        if booking["status"] != "in_progress" or booking["overtime_state"] != "pending" or booking["overtime_request_id"] != data["request_id"]:
+            return jsonify(error="This request changed or work ended. Refresh the booking before reviewing."), 409
+        limit = booking["approved_work_minutes"]
+        if data["decision"] == "approve":
+            limit += booking["overtime_requested_minutes"]
+            conflict = find_worker_schedule_conflict(conn, booking["worker_id"], booking["start_date"], booking["start_time"], limit / 60, exclude_booking_id=booking_id, include_requested=False)
+            if conflict:
+                return jsonify(error="Extra time overlaps another accepted job. Contact the worker before extending."), 409
+        state = "approved" if data["decision"] == "approve" else "declined"
+        conn.execute("UPDATE bookings SET approved_work_minutes=?,overtime_state=? WHERE id=?", (limit, state, booking_id))
+        conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'in_progress',?)", (booking_id, f"Hirer {state} {booking['overtime_requested_minutes']} extra minutes; approved billing limit {limit} minutes."))
+        add_in_app_notification(conn, "worker", booking["worker_id"], "overtime_reviewed", "Extra time " + state, f"Booking #{booking_id}: approved billing limit is {limit} minutes.", booking_id)
+        conn.commit()
+        return jsonify(ok=True, approved_work_minutes=limit, overtime_state=state)
+    finally:
+        conn.close()
 
 
 # ----------------------------------------------------------- booking routes
@@ -2481,6 +2567,7 @@ def build_payment_receipt_pdf(booking, hirer, worker, finance, audience):
         (label("service_date"), booking["start_date"], False),
         (label("scheduled_time"), f"{start_time} - {end_time}", False),
         (label("actual_work"), f"{int(booking['actual_minutes'] or 0)} minutes" if int(booking["actual_minutes"] or 0) else "-", False),
+        ("Billable work time", f"{booking['billable_minutes']} minutes" if booking["billable_minutes"] is not None else "-", False),
         (label("work_address"), booking["address"] or "-", False),
         (label("instructions"), booking["special_instructions"] or "-", False),
     ])
@@ -2817,6 +2904,7 @@ def razorpay_webhook():
 def public_booking(row):
     data = row_to_dict(row)
     data.pop("cash_otp_hash", None)
+    data["server_time"] = datetime.utcnow().isoformat() + "Z"
     return data
 
 

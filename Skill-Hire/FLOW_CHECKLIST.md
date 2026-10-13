@@ -12,6 +12,9 @@ Updated: 13 October 2026 (Asia/Riyadh). This records code and automated verifica
 | Native/background mobile GPS and Google route ETA production configuration | Needs testing/setup | Browser requires open worker portal; Google coordinate sharing is off by default |
 | Booking issues: participant reports/replies, shared status and reporter reopen | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
 | Admin issue review: booking/messages context, CSRF, optimistic updates and history | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
+| New timer billing limit, hirer overtime approval, actual/billable minutes and frozen rate | Complete in code | `tests/test_overtime.py`; `tests/work_overtime.test.js` |
+| Existing running timers retain the prior agreement | Complete in code | `tests/test_overtime.py` |
+| Live overtime approval, capped receipts and two-device timer display | Needs testing | Automated checks use isolated SQLite and mocked DOM |
 | Shared job progress, UTC timer and agreed-rate bill estimate on hirer/worker details | Complete in code | `tests/booking_tracking.test.js` |
 | Active status polling, safe refresh and assigned-worker detail access | Complete in code | `tests/booking_tracking.test.js`; `tests/test_booking_tracking.py` |
 | Booking review before submission, edit preservation and explicit confirmation | Complete in code | `tests/booking_review.test.js` |
@@ -55,6 +58,7 @@ node tests/booking_tracking.test.js
 node tests/booking_issues.test.js
 node tests/worker_journey.test.js
 node tests/live_travel_ui.test.js
+node tests/work_overtime.test.js
 ```
 
-Backend validation: 148 passing tests. Frontend validation: fourteen passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
+Backend validation: 157 passing tests. Frontend validation: fifteen passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
