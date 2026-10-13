@@ -13,6 +13,8 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/booking-tracking.css?v=1">
+<script src="/static/booking-tracking.js?v=1"></script>
 <style>
   :root {
     --bg: #F3F6FB; --card: #FFFFFF; --navy: #101B33; --navy-2: #1B2C52;
@@ -2018,7 +2020,8 @@
         if(!res.ok){showHirerLoadError(stackBody,res.data.error||"Booking load nahi hui",function(){openBookingDetailsScreen(bookingId);});return;}
         var b=res.data,guide=hirerBookingGuidance(b);
         stackBody.innerHTML =
-          '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+hirerBookingProgress(b)+'</section>' +
+          (typeof HireNowTracking!=="undefined"?HireNowTracking.html(b):"") +
+          '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+(typeof HireNowTracking==="undefined"?hirerBookingProgress(b):"")+'</section>' +
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div>' +
             '<div class="body"><div class="name">'+hirerMessageText(b.worker_name)+'</div><div class="sub">'+hirerMessageText(b.worker_skill)+' · '+(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
           '<div class="ref-detail-list">' +
@@ -2044,6 +2047,12 @@
           ((b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
           ((b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
           ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '');
+        if(typeof HireNowTracking!=="undefined")HireNowTracking.mount(stackBody,b,{
+          money:fmtMoney,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");},
+          canRefresh:function(){return !stackBody.querySelector("button:disabled");},
+          fetchLatest:function(){return api("/api/bookings/"+Number(b.id)).then(function(r){if(!r.ok)throw Error();return r.data;});},
+          changed:function(){openBookingDetailsScreen(b.id);loadBookings();}
+        });
         if(b.booking_type === "regular" && b.service_latitude == null && b.service_longitude == null && ["requested","confirmed","en_route"].indexOf(b.status)>=0){
           var pinButton=document.createElement("button");pinButton.className="btn btn-outline btn-block";pinButton.textContent="Add missing job site pin";
           stackBody.appendChild(pinButton);

@@ -2979,6 +2979,27 @@ def worker_bookings():
     return jsonify([public_booking(row) for row in rows])
 
 
+@app.get("/api/worker/bookings/<int:booking_id>")
+def worker_booking_detail(booking_id):
+    """Read one assigned job without reconciling unrelated provider orders."""
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    try:
+        row = conn.execute(
+            """SELECT b.*, h.name AS hirer_name, h.phone AS hirer_phone
+               FROM bookings b JOIN hirers h ON h.id=b.hirer_id
+               WHERE b.id=? AND b.worker_id=?""",
+            (booking_id, current_worker_id()),
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Booking not found"}), 404
+        return jsonify(public_booking(row))
+    finally:
+        conn.close()
+
+
 @app.post("/api/worker/bookings/<int:booking_id>/respond")
 def worker_respond_booking(booking_id):
     """Worker explicitly accepts or rejects a new hire request."""
