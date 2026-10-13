@@ -1562,17 +1562,39 @@
   function closeModal() { overlay.classList.remove("open"); }
   overlay.addEventListener("click", function (e) { if (e.target === overlay) closeModal(); });
 
+  function bookingEstimateAmount(rate,hours){
+    var amount=rate*Math.round(hours*60)/60,whole=Math.floor(amount);
+    return amount-whole===0.5?whole+(whole%2):Math.round(amount);
+  }
+  function bookingReviewHtml(worker,payload,hours,diagnosisFee){
+    var diagnosis=payload.booking_type==="diagnosis",rate=workerHourlyPrice(worker);
+    var estimate=diagnosis?Number(diagnosisFee):bookingEstimateAmount(rate,hours);
+    function row(label,value){return '<div class="ref-detail-row"><div class="k">'+label+'</div><div class="v" style="overflow-wrap:anywhere;white-space:pre-wrap">'+hirerMessageText(value)+'</div></div>';}
+    return '<div class="ref-card"><h3 id="bookingReviewTitle" tabindex="-1" style="margin-top:0">Review your booking request</h3><div class="accept-note">Check these details before sending. The worker still needs to accept your request.</div></div>'+
+      '<div class="ref-card ref-detail-list">'+row("Worker",worker.name)+row("Service",worker.skill)+row("Booking type",diagnosis?"Diagnosis / Inspection":"Regular Work")+
+      row("Date",payload.start_date)+row("Time · India (IST)",payload.start_time+" → "+payload.end_time)+row("Booked duration",Number(hours.toFixed(2))+" hours")+
+      row("Work address",payload.address)+row("Instructions",payload.special_instructions||"No additional instructions")+
+      row("Payment",payload.payment_method==="cash"?"Cash after work · OTP verification":"Online payment after worker acceptance")+'</div>'+
+      '<div class="ref-card"><div class="ref-label">Estimated charges</div>'+
+      (diagnosis?row("Diagnosis / visit fee",fmtMoney(estimate)):row("Hourly rate × duration",fmtMoney(rate)+" × "+Number(hours.toFixed(2))+" hours"))+
+      '<div class="ref-total"><span>'+ (diagnosis?'Estimated visit fee':'Estimated work amount')+'</span><span class="amt">'+fmtMoney(estimate)+'</span></div>'+
+      '<p class="accept-note">'+(diagnosis?'The visit fee covers diagnosis. Repair work is charged separately at the agreed hourly rate and starts only after your approval.':'Final work charges use actual timer duration at the agreed hourly rate. A longer job can increase the final bill; the estimate is not a fixed-price promise.')+'</p>'+
+      '<p class="accept-note">Materials and other extras are not included in this estimate. Agree on them with the worker before proceeding.</p></div>'+
+      '<div class="ref-card"><div class="ref-label">Cancellation</div><p class="accept-note">You can cancel before work starts. Once work has started or completed, cancellation is unavailable. If payment was received, the booking goes into refund review; the refund is not instant.</p></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><button class="btn btn-outline" id="editBookingReview">Edit Details</button><button class="btn btn-safety" id="refProceed">Confirm &amp; Send Request</button></div><div id="refBookingMsg" role="status" aria-live="polite"></div>';
+  }
+
   function openBookingScreen(workerId) {
     var w = state.workers.filter(function (x) { return x.id === workerId; })[0];
     if (!w) return;
-    var hourly = Math.round(Number(w.daily_wage || 0) / 8 * 100) / 100;
+    var hourly = workerHourlyPrice(w);
     var today = serviceDate(0), tomorrowDate = serviceDate(1);
     var selectedDate=today, selectedTime="", selectedEnd="", selectedType="regular", selectedPayment="cash",
         diagnosisDistance=null, diagnosisFee=null, diagnosisLat=null, diagnosisLng=null, diagnosisQuoteError="",
         bookingLat=state.location&&state.location.latitude!=null?state.location.latitude:null,
         bookingLng=state.location&&state.location.longitude!=null?state.location.longitude:null,
         bookingAddress=state.location&&state.location.address?state.location.address:"", bookingNotes="", availableSlots=[], slotsLoading=true, slotError="", diagnosisSlabs=[];
-    var bookingRevision=null;
+    var bookingRevision=null,slotRequest=0,reviewPayload=null,reviewHours=0,reviewFee=null;
     api("/api/pricing/diagnosis?worker_id="+encodeURIComponent(w.id)).then(function(r){
       if(r.ok){diagnosisSlabs=r.data.slabs||[];if(r.data.worker_location_configured===false)diagnosisQuoteError="Worker service location is not configured yet.";}
       else diagnosisQuoteError=r.data.error||"Diagnosis pricing unavailable";
@@ -1584,7 +1606,15 @@
     function calcHours(){if(!selectedTime||!selectedEnd)return 0;var a=time24(selectedTime).split(":"),b=selectedEnd.split(":");var mins=(+b[0]*60 + +b[1])-(+a[0]*60 + +a[1]);return mins>0?mins/60:0;}
     function renderBooking(){
       if(bookingRevision!==null && bookingRevision!==stackRevision)return;
-      var hrs=calcHours(), estimate=Math.round(hourly*hrs), isDiagnosis=selectedType==="diagnosis";
+      if(reviewPayload){
+        var previousSubmit=stackBody.querySelector("#refProceed");
+        if(previousSubmit && (previousSubmit.disabled || previousSubmit.dataset.bookingBusy==="1"))return;
+        stackBody.innerHTML=bookingReviewHtml(w,reviewPayload,reviewHours,reviewFee);
+        stackBody.querySelector("#editBookingReview").onclick=function(){var submit=stackBody.querySelector("#refProceed");if(submit.disabled || submit.dataset.bookingBusy==="1")return;reviewPayload=null;renderBooking();};
+        stackBody.querySelector("#refProceed").onclick=function(){createReferenceBooking(w,Object.assign({},reviewPayload));};
+        return;
+      }
+      var hrs=calcHours(), estimate=bookingEstimateAmount(hourly,hrs), isDiagnosis=selectedType==="diagnosis";
       stackBody.innerHTML='<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(w.id)+'">'+hirerMessageText(initials(w.name))+'</div><div class="body"><div class="name">'+hirerMessageText(w.name)+'</div><div class="sub">'+hirerMessageText(w.skill)+' · '+hirerMessageText(w.city)+'</div><div class="sub"><b>'+fmtMoney(w.daily_wage)+'/day</b> · '+fmtMoney(hourly)+'/hr derived from 8-hour day</div></div></div>'+
       '<div class="ref-card"><div class="ref-label">Booking Type</div><div class="ref-service-row"><button class="ref-service-btn '+(!isDiagnosis?'active':'')+'" data-type="regular">Regular Work</button><button class="ref-service-btn '+(isDiagnosis?'active':'')+'" data-type="diagnosis">Diagnosis / Inspection</button></div>'+
       '<div class="ref-label">Date</div><div class="ref-date-tabs"><button class="ref-date-btn '+(selectedDate===today?'active':'')+'" data-date="'+today+'">Today</button><button class="ref-date-btn '+(selectedDate===tomorrowDate?'active':'')+'" data-date="'+tomorrowDate+'">Tomorrow</button><input type="date" id="bookDate" min="'+today+'" value="'+selectedDate+'"></div>'+
@@ -1592,7 +1622,7 @@
       '<div class="ref-label">End Time (24-hour)</div><input class="ref-address" type="time" id="endTime" value="'+selectedEnd+'">'+
       (isDiagnosis?'<div class="ref-label">Diagnosis Service Location</div><div class="accept-note" id="diagQuoteNote">'+(diagnosisQuoteError?hirerMessageText(diagnosisQuoteError):(diagnosisDistance!=null?'Server distance: '+diagnosisDistance+' km · fee calculated automatically':'Choose the service location below. Worker exact base coordinates are not shown.'))+'</div><div class="accept-note">Pricing is server-controlled. You cannot enter or change the distance manually.</div>':'')+
       '<div class="ref-label">Work Address</div><input class="ref-address" id="refAddress" placeholder="Service address" value="'+hirerMessageText(bookingAddress)+'"><div class="location-actions" style="margin:8px 0 10px"><button class="btn btn-outline" id="bookingSavedLocation">Saved Location</button><button class="btn btn-outline" id="bookingCurrentLocation">Current GPS</button></div><button class="btn btn-outline btn-block" id="bookingMapLocation" style="margin-bottom:10px">Choose on Map</button><div class="accept-note" id="bookingLocationInfo">'+(bookingLat!=null?('Selected: '+Number(bookingLat).toFixed(5)+', '+Number(bookingLng).toFixed(5)):'No map location selected')+'</div><div class="ref-label">Payment Method</div><div class="pay-choice-grid"><button class="pay-choice '+(selectedPayment==='cash'?'active':'')+'" data-pay="cash">Cash after Work</button><button class="pay-choice '+(selectedPayment==='online'?'active':'')+'" data-pay="online">Online Payment</button></div><div class="ref-label">Instructions</div><textarea class="ref-notes" id="refNotes">'+hirerMessageText(bookingNotes)+'</textarea>'+
-      '<div class="ref-total"><span>'+(isDiagnosis?'Diagnosis / visit fee':'Estimated '+hrs.toFixed(1)+' hr work')+'</span><span class="amt">'+(isDiagnosis?(diagnosisFee==null?'Location required':fmtMoney(diagnosisFee)):fmtMoney(estimate))+'</span></div><button class="btn btn-safety btn-block" id="refProceed" '+(!selectedTime||!selectedEnd||hrs<=0||(isDiagnosis&&(diagnosisFee==null||diagnosisLat==null||diagnosisLng==null))?'disabled':'')+'>Send Booking Request</button><div id="refBookingMsg"></div></div>';
+      '<div class="ref-total"><span>'+(isDiagnosis?'Diagnosis / visit fee':'Estimated '+hrs.toFixed(1)+' hr work')+'</span><span class="amt">'+(isDiagnosis?(diagnosisFee==null?'Location required':fmtMoney(diagnosisFee)):fmtMoney(estimate))+'</span></div><button class="btn btn-safety btn-block" id="refProceed" '+(!selectedTime||!selectedEnd||hrs<1||hrs>12||(isDiagnosis&&(diagnosisFee==null||diagnosisLat==null||diagnosisLng==null))?'disabled':'')+'>Review Booking</button><div id="refBookingMsg"></div></div>';
       stackBody.querySelectorAll('[data-date]').forEach(function(b){b.onclick=function(){selectedDate=b.dataset.date;selectedTime='';loadSlots();};});
       stackBody.querySelector('#bookDate').onchange=function(){selectedDate=this.value;selectedTime='';loadSlots();};
       stackBody.querySelectorAll('[data-start]').forEach(function(b){b.onclick=function(){selectedTime=b.dataset.start;renderBooking();};});
@@ -1616,9 +1646,26 @@
           });
         },function(err){diagnosisFee=null;diagnosisDistance=null;diagnosisLat=null;diagnosisLng=null;diagnosisQuoteError="Location permission failed: "+err.message;renderBooking();},{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
       };
-      stackBody.querySelector('#refProceed').onclick=function(){var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),hrs2=calcHours();bookingAddress=address;bookingNotes=notes;if(!address){stackBody.querySelector('#refBookingMsg').innerHTML='<div class="pay-note">Work address enter karein.</div>';return;}createReferenceBooking(w,{start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(hrs2),expected_hourly_rate:Math.round(Number(w.daily_wage||0)/8*100)/100,booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,service_latitude:isDiagnosis?diagnosisLat:bookingLat,service_longitude:isDiagnosis?diagnosisLng:bookingLng});};
+      stackBody.querySelector('#refProceed').onclick=function(){
+        var address=stackBody.querySelector('#refAddress').value.trim(),notes=stackBody.querySelector('#refNotes').value.trim(),duration=calcHours();
+        bookingAddress=address;bookingNotes=notes;
+        var message=stackBody.querySelector('#refBookingMsg');
+        if(!address){message.textContent="Enter the work address before reviewing.";return;}
+        if(slotsLoading || !selectedTime || !selectedEnd || duration<1 || duration>12 || hourly==null){message.textContent="Choose an available start time and a duration between 1 and 12 hours.";return;}
+        if(isDiagnosis && (diagnosisFee==null || diagnosisLat==null || diagnosisLng==null)){message.textContent="Choose the service location and wait for a diagnosis quote.";return;}
+        reviewPayload={start_date:selectedDate,start_time:selectedTime,end_time:selectedEnd,hours:Math.ceil(duration),expected_hourly_rate:hourly,booking_type:selectedType,payment_method:selectedPayment,address:address,special_instructions:notes,service_latitude:isDiagnosis?diagnosisLat:bookingLat,service_longitude:isDiagnosis?diagnosisLng:bookingLng};
+        reviewHours=duration;reviewFee=diagnosisFee;renderBooking();stackScreen.scrollTop=0;
+        var heading=stackBody.querySelector("#bookingReviewTitle");if(heading)heading.focus();
+      };
     }
-    function loadSlots(){slotsLoading=true;availableSlots=[];renderBooking();api('/api/workers/'+Number(w.id)+'/available-slots?date='+encodeURIComponent(selectedDate)+'&hours=1').then(function(r){slotsLoading=false;if(r.ok)availableSlots=r.data.slots||[];else slotError=r.data.error||'Availability unavailable';renderBooking();});}
+    function loadSlots(){
+      var version=++slotRequest,date=selectedDate;
+      slotsLoading=true;availableSlots=[];slotError="";renderBooking();
+      api('/api/workers/'+Number(w.id)+'/available-slots?date='+encodeURIComponent(date)+'&hours=1').then(function(r){
+        if(version!==slotRequest || date!==selectedDate)return;
+        slotsLoading=false;if(r.ok)availableSlots=r.data.slots||[];else slotError=r.data.error||'Availability unavailable';renderBooking();
+      });
+    }
     loadSlots();
   }
 
@@ -1665,10 +1712,11 @@
     if(btn && (btn.disabled || btn.dataset.bookingBusy==="1"))return;
     if (btn) { btn.dataset.bookingBusy="1";btn.disabled = true; btn.textContent = "Request bheji ja rahi hai..."; }
     payload.worker_id = worker.id;
+    var originalLabel=btn?"Confirm & Send Request":"";
     var revision=stackRevision;
     var identity;
     try{identity=await bookingRequestIdentity(payload);}catch(error){
-      if(btn){delete btn.dataset.bookingBusy;btn.disabled=false;btn.textContent="Send Booking Request";}
+      if(btn){delete btn.dataset.bookingBusy;btn.disabled=false;btn.textContent=originalLabel;}
       msg.textContent="Secure request setup failed. Refresh this browser and check your bookings before retrying.";return;
     }
     return api("/api/bookings", { method: "POST", headers:{"Idempotency-Key":identity.key}, body: JSON.stringify(payload) }).then(function (res) {
@@ -1676,7 +1724,7 @@
       if(res.ok)acknowledgeBookingRequest(identity);
       if(revision!==stackRevision){if(res.ok)loadBookings();return;}
       if (!res.ok) {
-        if (btn) { btn.disabled = false; btn.textContent = "Send Booking Request"; }
+        if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
         msg.innerHTML = '<div class="pay-note">' + hirerMessageText(res.data.error || "Booking request nahi bani") + '</div>';
         return;
       }

@@ -6,6 +6,7 @@ Updated: 13 October 2026 (Asia/Riyadh). This records code and automated verifica
 | --- | --- | --- |
 | Worker discovery city/skill, online/verified and hourly budget filters | Complete in code | `tests/worker_discovery.test.js` |
 | Discovery hourly rates match booking billing, completed-job labels and city recommendations | Complete in code | `tests/test_worker_discovery.py`; `tests/worker_discovery.test.js` |
+| Booking review before submission, edit preservation and explicit confirmation | Complete in code | `tests/booking_review.test.js` |
 | Booking retry key, replay and overlapping requests | Complete in code | Backend suite; `tests/booking_retry.test.js` |
 | Authoritative payment receipts, balance and refund accounting | Complete in code | Backend suite including payment accounting tests |
 | Initial/balance checkout order reuse and concurrent request guard | Complete in code | Backend payment accounting tests |
@@ -41,6 +42,7 @@ node tests/admin_loading.test.js
 node tests/booking_retry.test.js
 node tests/flow_mutation_safety.test.js
 node tests/worker_discovery.test.js
+node tests/booking_review.test.js
 ```
 
-Backend validation: 115 passing tests. Frontend validation: nine passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
+Backend validation: 115 passing tests. Frontend validation: ten passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
