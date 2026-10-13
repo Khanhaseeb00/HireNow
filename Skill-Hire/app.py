@@ -122,11 +122,15 @@ def parse_optional_coordinates(latitude, longitude):
 
 
 
+import booking_issues
+
+
 def ensure_schema_extensions():
     """Safely add upgraded-booking fields without deleting existing rows."""
     init_db()
     conn = get_db()
     payment_accounting.ensure_schema(conn)
+    booking_issues.ensure_schema(conn)
     existing = table_columns(conn, "bookings")
     additions = {
         "request_expires_at": "TEXT",
@@ -4321,6 +4325,9 @@ CHECKOUT_HTML = """
 @app.get("/api/health")
 def health():
     return jsonify({"ok": True, "time": datetime.now().isoformat()})
+
+
+booking_issues.install_routes(app, globals())
 
 
 if __name__ == "__main__":

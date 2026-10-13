@@ -6,6 +6,8 @@ Updated: 13 October 2026 (Asia/Riyadh). This records code and automated verifica
 | --- | --- | --- |
 | Worker discovery city/skill, online/verified and hourly budget filters | Complete in code | `tests/worker_discovery.test.js` |
 | Discovery hourly rates match booking billing, completed-job labels and city recommendations | Complete in code | `tests/test_worker_discovery.py`; `tests/worker_discovery.test.js` |
+| Booking issues: participant reports/replies, shared status and reporter reopen | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
+| Admin issue review: booking/messages context, CSRF, optimistic updates and history | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
 | Shared job progress, UTC timer and agreed-rate bill estimate on hirer/worker details | Complete in code | `tests/booking_tracking.test.js` |
 | Active status polling, safe refresh and assigned-worker detail access | Complete in code | `tests/booking_tracking.test.js`; `tests/test_booking_tracking.py` |
 | Booking review before submission, edit preservation and explicit confirmation | Complete in code | `tests/booking_review.test.js` |
@@ -46,6 +48,7 @@ node tests/flow_mutation_safety.test.js
 node tests/worker_discovery.test.js
 node tests/booking_review.test.js
 node tests/booking_tracking.test.js
+node tests/booking_issues.test.js
 ```
 
-Backend validation: 118 passing tests. Frontend validation: eleven passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
+Backend validation: 130 passing tests. Frontend validation: twelve passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.

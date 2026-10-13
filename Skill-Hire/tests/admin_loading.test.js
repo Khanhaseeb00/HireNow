@@ -6,7 +6,7 @@ const elements={},document={getElementById:id=>elements[id]||(elements[id]=new E
 let timerCallback;
 const context={document,AbortController,setTimeout:fn=>(timerCallback=fn,1),clearTimeout:()=>{},alert:()=>{},confirm:()=>false,console,fetch:()=>Promise.reject(Error('network'))};
 vm.createContext(context);vm.runInContext(script,context);const realApi=context.api;
-const good={overview:{workers:3,hirers:4,pending_verifications:0,active_bookings:2,completed_bookings:1,paid_value:100},pending:[],workers:[],bookings:[],accounts:[],finance:{items:[],adjustments:[],commission_percent:10},payouts:[],diagnosis:[]};
+const good={overview:{workers:3,hirers:4,pending_verifications:0,active_bookings:2,completed_bookings:1,paid_value:100},pending:[],workers:[],bookings:[],accounts:[],finance:{items:[],adjustments:[],commission_percent:10},payouts:[],diagnosis:[],issues:[]};
 function nameOf(path){return Object.keys(context.adminSections).find(name=>context.adminSections[name].path===path);}
 function tick(){return new Promise(resolve=>setImmediate(resolve));}
 (async()=>{
@@ -15,7 +15,7 @@ function tick(){return new Promise(resolve=>setImmediate(resolve));}
  assert.match(document.getElementById('finance').children[0].textContent,/Finance unavailable/);assert.equal(document.getElementById('finance').children[0].innerHTML,'');assert.equal(document.getElementById('saveCommissionBtn').disabled,true);
  const before=document.getElementById('finance').children[0];context.renderFinance();assert.equal(document.getElementById('finance').children[0],before);
  context.api=async path=>{calls.push(nameOf(path));return {ok:true,data:good[nameOf(path)]};};
- document.getElementById('finance').children[1].listener();await tick();assert.equal(context.sectionStates.finance,'ready');assert.equal(document.getElementById('saveCommissionBtn').disabled,false);assert.equal(calls.length,9);assert.equal(calls[8],'finance');assert.match(document.getElementById('finance').innerHTML,/No finance ledger entries/);
+ document.getElementById('finance').children[1].listener();await tick();assert.equal(context.sectionStates.finance,'ready');assert.equal(document.getElementById('saveCommissionBtn').disabled,false);assert.equal(calls.length,10);assert.equal(calls[9],'finance');assert.match(document.getElementById('finance').innerHTML,/No finance ledger entries/);
  context.api=async path=>nameOf(path)==='overview'?{ok:false,data:{error:'Overview unavailable'}}:{ok:true,data:good[nameOf(path)]};await context.loadAll();assert.equal(document.getElementById('sWorkers').textContent,'—');assert.equal(context.sectionStates.workers,'ready');assert.equal(document.getElementById('overviewStatus').children[1].textContent,'Retry this section');
  context.api=async()=>({ok:true,data:{error:'Wrong shape'}});await context.loadAdminSection('workers');assert.equal(context.sectionStates.workers,'error');const workerError=document.getElementById('workers').children[0];context.renderWorkers();assert.equal(document.getElementById('workers').children[0],workerError);
  const pending=[];context.api=()=>new Promise(resolve=>pending.push(resolve));const old=context.loadAdminSection('workers'),latest=context.loadAdminSection('workers');pending[1]({ok:true,data:[]});await latest;pending[0]({ok:false,data:{error:'Old response'}});await old;assert.equal(context.sectionStates.workers,'ready');

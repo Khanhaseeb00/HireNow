@@ -15,6 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800;900&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/booking-tracking.css?v=1">
 <script src="/static/booking-tracking.js?v=1"></script>
+<script src="/static/booking-issues.js?v=1"></script>
 <style>
   :root {
     --bg: #F3F6FB; --card: #FFFFFF; --navy: #101B33; --navy-2: #1B2C52;
@@ -2046,10 +2047,12 @@
           ((b.status==="completed" && b.payment_status==="balance_due") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Additional payment required</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.total_amount||0)-Number(b.paid_amount||0)))+'</div><div class="accept-note">Actual work amount final estimate se zyada hai. Remaining balance pay karke booking fully settled karein.</div></div><button class="btn btn-safety btn-block" id="refPayBalance" style="margin-top:8px;">Pay Remaining Balance</button>' : '') +
           ((b.payment_status==="refund_pending") ? '<div class="ref-card" style="margin-top:10px;"><div class="ref-label">Refund pending</div><div style="font-size:20px;font-weight:900;">'+fmtMoney(Math.max(0,Number(b.paid_amount||0)-Number(b.total_amount||0)))+'</div><div class="accept-note">Aapne final bill se zyada pay kiya hai. Refund processing admin finance queue me hai.</div></div>' : '') +
           ((b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
+          (typeof HireNowIssues!=="undefined"?HireNowIssues.html():"") +
           ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '');
+        if(typeof HireNowIssues!=="undefined")HireNowIssues.mount(stackBody,{role:"hirer",bookingId:b.id,api:api,active:function(){return revision===stackRevision;}});
         if(typeof HireNowTracking!=="undefined")HireNowTracking.mount(stackBody,b,{
           money:fmtMoney,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");},
-          canRefresh:function(){return !stackBody.querySelector("button:disabled");},
+          canRefresh:function(){return !stackBody.querySelector("button:disabled")&&!stackBody.querySelector("[data-issue-editing='1']");},
           fetchLatest:function(){return api("/api/bookings/"+Number(b.id)).then(function(r){if(!r.ok)throw Error();return r.data;});},
           changed:function(){openBookingDetailsScreen(b.id);loadBookings();}
         });
