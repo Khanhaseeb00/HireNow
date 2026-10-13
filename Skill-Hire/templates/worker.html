@@ -1239,7 +1239,8 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     if(b.status==="requested")return {label:"Respond within 30 minutes, or before the scheduled start if sooner"};
     if(!(b.payment_status==="paid" || (b.payment_method==="cash" && b.payment_status==="cash_pending")))return {label:wguide("payment")};
     if(b.work_started_at && !b.work_ended_at)return {label:wguide("running"),action:"stop",button:wguide("stop")};
-    if(b.status==="confirmed" || b.status==="en_route")return {label:wguide("gps"),action:"checkin",button:(NEXT_ACTION_BY_LANG[state.lang]||NEXT_ACTION_BY_LANG.en)[b.status]};
+    if(b.status==="confirmed")return {label:"Start your journey when ready. Precise GPS is required only to confirm arrival at the job site.",action:"checkin",button:"Start Journey"};
+    if(b.status==="en_route")return {label:wguide("gps"),action:"checkin",button:(NEXT_ACTION_BY_LANG[state.lang]||NEXT_ACTION_BY_LANG.en)[b.status]};
     if(b.status==="checked_in"){
       if(b.booking_type==="diagnosis" && !b.diagnosis_notes)return {label:wguide("diagnose"),action:"diagnose",button:wguide("diagnose")};
       if(b.booking_type==="diagnosis" && !b.work_approved_at)return {label:wguide("approval")};
@@ -1325,7 +1326,7 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
       (mapsUrl?'<a class="btn btn-primary btn-block" style="text-decoration:none" id="workerOpenMaps" target="_blank" rel="noopener noreferrer">Open directions in Maps ↗</a>':'<div class="empty-soft">No destination is available. Message the hirer for the address before travelling.</div>')+
       '<button type="button" class="btn btn-outline btn-block" id="workerLocationChat" style="margin-top:10px">Message Hirer</button>'+
       '<div class="detail-stage"><p>Schedule times: India (IST)</p><span class="status-pill">'+earningsText((b.request_expired_at?"Request expired":(STATUS_LABELS_BY_LANG[state.lang]||STATUS_LABELS_BY_LANG.en)[b.status])||b.status)+'</span><p>'+earningsText(next.label)+'</p>'+
-      (canCheck?'<button type="button" class="btn btn-safety btn-block" id="workerNavCheckIn">'+earningsText(next.button)+'</button><p style="color:var(--app-muted);font-size:12px;margin-top:10px">GPS permission is needed only for this status update. Your current coordinates will be recorded for this booking.</p>':"")+
+      (canCheck?'<button type="button" class="btn btn-safety btn-block" id="workerNavCheckIn">'+earningsText(next.button)+'</button><p style="color:var(--app-muted);font-size:12px;margin-top:10px">'+(b.status==="confirmed"?'Start your journey without waiting for GPS. Arrival check-in will verify your location at the job site.':'Arrival needs precise GPS within 100 metres accuracy and within 300 metres of the job pin.')+'</p>':"")+
       '<div class="gps-note" id="gps-nav-'+Number(b.id)+'" role="status" aria-live="polite"></div></div></div>';
     var link=document.getElementById("workerOpenMaps");if(link)link.href=mapsUrl;
     showWorkerPanel("navigation");
@@ -1444,6 +1445,14 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     var expectedStatus = booking.status;
     if (note.dataset.gpsBusy === "1") return;
     note.dataset.gpsBusy = "1";
+    if(expectedStatus === "confirmed"){
+      note.textContent="Starting journey...";
+      api("/api/worker/bookings/"+Number(bookingId)+"/start-travel",{method:"POST",body:"{}"}).then(function(result){
+        if(!result.ok){note.textContent=(result.data.error||"Journey could not be started")+" Check the latest job status before retrying.";if(result.status===409 || result.status===0 || result.status>=500)loadBookings();return;}
+        note.textContent="Journey started. Use precise GPS for arrival check-in at the job site.";loadBookings();
+      }).finally(function(){delete note.dataset.gpsBusy;});
+      return;
+    }
     if (!navigator.geolocation) {
       delete note.dataset.gpsBusy;
       note.textContent = "Is browser mein location support nahi hai.";
@@ -1453,6 +1462,11 @@ nav.tabs button{white-space:normal;overflow-wrap:anywhere;line-height:1.25}
     navigator.geolocation.getCurrentPosition(
       function (pos) {
         var lat = pos.coords.latitude, lng = pos.coords.longitude;
+        if(!Number.isFinite(pos.coords.accuracy) || pos.coords.accuracy>100){
+          delete note.dataset.gpsBusy;
+          note.textContent="Arrival GPS accuracy is "+(Number.isFinite(pos.coords.accuracy)?Math.round(pos.coords.accuracy)+" metres":"unavailable")+". Arrival needs 100 metres or better. Enable precise location for this browser, move to an open area and retry Check-in. This does not mean the hirer's job pin is wrong.";
+          return;
+        }
         note.innerHTML = '<span class="pin locating"></span> Location mil gayi (' + lat.toFixed(4) + ', ' + lng.toFixed(4) + ') — bhej rahe hain...';
         api("/api/worker/bookings/" + bookingId + "/check-in", {
           method: "POST",

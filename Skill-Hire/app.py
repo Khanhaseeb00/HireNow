@@ -3130,6 +3130,37 @@ def add_booking_site_location(booking_id):
     return jsonify({"ok": True})
 
 
+@app.post("/api/worker/bookings/<int:booking_id>/start-travel")
+def worker_start_travel(booking_id):
+    """Declare travel separately from GPS proof of arrival at the job site."""
+    auth_error = require_worker_login()
+    if auth_error:
+        return auth_error
+    conn = get_db()
+    try:
+        if not is_postgres():
+            conn.execute("BEGIN IMMEDIATE")
+        booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=? AND worker_id=?"),
+                               (booking_id, current_worker_id())).fetchone()
+        if not booking:
+            return jsonify({"error": "Booking not found or not assigned to you"}), 404
+        if booking["status"] == "en_route":
+            return jsonify({"status": "en_route", "replayed": True})
+        if booking["status"] != "confirmed":
+            return jsonify({"error": "Refresh booking details. Only an accepted booking can start travel."}), 409
+        if not booking_allows_work(booking):
+            return jsonify({"error": "Payment must be ready before starting travel"}), 409
+        conn.execute("UPDATE bookings SET status='en_route' WHERE id=?", (booking_id,))
+        conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'en_route',?)",
+                     (booking_id, "Worker started journey. Arrival will require separate GPS verification."))
+        add_in_app_notification(conn, "hirer", booking["hirer_id"], "worker_en_route", "Worker is on the way",
+                                f"Worker has started travelling for booking #{booking_id}.", booking_id)
+        conn.commit()
+        return jsonify({"status": "en_route", "replayed": False})
+    finally:
+        conn.close()
+
+
 @app.post("/api/worker/bookings/<int:booking_id>/check-in")
 def worker_check_in(booking_id):
     """
