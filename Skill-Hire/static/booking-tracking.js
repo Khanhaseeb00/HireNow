@@ -26,7 +26,7 @@
     var hasTimer=!terminal&&(booking.status==='in_progress'||booking.status==='completed')&&booking.work_started_at;
     return '<section class="booking-tracking" data-booking-track="'+Number(booking.id)+'"><h3>Job progress</h3>'+progress+
       (hasTimer?'<div class="booking-tracking-values"><div><span>Work duration</span><strong data-work-clock>—</strong></div><div><span>'+(booking.status==='completed'?'Final job bill':'Estimated job bill')+'</span><strong data-work-estimate>—</strong></div></div><p class="booking-tracking-note">'+(booking.status==='completed'?'Payment and worker settlement are shown separately below.':'Estimate includes the diagnosis fee where applicable. Final billing uses recorded whole work minutes; worker commission is separate.')+'</p>':'')+
-      '<p class="booking-tracking-note" data-track-feedback>Latest recorded status. This is not live GPS tracking.</p><button type="button" class="btn btn-outline" data-refresh-tracking>Refresh Status</button></section>';
+      '<p class="booking-tracking-note" data-track-feedback>Latest recorded job stage. Travel location is shown separately while sharing is active.</p><button type="button" class="btn btn-outline" data-refresh-tracking>Refresh Status</button></section>';
   }
   function fingerprint(b){return JSON.stringify([b.status,b.payment_status,b.paid_amount,b.total_amount,b.work_started_at,b.work_ended_at,b.work_approved_at,b.work_declined_at,b.diagnosis_notes]);}
   function stop(){if(interval!=null){clearInterval(interval);interval=null;}}

@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="/static/booking-tracking.css?v=1">
 <script src="/static/booking-tracking.js?v=1"></script>
 <script src="/static/booking-issues.js?v=1"></script>
+<script src="/static/hirer-travel.js?v=1"></script>
 <style>
   :root {
     --bg: #F3F6FB; --card: #FFFFFF; --navy: #101B33; --navy-2: #1B2C52;
@@ -2022,6 +2023,7 @@
         var b=res.data,guide=hirerBookingGuidance(b);
         stackBody.innerHTML =
           (typeof HireNowTracking!=="undefined"?HireNowTracking.html(b):"") +
+          (typeof HireNowLiveTravel!=="undefined"?HireNowLiveTravel.html(b):"") +
           '<section class="ref-card hirer-job-guidance"><strong>'+hirerMessageText(guide.title)+'</strong><p>'+hirerMessageText(guide.note)+'</p>'+(typeof HireNowTracking==="undefined"?hirerBookingProgress(b):"")+'</section>' +
           '<div class="ref-worker-mini ref-card"><div class="avatar" style="background:'+colorFor(b.worker_id)+'">'+hirerMessageText(initials(b.worker_name))+'</div>' +
             '<div class="body"><div class="name">'+hirerMessageText(b.worker_name)+'</div><div class="sub">'+hirerMessageText(b.worker_skill)+' · '+(b.scheduled_minutes?b.scheduled_minutes/60:b.hours||2)+' hrs</div><div class="sub" style="color:var(--orange);font-weight:700;">★ '+(b.worker_rating||0)+'</div></div></div>' +
@@ -2049,6 +2051,7 @@
           ((b.status==="completed" && b.payment_status==="paid") ? '<div class="ref-card" style="margin-top:10px;"><div class="stamp-mini">PAYMENT SETTLED</div><div class="accept-note">Final bill aur received payment match ho gaye.</div></div>' : '') +
           (typeof HireNowIssues!=="undefined"?HireNowIssues.html():"") +
           ((Number(b.paid_amount||0)>0) ? '<button class="btn btn-outline btn-block" id="refReceipt" style="margin-top:8px;">Download PDF Receipt</button>' : '');
+        if(typeof HireNowLiveTravel!=="undefined")HireNowLiveTravel.mount(stackBody,b,{api:api,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");}});
         if(typeof HireNowIssues!=="undefined")HireNowIssues.mount(stackBody,{role:"hirer",bookingId:b.id,api:api,active:function(){return revision===stackRevision;}});
         if(typeof HireNowTracking!=="undefined")HireNowTracking.mount(stackBody,b,{
           money:fmtMoney,active:function(){return revision===stackRevision&&!!state.hirer&&stackScreen.classList.contains("open");},

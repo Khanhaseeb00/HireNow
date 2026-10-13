@@ -6,7 +6,10 @@ Updated: 13 October 2026 (Asia/Riyadh). This records code and automated verifica
 | --- | --- | --- |
 | Worker discovery city/skill, online/verified and hourly budget filters | Complete in code | `tests/worker_discovery.test.js` |
 | Discovery hourly rates match booking billing, completed-job labels and city recommendations | Complete in code | `tests/test_worker_discovery.py`; `tests/worker_discovery.test.js` |
-| Journey start separated from arrival GPS accuracy/location verification | Complete in code | `tests/test_start_travel.py`; `tests/worker_journey.test.js` |
+| Journey GPS recorded separately from strict arrival GPS accuracy/location verification | Complete in code | `tests/test_start_travel.py`; `tests/worker_journey.test.js` |
+| Live worker GPS: assigned-hirer map, fresh/stale labels and sharing stop/resume | Complete in code | `tests/test_live_travel.py`; `tests/live_travel_ui.test.js` |
+| ETA: explicitly labelled speed estimate and opt-in Google traffic route support | Complete in code; routing setup pending | `tests/test_live_travel.py`; `tests/live_travel_ui.test.js` |
+| Native/background mobile GPS and Google route ETA production configuration | Needs testing/setup | Browser requires open worker portal; Google coordinate sharing is off by default |
 | Booking issues: participant reports/replies, shared status and reporter reopen | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
 | Admin issue review: booking/messages context, CSRF, optimistic updates and history | Complete in code | `tests/test_booking_issues.py`; `tests/booking_issues.test.js` |
 | Shared job progress, UTC timer and agreed-rate bill estimate on hirer/worker details | Complete in code | `tests/booking_tracking.test.js` |
@@ -51,6 +54,7 @@ node tests/booking_review.test.js
 node tests/booking_tracking.test.js
 node tests/booking_issues.test.js
 node tests/worker_journey.test.js
+node tests/live_travel_ui.test.js
 ```
 
-Backend validation: 136 passing tests. Frontend validation: thirteen passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.
+Backend validation: 148 passing tests. Frontend validation: fourteen passing test scripts. Embedded scripts in the three affected templates pass `node --check`; `git diff --check` passes. Deployment and live end-to-end behavior are separate from saving code to main.

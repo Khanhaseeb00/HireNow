@@ -123,6 +123,7 @@ def parse_optional_coordinates(latitude, longitude):
 
 
 import booking_issues
+import travel_tracking
 
 
 def ensure_schema_extensions():
@@ -131,6 +132,7 @@ def ensure_schema_extensions():
     conn = get_db()
     payment_accounting.ensure_schema(conn)
     booking_issues.ensure_schema(conn)
+    travel_tracking.ensure_schema(conn)
     existing = table_columns(conn, "bookings")
     additions = {
         "request_expires_at": "TEXT",
@@ -3136,27 +3138,41 @@ def worker_start_travel(booking_id):
     auth_error = require_worker_login()
     if auth_error:
         return auth_error
+    try:
+        fix=travel_tracking.validate(request.get_json(silent=True),parse_optional_coordinates)
+    except ValueError as exc:
+        return jsonify({"error":str(exc)}),400
     conn = get_db()
     try:
         if not is_postgres():
             conn.execute("BEGIN IMMEDIATE")
+        conn.execute(for_update("SELECT id FROM workers WHERE id=?"),(current_worker_id(),)).fetchone()
         booking = conn.execute(for_update("SELECT * FROM bookings WHERE id=? AND worker_id=?"),
                                (booking_id, current_worker_id())).fetchone()
         if not booking:
             return jsonify({"error": "Booking not found or not assigned to you"}), 404
         if booking["status"] == "en_route":
-            return jsonify({"status": "en_route", "replayed": True})
+            try:travel_tracking.save(conn,booking_id,fix)
+            except ValueError as exc:return jsonify({"error":str(exc)}),409
+            sharing_token=travel_tracking.activate(conn,booking_id)
+            conn.commit()
+            return jsonify({"status": "en_route", "replayed": True,"sharing_token":sharing_token})
         if booking["status"] != "confirmed":
             return jsonify({"error": "Refresh booking details. Only an accepted booking can start travel."}), 409
         if not booking_allows_work(booking):
             return jsonify({"error": "Payment must be ready before starting travel"}), 409
+        other=conn.execute("SELECT id FROM bookings WHERE worker_id=? AND status='en_route' AND id<>?",(current_worker_id(),booking_id)).fetchone()
+        if other:return jsonify({"error":"Another journey is already active. Finish or cancel it before heading to a different job."}),409
+        try:travel_tracking.save(conn,booking_id,fix)
+        except ValueError as exc:return jsonify({"error":str(exc)}),409
+        sharing_token=travel_tracking.activate(conn,booking_id)
         conn.execute("UPDATE bookings SET status='en_route' WHERE id=?", (booking_id,))
-        conn.execute("INSERT INTO booking_events(booking_id,status,note) VALUES (?,'en_route',?)",
-                     (booking_id, "Worker started journey. Arrival will require separate GPS verification."))
+        conn.execute("INSERT INTO booking_events(booking_id,status,note,latitude,longitude) VALUES (?,'en_route',?,?,?)",
+                     (booking_id, "Worker started journey with GPS recorded. Arrival requires separate precise verification.",fix["latitude"],fix["longitude"]))
         add_in_app_notification(conn, "hirer", booking["hirer_id"], "worker_en_route", "Worker is on the way",
                                 f"Worker has started travelling for booking #{booking_id}.", booking_id)
         conn.commit()
-        return jsonify({"status": "en_route", "replayed": False})
+        return jsonify({"status": "en_route", "replayed": False,"sharing_token":sharing_token})
     finally:
         conn.close()
 
@@ -3199,6 +3215,7 @@ def worker_check_in(booking_id):
     conn = get_db()
     if not is_postgres():
         conn.execute("BEGIN IMMEDIATE")
+    conn.execute(for_update("SELECT id FROM workers WHERE id=?"),(current_worker_id(),)).fetchone()
     booking = conn.execute(
         for_update("SELECT * FROM bookings WHERE id = ? AND worker_id = ?"), (booking_id, current_worker_id())
     ).fetchone()
@@ -3217,6 +3234,9 @@ def worker_check_in(booking_id):
         return jsonify({"error": "Payment must be ready before the worker travels or checks in"}), 400
 
     if booking["status"] == "confirmed":
+        other=conn.execute("SELECT id FROM bookings WHERE worker_id=? AND status='en_route' AND id<>?",(current_worker_id(),booking_id)).fetchone()
+        if other:
+            conn.close();return jsonify({"error":"Another journey is already active. Finish or cancel it before heading to a different job."}),409
         nxt = "en_route"
     elif booking["status"] == "en_route":
         nxt = "checked_in"
@@ -4359,6 +4379,7 @@ def health():
 
 
 booking_issues.install_routes(app, globals())
+travel_tracking.install_routes(app, globals())
 
 
 if __name__ == "__main__":
